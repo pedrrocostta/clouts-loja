@@ -41,7 +41,13 @@ const me = () => auth()?.user || null;
 const favKey = () => 'clouts.favs.' + (me()?.uid || 'visitante');
 let cart = store.get('clouts.cart', []).filter(i => byId(i.id));
 let favs = store.get(favKey(), []).filter(byId);
-let ship = store.get('clouts.ship', null);   // { cep, cidade, bairro, rua, valor }
+let ship = store.get('clouts.ship', null);
+let cupons = [];                                   // cupons do usuário logado (Firestore)
+let cupomAtivo = store.get('clouts.cupom', null);   // código aplicado no carrinho
+let stopCupons = null, pendingShare = false;
+const cupomObj = () => cupons.find(c => c.codigo === cupomAtivo && !c.usado) || null;
+const descontoValor = () => { const c = cupomObj(); return c ? Math.round(cartTotal() * c.percent) / 100 : 0; };
+const totalPedido = () => Math.max(0, cartTotal() - descontoValor()) + (freteValor() || 0);   // { cep, cidade, bairro, rua, valor }
 const saveCart = () => { store.set('clouts.cart', cart); renderCart(); };
 const saveFavs = () => { store.set(favKey(), favs); updateBadges(); };
 
@@ -53,6 +59,7 @@ const ICON = {
   truck: svg('<path d="M3 6h11v10H3zM14 10h4l3 3v3h-7"/><circle cx="7" cy="17.5" r="1.8"/><circle cx="17" cy="17.5" r="1.8"/>'),
   chat: svg('<path d="M4 5h16v11H9l-5 4V5Z"/>'),
   card: svg('<rect x="3" y="6" width="18" height="12" rx="2"/><path d="M3 10h18M7 15h3"/>'),
+  tag: svg('<path d="M3 12V4h8l10 10-8 8L3 12Z"/><circle cx="7.5" cy="8.5" r="1.2"/>'),
   x: svg('<path d="m6 6 12 12M18 6 6 18"/>'),
   pix: svg('<path d="M12 3.500 20.500 12 12 20.500 3.500 12 12 3.500Z"/><path d="m8.500 12 3.500-3.500 3.500 3.500-3.500 3.500Z"/>'),
   google: '<svg viewBox="0 0 24 24" style="fill:none;stroke:none"><path fill="#4285F4" d="M22.500 12.200c0-.8-.1-1.500-.2-2.200H12v4.200h5.900a5 5 0 0 1-2.200 3.300v2.700h3.500c2.100-1.900 3.300-4.700 3.300-8Z"/><path fill="#34A853" d="M12 23c3 0 5.400-1 7.200-2.700l-3.500-2.700c-1 .7-2.200 1-3.700 1-2.800 0-5.200-1.900-6-4.500H2.400v2.800A11 11 0 0 0 12 23Z"/><path fill="#FBBC05" d="M6 14.100a6.600 6.600 0 0 1 0-4.200V7.100H2.400a11 11 0 0 0 0 9.800L6 14.100Z"/><path fill="#EA4335" d="M12 5.400c1.600 0 3 .6 4.100 1.600l3.100-3.100A11 11 0 0 0 2.400 7.100L6 9.900c.8-2.600 3.200-4.500 6-4.500Z"/></svg>'
@@ -69,7 +76,7 @@ function cardHTML(p, rank) {
   const on = favs.includes(p.id);
   return `<article class="card" data-id="${p.id}" tabindex="0" aria-label="${esc(p.nome)}">
     <div class="card-img">
-      <img src="${p.img}" alt="${esc(p.nome)}" loading="lazy">
+      <img src="${esc(p.img)}" alt="${esc(p.nome)}" loading="lazy">
       ${rank ? `<span class="tag-p rank">#${rank}</span>` : p.premium ? '<span class="tag-p">Premium</span>' : p.diamond ? '<span class="tag-p">Diamond</span>' : ''}
       <button class="fav ${on ? 'on' : ''}" data-fav="${p.id}" aria-label="Favoritar" aria-pressed="${on}">${ICON.heart}</button>
       ${soldOut(p) ? '<span class="soldout">Esgotado</span>' : `<button class="qadd" data-quick="${p.id}" aria-label="Adicionar ao carrinho">${ICON.plus}</button>`}
@@ -90,20 +97,45 @@ const CATS = () => [
 ];
 const catHTML = ([n, h, img]) => `<a class="cat" href="${h}"><span><img src="${img}" alt="" loading="lazy"></span>${n}</a>`;
 
+function heroSlides() {
+  const [t1, t2] = topList().length > 1 ? topList() : [pick('f-112271-1', 'feminino'), pick('m-4', 'masculino')];
+  const vid = (n, kick, h, p, href, cta) => `<article class="hs hs-vid"><video src="img/video/${n}.mp4" poster="img/video/${n}.jpg" autoplay muted loop playsinline preload="metadata" aria-hidden="true"></video>
+    <div class="hs-txt"><span class="kicker">${kick}</span><h1>${h}</h1><p>${p}</p><a class="btn btn-gold" href="${href}">${cta}</a></div></article>`;
+  return vid('feminino', 'Feminino', 'Caimento que <em>valoriza</em>', 'Cigarrete, wide leg e moom com lycra. Do jeans ao dia a dia.', '#/feminino', 'Ver feminino')
+    + vid('masculino', 'Masculino', 'Ajuste <em>perfeito</em>', 'Calças slim fit em sarja e poliviscose com elastano.', '#/masculino', 'Ver masculino')
+    + `<article class="hs hs-split"><div class="hs-txt"><span class="kicker">Mais vendidos</span><h1>As preferidas de <em>quem já vestiu</em></h1><p>Entregamos em Contagem, Betim e Belo Horizonte.</p><a class="btn btn-gold" href="#/mais-vendidos">Ver mais vendidos</a></div>
+      <div class="hs-pic"><img src="${esc(t1.img)}" alt=""><img src="${esc(t2.img)}" alt=""></div></article>`;
+}
+function initHero() {
+  const tr = $('#hsTrack'); if (!tr) return;
+  const n = tr.children.length, dots = $('#hsDots'), calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let k = 0, x0 = null;
+  dots.innerHTML = [...tr.children].map((_, i) => `<button aria-label="Slide ${i + 1}"></button>`).join('');
+  const go = i => {
+    k = (i + n) % n; tr.style.transform = `translateX(${-100 * k}%)`;
+    [...dots.children].forEach((d, j) => { d.classList.toggle('on', j === k); d.setAttribute('aria-current', j === k); });
+  };
+  const play = () => { clearInterval(heroTimer); if (!calm) heroTimer = setInterval(() => go(k + 1), 6500); };
+  $('#hsPrev').onclick = () => { go(k - 1); play(); };
+  $('#hsNext').onclick = () => { go(k + 1); play(); };
+  dots.onclick = e => { const i = [...dots.children].indexOf(e.target.closest('button')); if (i >= 0) { go(i); play(); } };
+  const hero = $('#hero');
+  hero.addEventListener('touchstart', e => { x0 = e.touches[0].clientX; clearInterval(heroTimer); }, { passive: true });
+  hero.addEventListener('touchend', e => { if (x0 != null) { const d = e.changedTouches[0].clientX - x0; if (Math.abs(d) > 40) go(k + (d < 0 ? 1 : -1)); } x0 = null; play(); });
+  hero.addEventListener('mouseenter', () => clearInterval(heroTimer)); hero.addEventListener('mouseleave', play);
+  if (calm) $$('.hs-vid video', hero).forEach(v => v.pause());
+  go(0); play();
+}
+
 function viewHome() {
   const fem = PRODUTOS.filter(p => p.secao === 'feminino'), mas = PRODUTOS.filter(p => p.secao === 'masculino');
   const hero = [pick('f-112271-1', 'feminino'), pick('m-4', 'masculino'), pick('f-112420-1', 'feminino'), pick('m-2', 'masculino')];
   app.innerHTML = `
-  <section class="hero">
-    <div class="hero-txt">
-      <span class="kicker">Coleção 2026</span>
-      <h1>Vista<br>seu <em>melhor.</em></h1>
-      <p>Calças femininas e masculinas com caimento perfeito. Entregamos em Contagem, Betim e Belo Horizonte.</p>
-      <a class="btn btn-gold" href="#/mais-vendidos" style="align-self:flex-start">Ver mais vendidos</a>
-    </div>
-    <div class="hero-img">${hero.map((p, i) => `<img src="${p.img}" alt="" class="${i ? '' : 'on'}">`).join('')}
-      <div class="hero-dots">${hero.map((_, i) => `<i class="${i ? '' : 'on'}"></i>`).join('')}</div>
-    </div>
+  <section class="hero2" id="hero" aria-roledescription="carrossel" aria-label="Destaques">
+    <div class="hs-track" id="hsTrack">${heroSlides()}</div>
+    <button class="hs-nav prev" id="hsPrev" aria-label="Slide anterior">‹</button>
+    <button class="hs-nav next" id="hsNext" aria-label="Próximo slide">›</button>
+    <div class="hero-dots" id="hsDots"></div>
   </section>
 
   <section class="strip">
@@ -113,23 +145,13 @@ function viewHome() {
 
   <section class="cats-grid">${CATS().map(catHTML).join('')}<a class="cat" href="#/entrega"><span class="ic">${ICON.truck}</span>Entrega</a></section>
 
-  <section class="sec vids">
-    <a class="vid" href="#/feminino"><video src="img/video/feminino.mp4" poster="img/video/feminino.jpg" autoplay muted loop playsinline preload="metadata" aria-hidden="true"></video><div><span>Caimento que valoriza</span><h3>Feminino</h3></div></a>
-    <a class="vid" href="#/masculino"><video src="img/video/masculino.mp4" poster="img/video/masculino.jpg" autoplay muted loop playsinline preload="metadata" aria-hidden="true"></video><div><span>Ajuste perfeito</span><h3>Masculino</h3></div></a>
-  </section>
-
   <section class="sec"><div class="sec-h"><h2>Mais vendidos</h2><a href="#/mais-vendidos">Ver tudo →</a></div>
     <div class="grid">${topList().slice(0, 8).map((p, i) => cardHTML(p, i + 1)).join('')}</div></section>
   <section class="sec"><div class="sec-h"><h2>Feminino</h2><a href="#/feminino">Ver tudo →</a></div>
     <div class="grid">${fem.slice(0, 8).map(p => cardHTML(p)).join('')}</div></section>
   <section class="sec"><div class="sec-h"><h2>Masculino</h2><a href="#/masculino">Ver tudo →</a></div>
     <div class="grid">${mas.map(p => cardHTML(p)).join('')}</div></section>`;
-  if (matchMedia('(prefers-reduced-motion: reduce)').matches) $$('.vid video').forEach(v => v.pause());
-  const imgs = $$('.hero-img img'), dots = $$('.hero-dots i'); let k = 0;
-  if (imgs.length > 1) heroTimer = setInterval(() => {
-    imgs[k].classList.remove('on'); dots[k].classList.remove('on');
-    k = (k + 1) % imgs.length; imgs[k].classList.add('on'); dots[k].classList.add('on');
-  }, 4500);
+  initHero();
 }
 
 function viewList(secao, q) {
@@ -179,6 +201,22 @@ function viewEntrega() {
   <a class="btn btn-gold" href="#/feminino">Começar a comprar</a>`;
 }
 
+function viewCupons() {
+  const u = me();
+  if (!u) {
+    app.innerHTML = `<div class="page-h"><h1>Meus cupons</h1></div><div class="empty">Entre com o Google para ver e usar seus cupons.<br><br><button class="btn btn-dark" id="pLogin">Entrar</button></div>`;
+    $('#pLogin').onclick = () => openLogin('Entre com o Google para ver seus cupons.'); return;
+  }
+  app.innerHTML = `<div class="page-h"><h1>Meus cupons</h1><p>Cupons ganhos ao compartilhar a loja.</p></div>
+  ${cupons.length ? `<div class="cupons">${cupons.map(c => `<article class="ticket ${c.usado ? 'used' : ''}"><div class="tk-pct"><b>${c.percent}%</b><span>OFF</span></div>
+      <div class="tk-in"><div class="tk-code">${esc(c.codigo)}</div><p>${c.usado ? 'Cupom já utilizado' : 'Disponível. Vale para todo o pedido, sem incluir o frete.'}</p>
+      ${c.usado ? '' : `<div class="tk-act"><button class="btn btn-gold sm" data-usar="${esc(c.codigo)}">Usar no carrinho</button><button class="btn btn-line sm" data-copy="${esc(c.codigo)}">Copiar código</button></div>`}</div></article>`).join('')}</div>`
+    : `<div class="empty">Você ainda não tem cupons.<br><br><button class="btn btn-gold" id="cShare">Compartilhar e ganhar 10% OFF</button></div>`}`;
+  if ($('#cShare')) $('#cShare').onclick = () => shareStore();
+  $$('[data-usar]').forEach(b => b.onclick = () => { cupomAtivo = b.dataset.usar; store.set('clouts.cupom', cupomAtivo); openCart(); toast('Cupom aplicado'); });
+  $$('[data-copy]').forEach(b => b.onclick = async () => { try { await navigator.clipboard.writeText(b.dataset.copy); toast('Código copiado'); } catch { toast(b.dataset.copy); } });
+}
+
 function viewPerfil() {
   const u = me();
   if (!u) {
@@ -188,7 +226,8 @@ function viewPerfil() {
   app.innerHTML = `<div class="page-h"><h1>Minha conta</h1></div>
   <div class="acct">${u.foto ? `<img src="${esc(u.foto)}" alt="" referrerpolicy="no-referrer">` : `<span class="av">${esc((u.nome || u.email || '?')[0].toUpperCase())}</span>`}
     <div><b>${esc(u.nome || 'Cliente CLOUTS')}</b><br><span class="note">${esc(u.email)}</span></div></div>
-  <div class="acct-links"><a class="btn btn-line" href="#/favoritos">${ICON.heart} Meus favoritos (${favs.length})</a>
+  <div class="acct-links"><a class="btn btn-line" href="#/cupons">${ICON.tag} Meus cupons (${cupons.filter(c => !c.usado).length})</a>
+  <a class="btn btn-line" href="#/favoritos">${ICON.heart} Meus favoritos (${favs.length})</a>
   <a class="btn btn-line" href="${waLink('Olá! Preciso de ajuda com meu pedido.')}" target="_blank" rel="noopener">${ICON.chat} Falar no WhatsApp</a>
   <a class="btn btn-line" href="https://instagram.com/${CONFIG.instagram}" target="_blank" rel="noopener">Instagram @${CONFIG.instagram}</a>
   <button class="btn btn-dark" id="pOut">Sair da conta</button></div>`;
@@ -206,13 +245,14 @@ function renderView() {
   else if (r === 'favoritos') viewFavs();
   else if (r === 'entrega') viewEntrega();
   else if (r === 'perfil') viewPerfil();
+  else if (r === 'cupons') viewCupons();
   else { document.body.classList.add('is-home'); viewHome(); }
 }
 function route() {
   const [path, qs] = (location.hash.slice(1) || '/').split('?');
   clearInterval(heroTimer); closeAll();
   const r = path.split('/').filter(Boolean)[0] || 'home';
-  cur = { r: ['feminino', 'masculino', 'mais-vendidos', 'busca', 'favoritos', 'entrega', 'perfil'].includes(r) ? r : 'home', q: new URLSearchParams(qs || '') };
+  cur = { r: ['feminino', 'masculino', 'mais-vendidos', 'busca', 'favoritos', 'entrega', 'perfil', 'cupons'].includes(r) ? r : 'home', q: new URLSearchParams(qs || '') };
   routeKey = cur.r;
   renderView();
   $$('[data-isl]').forEach(a => a.classList.toggle('on', a.dataset.isl === routeKey));
@@ -300,7 +340,52 @@ function onUser(u) {
   if (routeKey === 'perfil') viewPerfil();
   if (routeKey === 'favoritos') viewFavs();
   if (u && $('#sheet').querySelector('.login')) closeSheet();
+  stopCupons?.(); stopCupons = null; cupons = [];
+  if (u && window.CloutsDB) CloutsDB.cupons(u.uid, list => {
+    cupons = list; if (cupomAtivo && !cupomObj()) { cupomAtivo = null; store.set('clouts.cupom', null); }
+    if (routeKey === 'cupons') viewCupons(); if (routeKey === 'perfil') viewPerfil();
+    if ($('#cartDrawer').classList.contains('open')) renderCart();
+    if (list.length) hidePromo();
+  }, () => {}).then(f => { stopCupons = f; });
+  if (u && pendingShare) { pendingShare = false; toast('Agora toque em Compartilhar para liberar seu cupom'); showPromo(true); }
   if (u && checkout) renderCart();
+}
+
+/* ---------- Compartilhar e ganhar cupom ---------- */
+const SHARE = { title: 'CLOUTS', text: 'Conheça a CLOUTS: calças femininas e masculinas. Vista seu melhor.', url: location.origin + '/' };
+function promoWanted() {
+  if (!auth()?.configured) return false;
+  if (cupons.length) return false;
+  const h = store.get('clouts.promoHide', 0); return !h || Date.now() - h > 24 * 3600 * 1000;
+}
+function showPromo(force) {
+  if (!force && !promoWanted()) return;
+  let el = $('#promo');
+  if (!el) {
+    el = document.createElement('aside'); el.id = 'promo'; el.className = 'promo'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', 'Cupom de desconto');
+    el.innerHTML = `<div class="pr-ic">${ICON.tag}</div><div class="pr-tx"><b>Compartilhe a loja e ganhe 10% OFF</b><span>Envie a CLOUTS para alguém e receba seu cupom.</span></div>
+      <button class="btn btn-gold sm" id="prGo">Compartilhar</button><button class="pr-x" id="prX" aria-label="Fechar">${ICON.x}</button>`;
+    document.body.appendChild(el);
+    $('#prGo').onclick = () => shareStore();
+    $('#prX').onclick = () => { store.set('clouts.promoHide', Date.now()); hidePromo(); };
+  }
+  requestAnimationFrame(() => el.classList.add('on'));
+}
+function hidePromo() { const el = $('#promo'); if (el) { el.classList.remove('on'); setTimeout(() => el.remove(), 400); } }
+async function shareStore() {
+  if (!auth()?.configured) return;
+  if (!me()) { pendingShare = true; hidePromo(); openLogin('Entre com o Google para receber seu cupom de 10% OFF ao compartilhar a loja.'); return; }
+  let done = false;
+  if (navigator.share) { try { await navigator.share(SHARE); done = true; } catch (e) { if (e.name === 'AbortError') return; } }
+  if (!done) {
+    window.open('https://wa.me/?text=' + encodeURIComponent(SHARE.text + ' ' + SHARE.url), '_blank', 'noopener');
+    try { await navigator.clipboard.writeText(SHARE.url); } catch {}
+  }
+  try {
+    const r = await CloutsDB.darCupom(me().uid);
+    hidePromo(); toast(r === 'novo' ? 'Cupom COMPARTILHE10 liberado! Veja em Perfil → Meus cupons' : 'Você já tem esse cupom. Veja em Meus cupons');
+    if (r === 'novo') setTimeout(() => { location.hash = '#/cupons'; }, 900);
+  } catch { toast('Não foi possível liberar o cupom agora. Tente de novo.'); }
 }
 
 /* ---------- Detalhe do produto ---------- */
@@ -309,8 +394,8 @@ function openSheet(id) {
   let sel = null;
   const gal = [p.img, ...(p.extras || [])];
   const sheet = showSheet(`
-    <div class="gal"><img class="gal-main" src="${p.img}" alt="${esc(p.nome)}">
-      ${gal.length > 1 ? `<div class="gal-th">${gal.map((g, i) => `<img src="${g}" alt="" class="${i ? '' : 'on'}" data-g="${g}">`).join('')}</div>` : ''}</div>
+    <div class="gal"><img class="gal-main" src="${esc(p.img)}" alt="${esc(p.nome)}">
+      ${gal.length > 1 ? `<div class="gal-th">${gal.map((g, i) => `<img src="${esc(g)}" alt="" class="${i ? '' : 'on'}" data-g="${esc(g)}">`).join('')}</div>` : ''}</div>
     <div class="pinfo">
       <div class="cod">CÓDIGO ${esc(p.cod)}</div>
       <h2>${esc(p.nome)}</h2>
@@ -400,7 +485,7 @@ function renderCart() {
   if (checkout) return renderCheckout();
   body.innerHTML = cart.map((i, idx) => {
     const p = byId(i.id), off = !p.tam.includes(i.tam) || p.esgotado;
-    return `<div class="ci"><img src="${p.img}" alt=""><div>${off ? '<div class="warn">Tamanho indisponível no momento. Remova para continuar.</div>' : ''}
+    return `<div class="ci"><img src="${esc(p.img)}" alt=""><div>${off ? '<div class="warn">Tamanho indisponível no momento. Remova para continuar.</div>' : ''}
       <div class="t">${esc(p.nome)}</div><div class="m">Cód. ${esc(p.cod)} · Tam. ${i.tam}</div>
       <div class="ci-r"><div class="qty"><button data-dec="${idx}" aria-label="Diminuir">−</button><span>${i.q}</span><button data-inc="${idx}" aria-label="Aumentar">+</button></div>
       <b>${brl(p.preco * i.q)}</b></div><button class="rm" data-rm="${idx}">Remover</button></div></div>`;
@@ -408,17 +493,20 @@ function renderCart() {
   foot.innerHTML = `<form class="cep" id="cepForm"><label for="cepIn">Calcular frete</label>
       <div><input id="cepIn" inputmode="numeric" placeholder="Seu CEP" maxlength="9" autocomplete="postal-code" value="${esc(ship?.cep || '')}"><button class="btn btn-dark" type="submit">Calcular</button></div>
       <p class="note" id="cepMsg">${shipMsg()}</p></form>
+    ${cupomBox()}
     <div class="tot"><span>Subtotal</span><span>${brl(cartTotal())}</span></div>
+    ${descontoValor() ? `<div class="tot disc"><span>Cupom ${esc(cupomAtivo)}</span><span>− ${brl(descontoValor())}</span></div>` : ''}
     <div class="tot"><span>Frete</span><span id="fLbl">${ship ? brl(freteValor()) : '—'}</span></div>
-    <div class="tot big"><span>Total</span><b id="tLbl">${brl(cartTotal() + (freteValor() || 0))}</b></div>
+    <div class="tot big"><span>Total</span><b id="tLbl">${brl(totalPedido())}</b></div>
     <button class="btn btn-gold block" id="goCheckout">Finalizar pedido</button>`;
+  bindCupom();
   $('#cepIn').oninput = e => { e.target.value = maskCep(e.target.value); };
   $('#cepForm').onsubmit = async e => {
     e.preventDefault(); const m = $('#cepMsg'); m.textContent = 'Consultando…';
     const r = await lookupCep($('#cepIn').value);
-    if (!r.ok) { ship = null; store.set('clouts.ship', null); m.textContent = r.msg; m.classList.add('bad'); $('#fLbl').textContent = '—'; $('#tLbl').textContent = brl(cartTotal()); return; }
+    if (!r.ok) { ship = null; store.set('clouts.ship', null); m.textContent = r.msg; m.classList.add('bad'); $('#fLbl').textContent = '—'; $('#tLbl').textContent = brl(totalPedido()); return; }
     ship = { ...ship, ...r.data }; ship.valor = freteValor(); store.set('clouts.ship', ship);
-    m.classList.remove('bad'); m.textContent = shipMsg(); $('#fLbl').textContent = brl(freteValor()); $('#tLbl').textContent = brl(cartTotal() + freteValor());
+    m.classList.remove('bad'); m.textContent = shipMsg(); $('#fLbl').textContent = brl(freteValor()); $('#tLbl').textContent = brl(totalPedido());
   };
   $('#goCheckout').onclick = () => {
     if (cart.some(i => { const p = byId(i.id); return !p.tam.includes(i.tam) || p.esgotado; })) { toast('Remova os itens indisponíveis'); return; }
@@ -426,6 +514,22 @@ function renderCart() {
     if (!ship) { $('#cepMsg').textContent = 'Informe seu CEP para calcular o frete.'; $('#cepMsg').classList.add('bad'); $('#cepIn').focus(); return; }
     checkout = true; renderCart();
   };
+}
+function cupomBox() {
+  if (!auth()?.configured) return '';
+  const c = cupomObj();
+  if (c) return `<div class="cupom on"><span><b>${esc(c.codigo)}</b> · ${c.percent}% OFF aplicado</span><button type="button" id="cupomRm">Remover</button></div>`;
+  if (!me()) return `<div class="cupom"><button type="button" id="cupomLogin">Tem cupom? Entre para usar</button></div>`;
+  const av = cupons.filter(x => !x.usado);
+  if (!av.length) return `<div class="cupom"><button type="button" id="cupomShare">Compartilhe a loja e ganhe 10% OFF</button></div>`;
+  return `<div class="cupom"><label for="cupomSel">Cupom</label><select id="cupomSel"><option value="">Escolher cupom</option>${av.map(x => `<option value="${esc(x.codigo)}">${esc(x.codigo)} · ${x.percent}% OFF</option>`).join('')}</select></div>`;
+}
+function bindCupom() {
+  const on = (id, f) => { const el = $(id); if (el) el.onclick = f; };
+  on('#cupomRm', () => { cupomAtivo = null; store.set('clouts.cupom', null); renderCart(); });
+  on('#cupomLogin', () => openLogin('Entre com o Google para usar seus cupons.'));
+  on('#cupomShare', () => shareStore());
+  const sel = $('#cupomSel'); if (sel) sel.onchange = e => { cupomAtivo = e.target.value || null; store.set('clouts.cupom', cupomAtivo); renderCart(); };
 }
 const shipMsg = () => ship ? `Entrega em ${ship.cidade}${ship.bairro ? ' · ' + ship.bairro : ''}: ${freteValor() === 0 ? 'frete ' + (CONFIG.freteGratisAcima != null && cartTotal() >= CONFIG.freteGratisAcima ? 'grátis' : brl(0)) : brl(freteValor())}` : 'Entregamos em Contagem, Betim e Belo Horizonte.';
 $('#cartBody').addEventListener('click', e => {
@@ -450,8 +554,9 @@ function renderCheckout() {
       <label class="opt"><input type="radio" name="pag" value="Cartão de crédito"><span>${ICON.card}<b>Cartão de crédito</b><small>Enviamos o link seguro de pagamento no WhatsApp.</small></span></label>
     </fieldset></form>`;
   $('#cartFoot').innerHTML = `<div class="tot"><span>Subtotal</span><span>${brl(cartTotal())}</span></div>
-    <div class="tot"><span>Frete (${esc(ship.cidade)})</span><span>${brl(freteValor())}</span></div>
-    <div class="tot big"><span>Total</span><b>${brl(cartTotal() + freteValor())}</b></div>
+    ${descontoValor() ? `<div class="tot disc"><span>Cupom ${esc(cupomAtivo)}</span><span>− ${brl(descontoValor())}</span></div>` : ''}
+    <div class="tot"><span>Frete (${esc(ship.cidade)})</span><span id="ckFrete">${brl(freteValor())}</span></div>
+    <div class="tot big"><span>Total</span><b id="ckTotal">${brl(totalPedido())}</b></div>
     <button class="btn btn-gold block" id="sendWa">${ICON.chat} Enviar pedido no WhatsApp</button>
     <button class="btn block link" id="backCart">← Voltar ao carrinho</button>`;
   const f = $('#ckForm');
@@ -461,7 +566,7 @@ function renderCheckout() {
     if (!r.ok) { toast(r.msg); e.target.classList.add('err'); return; }
     e.target.classList.remove('err'); ship = { ...ship, ...r.data }; store.set('clouts.ship', ship);
     f.elements.cidade.value = ship.cidade; f.elements.rua.value = ship.rua; f.elements.bairro.value = ship.bairro;
-    $('#cartFoot .tot:nth-child(2) span:last-child').textContent = brl(freteValor());
+    $('#ckFrete').textContent = brl(freteValor()); $('#ckTotal').textContent = brl(totalPedido());
   };
   $('#backCart').onclick = () => { checkout = false; renderCart(); };
   $('#sendWa').onclick = sendOrder;
@@ -471,16 +576,18 @@ function sendOrder() {
   ['nome', 'tel', 'cep', 'rua', 'num', 'bairro'].forEach(k => { const el = f.elements[k]; const bad = !String(d[k] || '').trim(); el.classList.toggle('err', bad); if (bad) ok = false; });
   if (!ok) { toast('Preencha os campos obrigatórios'); return; }
   store.set('clouts.cliente', { nome: d.nome, tel: d.tel, rua: d.rua, num: d.num, bairro: d.bairro, comp: d.comp });
-  const frete = freteValor(), total = cartTotal() + frete;
+  const frete = freteValor(), desc = descontoValor(), total = totalPedido(), cp = cupomObj();
   const linhas = cart.map(i => { const p = byId(i.id); return `• ${p.nome} — Cód. ${p.cod} — Tam. ${i.tam} — ${i.q}x ${brl(p.preco)}`; });
   const u = me();
-  const msg = `*Novo pedido — CLOUTS*\n\n${linhas.join('\n')}\n\n*Subtotal:* ${brl(cartTotal())}\n*Frete (${ship.cidade}):* ${brl(frete)}\n*Total:* ${brl(total)}\n*Pagamento:* ${d.pag}\n\n*Cliente:* ${d.nome}${u?.email ? '\n*E-mail:* ' + u.email : ''}\n*WhatsApp:* ${d.tel}\n*Entrega:* ${d.rua}, ${d.num}${d.comp ? ' — ' + d.comp : ''} — ${d.bairro}, ${ship.cidade} — CEP ${d.cep}`;
+  const msg = `*Novo pedido — CLOUTS*\n\n${linhas.join('\n')}\n\n*Subtotal:* ${brl(cartTotal())}${cp ? `\n*Cupom ${cp.codigo} (${cp.percent}% OFF):* − ${brl(desc)}` : ''}\n*Frete (${ship.cidade}):* ${brl(frete)}\n*Total:* ${brl(total)}\n*Pagamento:* ${d.pag}\n\n*Cliente:* ${d.nome}${u?.email ? '\n*E-mail:* ' + u.email : ''}\n*WhatsApp:* ${d.tel}\n*Entrega:* ${d.rua}, ${d.num}${d.comp ? ' — ' + d.comp : ''} — ${d.bairro}, ${ship.cidade} — CEP ${d.cep}`;
   window.open(waLink(msg), '_blank', 'noopener');
+  if (cp && u) { CloutsDB.usarCupom(u.uid, cp.codigo).catch(() => {}); cupomAtivo = null; store.set('clouts.cupom', null); }
 }
 
 /* ---------- Init ---------- */
 setHH(); updateBadges(); renderCart(); route();
 if (auth()) auth().onChange(onUser);
+setTimeout(showPromo, 4500);
 if (window.CloutsDB) CloutsDB.watch(docs => {
   if (!applyCatalog(docs)) return;
   try { localStorage.setItem('clouts.catalogo', JSON.stringify(docs)); } catch {}

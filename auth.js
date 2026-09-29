@@ -58,6 +58,31 @@ const CloutsDB = {
   }
 };
 
+/* Cupons do cliente: users/{uid}/cupons/{código}. As regras do Firestore só deixam criar o COMPARTILHE10 (10%, uma vez por conta)
+ * e só permitem marcar como usado. Compartilhar não pode ser verificado pelo servidor; o cupom é liberado ao concluir o compartilhamento. */
+const CUPOM = 'COMPARTILHE10';
+Object.assign(CloutsDB, {
+  async _fs() {
+    const [app, fs] = await Promise.all([CloutsFB.getApp(), import(CloutsFB.base + 'firebase-firestore.js')]);
+    return { fs, db: fs.getFirestore(app) };
+  },
+  async cupons(uid, onList, onErr) {
+    const { fs, db } = await this._fs();
+    return fs.onSnapshot(fs.collection(db, 'users', uid, 'cupons'),
+      snap => onList(snap.docs.map(d => ({ id: d.id, ...d.data() }))), e => onErr && onErr(e));
+  },
+  async darCupom(uid) {
+    const { fs, db } = await this._fs(), ref = fs.doc(db, 'users', uid, 'cupons', CUPOM);
+    if ((await fs.getDoc(ref)).exists()) return 'existente';
+    await fs.setDoc(ref, { codigo: CUPOM, percent: 10, usado: false, origem: 'compartilhar', criadoEm: fs.serverTimestamp() });
+    return 'novo';
+  },
+  async usarCupom(uid, codigo) {
+    const { fs, db } = await this._fs();
+    await fs.updateDoc(fs.doc(db, 'users', uid, 'cupons', codigo), { usado: true });
+  }
+});
+
 window.CloutsAuth = CloutsAuth;
 window.CloutsDB = CloutsDB;
 CloutsAuth.start();

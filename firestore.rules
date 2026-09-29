@@ -2,17 +2,61 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Só o(s) e-mail(s) abaixo, entrando com e-mail e senha no painel, podem alterar o catálogo.
+    // Administrador do painel: só este e-mail, entrando com e-mail e senha.
     function isAdmin() {
       return request.auth != null
         && request.auth.token.firebase.sign_in_provider == 'password'
         && request.auth.token.email in ['clouts.oficial2026@gmail.com'];
     }
 
-    // Catálogo: qualquer visitante lê, só o administrador escreve.
+    // Formato aceito para uma peça (bloqueia campos extras, textos gigantes e valores inválidos).
+    function produtoValido() {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['id','cod','nome','secao','modelo','preco','cor','tecido','lycra','tam',
+                               'visivel','esgotado','premium','diamond','img','extras','ordem','maisVendido','rankMV'])
+        && d.cod is string && d.cod.size() > 0 && d.cod.size() <= 40
+        && d.nome is string && d.nome.size() > 0 && d.nome.size() <= 140
+        && d.secao in ['feminino', 'masculino']
+        && d.get('modelo', '') is string && d.get('modelo', '').size() <= 60
+        && d.preco is number && d.preco >= 0 && d.preco <= 100000
+        && d.tam is list && d.tam.size() <= 12
+        && d.img is string && d.img.size() > 0 && d.img.size() < 950000
+        && (!('extras' in d) || (d.extras is list && d.extras.size() <= 6));
+    }
+
+    // Catálogo: qualquer visitante lê; só o administrador cria, altera ou exclui.
     match /produtos/{id} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow create, update: if isAdmin() && produtoValido();
+      allow delete: if isAdmin();
+    }
+
+    // Cupons de cada cliente: users/{uid}/cupons/{codigo}
+    match /users/{uid}/cupons/{cid} {
+      allow read: if request.auth != null && (request.auth.uid == uid || isAdmin());
+
+      // O cliente só pode criar o próprio COMPARTILHE10 (10%), uma única vez.
+      allow create: if request.auth != null && request.auth.uid == uid
+        && cid == 'COMPARTILHE10'
+        && request.resource.data.keys().hasOnly(['codigo', 'percent', 'usado', 'origem', 'criadoEm'])
+        && request.resource.data.codigo == 'COMPARTILHE10'
+        && request.resource.data.percent == 10
+        && request.resource.data.usado == false
+        && request.resource.data.origem == 'compartilhar'
+        && request.resource.data.criadoEm == request.time;
+
+      // Depois de criado, só dá para marcar como usado (nunca desfazer, nunca mudar o valor).
+      allow update: if request.auth != null && request.auth.uid == uid
+        && resource.data.usado == false
+        && request.resource.data.usado == true
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['usado']);
+
+      allow delete: if false;
+    }
+
+    // Todo o resto fica fechado.
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }

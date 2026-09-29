@@ -31,3 +31,13 @@ Ao informar o CEP, o site consulta o ViaCEP, confirma se é Contagem, Betim ou B
 
 ## Pagamento (Pix e cartão)
 Hoje o cliente escolhe Pix ou cartão e o pedido vai por WhatsApp; a loja envia a chave Pix/QR Code ou o link de pagamento. Cobrança automática dentro do site exige um provedor (ex.: Mercado Pago, que aceita Pix e cartão) com conta da loja e um pequeno servidor para guardar a chave secreta.
+
+## Painel do cliente (`/painel/`)
+Entra com e-mail e senha (Firebase Authentication). Só o e-mail listado em `firestore.rules` e em `painel/painel.js` (`ADMINS`) altera o catálogo.
+
+## Segurança
+- **Regras do Firestore** (`firestore.rules`): leitura pública só do catálogo; escrita só do administrador, com validação de formato; cada cliente lê apenas os próprios cupons. Ao mudar o arquivo, cole o conteúdo em Firestore Database → Regras → Publicar.
+- **Painel:** sessão termina ao fechar a aba e após 20 min parado; 5 senhas erradas bloqueiam o login por um tempo; conta que não é administradora é desconectada.
+- **Cabeçalhos** (`vercel.json`): o painel roda com Content-Security-Policy restritiva, sem cache, sem indexação e não pode ser aberto dentro de outro site; a loja bloqueia iframe e sniffing.
+- **Cupom COMPARTILHE10:** o servidor não consegue confirmar que a loja foi compartilhada; as regras garantem 10%, um por conta, e que só pode ser marcado como usado.
+- **Chave da API (recomendado):** no Google Cloud Console → APIs e serviços → Credenciais → chave "Browser key" → Restrições de aplicativo → Referenciadores HTTP: `clouts-loja.vercel.app/*` (e o domínio próprio).
