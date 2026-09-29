@@ -44,7 +44,9 @@ let favs = store.get(favKey(), []).filter(byId);
 let ship = store.get('clouts.ship', null);
 let cupons = [];                                   // cupons do usuário logado (Firestore)
 let cupomAtivo = store.get('clouts.cupom', null);   // código aplicado no carrinho
-let stopCupons = null, pendingShare = false;
+let stopCupons = null, stopConv = null, pendingShare = false, cuponsLoaded = false, refN = 0, granting = false;
+const REF_MIN = 10;                                // amigos necessários para liberar o cupom
+try { const r = new URLSearchParams(location.search).get('ref'); if (r && /^[A-Za-z0-9]{20,40}$/.test(r)) localStorage.setItem('clouts.ref', r); } catch {}
 const cupomObj = () => cupons.find(c => c.codigo === cupomAtivo && !c.usado) || null;
 const descontoValor = () => { const c = cupomObj(); return c ? Math.round(cartTotal() * c.percent) / 100 : 0; };
 const totalPedido = () => Math.max(0, cartTotal() - descontoValor()) + (freteValor() || 0);   // { cep, cidade, bairro, rua, valor }
@@ -192,12 +194,11 @@ function viewCupons() {
     app.innerHTML = `<div class="page-h"><h1>Meus cupons</h1></div><div class="empty">Entre com o Google para ver e usar seus cupons.<br><br><button class="btn btn-dark" id="pLogin">Entrar</button></div>`;
     $('#pLogin').onclick = () => openLogin('Entre com o Google para ver seus cupons.'); return;
   }
-  app.innerHTML = `<div class="page-h"><h1>Meus cupons</h1><p>Cupons ganhos ao compartilhar a loja.</p></div>
+  app.innerHTML = `<div class="page-h"><h1>Meus cupons</h1><p>Cupons ganhos ao convidar amigos.</p></div>
   ${cupons.length ? `<div class="cupons">${cupons.map(c => `<article class="ticket ${c.usado ? 'used' : ''}"><div class="tk-pct"><b>${c.percent}%</b><span>OFF</span></div>
       <div class="tk-in"><div class="tk-code">${esc(c.codigo)}</div><p>${c.usado ? 'Cupom já utilizado' : 'Disponível. Vale para todo o pedido, sem incluir o frete.'}</p>
       ${c.usado ? '' : `<div class="tk-act"><button class="btn btn-gold sm" data-usar="${esc(c.codigo)}">Usar no carrinho</button><button class="btn btn-line sm" data-copy="${esc(c.codigo)}">Copiar código</button></div>`}</div></article>`).join('')}</div>`
-    : `<div class="empty">Você ainda não tem cupons.<br><br><button class="btn btn-gold" id="cShare">Compartilhar e ganhar 10% OFF</button></div>`}`;
-  if ($('#cShare')) $('#cShare').onclick = () => shareStore();
+    : `<div class="empty">${progressHTML()}</div>`}`;
   $$('[data-usar]').forEach(b => b.onclick = () => { cupomAtivo = b.dataset.usar; store.set('clouts.cupom', cupomAtivo); openCart(); toast('Cupom aplicado'); });
   $$('[data-copy]').forEach(b => b.onclick = async () => { try { await navigator.clipboard.writeText(b.dataset.copy); toast('Código copiado'); } catch { toast(b.dataset.copy); } });
 }
@@ -314,7 +315,7 @@ function openLogin(motivo) {
     <p class="note" id="gMsg"></p></div>`, 'one narrow');
   $('#gBtn', s).onclick = async () => {
     if (!auth()?.configured) { $('#gMsg', s).textContent = 'O login com Google será ativado assim que a configuração do Firebase for concluída (veja o LEIA-ME).'; return; }
-    try { await auth().signIn(); closeSheet(); toast('Bem-vindo(a) à CLOUTS!'); }
+    try { const u = await auth().signIn(); closeSheet(); toast('Bem-vindo(a) à CLOUTS!'); if (u.isNew) registrarConvite(u.uid); }
     catch (e) { $('#gMsg', s).textContent = e.code === 'auth/popup-closed-by-user' ? 'Login cancelado.' : 'Não foi possível entrar agora. Tente novamente.'; }
   };
 }
@@ -325,14 +326,15 @@ function onUser(u) {
   if (routeKey === 'perfil') viewPerfil();
   if (routeKey === 'favoritos') viewFavs();
   if (u && $('#sheet').querySelector('.login')) closeSheet();
-  stopCupons?.(); stopCupons = null; cupons = [];
+  stopCupons?.(); stopCupons = null; stopConv?.(); stopConv = null; cupons = []; cuponsLoaded = false; refN = 0;
   if (u && window.CloutsDB) CloutsDB.cupons(u.uid, list => {
-    cupons = list; if (cupomAtivo && !cupomObj()) { cupomAtivo = null; store.set('clouts.cupom', null); }
+    cupons = list; cuponsLoaded = true; maybeGrant(); if (cupomAtivo && !cupomObj()) { cupomAtivo = null; store.set('clouts.cupom', null); }
     if (routeKey === 'cupons') viewCupons(); if (routeKey === 'perfil') viewPerfil();
     if ($('#cartDrawer').classList.contains('open')) renderCart();
     if (list.length) hidePromo();
   }, () => {}).then(f => { stopCupons = f; });
-  if (u && pendingShare) { pendingShare = false; toast('Agora toque em Compartilhar para liberar seu cupom'); showPromo(true); }
+  if (u && window.CloutsDB) CloutsDB.convites(u.uid, n => { refN = n; maybeGrant(); updateInvite(); if (routeKey === 'cupons') viewCupons(); }, () => {}).then(f => { stopConv = f; });
+  if (u && pendingShare) { pendingShare = false; hidePromo(); openInvite(); }
   if (u && checkout) renderCart();
 }
 
@@ -350,8 +352,8 @@ function showPromo(force) {
   el.innerHTML = `<div class="promo-card" role="dialog" aria-modal="true" aria-labelledby="prT">
     <button class="pr-x" id="prX" aria-label="Fechar">${ICON.x}</button>
     <div class="pr-big"><b>10%</b><span>OFF</span></div>
-    <h2 id="prT">Compartilhe a loja e ganhe 10% OFF</h2>
-    <p>Envie a CLOUTS para alguém e receba seu cupom na hora.</p>
+    <h2 id="prT">Convide ${REF_MIN} amigos e ganhe 10% OFF</h2>
+    <p>Cada amigo que entrar com o Google pelo seu link conta 1. Ao chegar em ${REF_MIN}, o cupom é liberado.</p>
     <button class="btn btn-gold block" id="prGo">Quero meu desconto</button></div>`;
   document.body.appendChild(el);
   const close = () => { store.set('clouts.promoHide', Date.now()); hidePromo(); };
@@ -361,21 +363,54 @@ function showPromo(force) {
   requestAnimationFrame(() => { el.classList.add('on'); $('#prGo').focus({ preventScroll: true }); });
 }
 function hidePromo() { const el = $('#promo'); if (el) { el.classList.remove('on'); setTimeout(() => el.remove(), 350); } }
-async function shareStore() {
-  if (!auth()?.configured) return;
-  if (!me()) { pendingShare = true; hidePromo(); openLogin('Entre com o Google para receber seu cupom de 10% OFF ao compartilhar a loja.'); return; }
-  let done = false;
-  if (navigator.share) { try { await navigator.share(SHARE); done = true; } catch (e) { if (e.name === 'AbortError') return; } }
-  if (!done) {
-    window.open('https://wa.me/?text=' + encodeURIComponent(SHARE.text + ' ' + SHARE.url), '_blank', 'noopener');
-    try { await navigator.clipboard.writeText(SHARE.url); } catch {}
-  }
-  try {
-    const r = await CloutsDB.darCupom(me().uid);
-    hidePromo(); toast(r === 'novo' ? 'Cupom COMPARTILHE10 liberado! Veja em Perfil → Meus cupons' : 'Você já tem esse cupom. Veja em Meus cupons');
-    if (r === 'novo') setTimeout(() => { location.hash = '#/cupons'; }, 900);
-  } catch { toast('Não foi possível liberar o cupom agora. Tente de novo.'); }
+function registrarConvite(uid) {
+  let ref = null; try { ref = localStorage.getItem('clouts.ref'); } catch {}
+  if (!ref || ref === uid) return;
+  CloutsDB.registrarConvite(ref, uid).catch(() => {}).finally(() => { try { localStorage.removeItem('clouts.ref'); } catch {} });
 }
+function maybeGrant() {
+  const u = me(); if (!u || !cuponsLoaded || granting || cupons.length || refN < REF_MIN) return;
+  granting = true;
+  CloutsDB.darCupom(u.uid).then(r => { if (r === 'novo') { hidePromo(); toast('Parabéns! Seu cupom de 10% OFF foi liberado.'); } }).catch(() => {}).finally(() => { granting = false; });
+}
+const inviteLink = () => `${location.origin}/?ref=${me().uid}`;
+function progressHTML() {
+  const n = Math.min(refN, REF_MIN);
+  return `<div class="prog"><div class="prog-h"><b>Convide ${REF_MIN} amigos</b><span id="ivN">${n} de ${REF_MIN}</span></div>
+    <div class="prog-bar"><i style="width:${n / REF_MIN * 100}%"></i></div>
+    <p class="note">Cada amigo precisa criar a conta com o Google pelo seu link.</p>
+    <button class="btn btn-gold" data-invite>Ver meu link de convite</button></div>`;
+}
+function updateInvite() {
+  const s = $('#sheet .invite'); if (!s) return;
+  const n = Math.min(refN, REF_MIN);
+  $('#ivN', s).textContent = `${n} de ${REF_MIN}`; $('.prog-bar i', s).style.width = `${n / REF_MIN * 100}%`;
+  if (cupons.length) { $('.iv-done', s).hidden = false; $('.iv-act', s).hidden = true; }
+}
+function openInvite() {
+  const u = me(); if (!u) return;
+  const link = inviteLink(), texto = `${SHARE.text} Entre pelo meu link: ${link}`;
+  const s = showSheet(`<div class="invite"><div class="pr-big dk"><b>10%</b><span>OFF</span></div>
+    <h2>Convide ${REF_MIN} amigos</h2>
+    <p class="note">Cada amigo que criar a conta com o Google pelo seu link conta 1. Ao chegar em ${REF_MIN}, seu cupom de 10% OFF é liberado sozinho. O cupom vale uma vez por conta.</p>
+    <div class="prog"><div class="prog-h"><b>Amigos que entraram</b><span id="ivN"></span></div><div class="prog-bar"><i></i></div></div>
+    <p class="iv-done" hidden><b>Cupom liberado!</b> Veja em Perfil → Meus cupons.</p>
+    <div class="iv-act"><input id="ivLink" readonly value="${esc(link)}" aria-label="Seu link de convite">
+      <button class="btn btn-gold block" id="ivShare">Compartilhar meu link</button>
+      <button class="btn btn-line block" id="ivCopy">Copiar link</button></div></div>`, 'one narrow');
+  updateInvite();
+  $('#ivShare', s).onclick = async () => {
+    if (navigator.share) { try { await navigator.share({ title: SHARE.title, text: SHARE.text + ' Entre pelo meu link:', url: link }); return; } catch (e) { if (e.name === 'AbortError') return; } }
+    window.open('https://wa.me/?text=' + encodeURIComponent(texto), '_blank', 'noopener');
+  };
+  $('#ivCopy', s).onclick = async () => { try { await navigator.clipboard.writeText(link); toast('Link copiado'); } catch { $('#ivLink', s).select(); toast('Selecione e copie o link'); } };
+}
+function shareStore() {
+  if (!auth()?.configured) return;
+  if (!me()) { pendingShare = true; hidePromo(); openLogin(`Entre com o Google para gerar seu link e ganhar 10% OFF ao convidar ${REF_MIN} amigos.`); return; }
+  hidePromo(); openInvite();
+}
+document.addEventListener('click', e => { if (e.target.closest('[data-invite]')) openInvite(); });
 
 /* ---------- Detalhe do produto ---------- */
 function openSheet(id) {
@@ -510,7 +545,7 @@ function cupomBox() {
   if (c) return `<div class="cupom on"><span><b>${esc(c.codigo)}</b> · ${c.percent}% OFF aplicado</span><button type="button" id="cupomRm">Remover</button></div>`;
   if (!me()) return `<div class="cupom"><button type="button" id="cupomLogin">Tem cupom? Entre para usar</button></div>`;
   const av = cupons.filter(x => !x.usado);
-  if (!av.length) return `<div class="cupom"><button type="button" id="cupomShare">Compartilhe a loja e ganhe 10% OFF</button></div>`;
+  if (!av.length) return `<div class="cupom"><button type="button" id="cupomShare">Convide ${REF_MIN} amigos e ganhe 10% OFF</button></div>`;
   return `<div class="cupom"><label for="cupomSel">Cupom</label><select id="cupomSel"><option value="">Escolher cupom</option>${av.map(x => `<option value="${esc(x.codigo)}">${esc(x.codigo)} · ${x.percent}% OFF</option>`).join('')}</select></div>`;
 }
 function bindCupom() {

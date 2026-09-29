@@ -35,14 +35,16 @@ service cloud.firestore {
     match /users/{uid}/cupons/{cid} {
       allow read: if request.auth != null && (request.auth.uid == uid || isAdmin());
 
-      // O cliente só pode criar o próprio COMPARTILHE10 (10%), uma única vez.
+      // O cliente só pode criar o próprio COMPARTILHE10 (10%), uma única vez, e só depois de 10 amigos convidados.
       allow create: if request.auth != null && request.auth.uid == uid
         && cid == 'COMPARTILHE10'
+        && exists(/databases/$(database)/documents/referrals/$(uid))
+        && get(/databases/$(database)/documents/referrals/$(uid)).data.n >= 10
         && request.resource.data.keys().hasOnly(['codigo', 'percent', 'usado', 'origem', 'criadoEm'])
         && request.resource.data.codigo == 'COMPARTILHE10'
         && request.resource.data.percent == 10
         && request.resource.data.usado == false
-        && request.resource.data.origem == 'compartilhar'
+        && request.resource.data.origem == 'indicacao'
         && request.resource.data.criadoEm == request.time;
 
       // Depois de criado, só dá para marcar como usado (nunca desfazer, nunca mudar o valor).
@@ -52,6 +54,31 @@ service cloud.firestore {
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['usado']);
 
       allow delete: if false;
+    }
+
+    // Convites: referrals/{quemConvidou} guarda o contador n; convidados/{amigo} garante 1 contagem por conta.
+    match /referrals/{refUid} {
+      allow read: if request.auth != null && (request.auth.uid == refUid || isAdmin());
+
+      // O amigo (outra conta) soma exatamente 1, e só se o registro dele for criado na mesma operação.
+      allow create: if request.auth != null && request.auth.uid != refUid
+        && request.resource.data.keys().hasOnly(['n'])
+        && request.resource.data.n == 1
+        && !exists(/databases/$(database)/documents/referrals/$(refUid)/convidados/$(request.auth.uid))
+        && existsAfter(/databases/$(database)/documents/referrals/$(refUid)/convidados/$(request.auth.uid));
+      allow update: if request.auth != null && request.auth.uid != refUid
+        && request.resource.data.keys().hasOnly(['n'])
+        && request.resource.data.n == resource.data.n + 1
+        && !exists(/databases/$(database)/documents/referrals/$(refUid)/convidados/$(request.auth.uid))
+        && existsAfter(/databases/$(database)/documents/referrals/$(refUid)/convidados/$(request.auth.uid));
+
+      match /convidados/{amigo} {
+        allow read: if isAdmin();
+        allow create: if request.auth != null && request.auth.uid == amigo && amigo != refUid
+          && request.resource.data.keys().hasOnly(['criadoEm'])
+          && request.resource.data.criadoEm == request.time
+          && existsAfter(/databases/$(database)/documents/referrals/$(refUid));
+      }
     }
 
     // Todo o resto fica fechado.

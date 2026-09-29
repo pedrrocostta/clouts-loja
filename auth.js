@@ -39,7 +39,7 @@ const CloutsAuth = (() => {
     async signIn() {
       await init();
       const r = await mod.signInWithPopup(auth, new mod.GoogleAuthProvider());
-      return pick(r.user);
+      return { ...pick(r.user), isNew: !!mod.getAdditionalUserInfo(r)?.isNewUser };
     },
     async signOut() { await init(); await mod.signOut(auth); }
   };
@@ -58,8 +58,9 @@ const CloutsDB = {
   }
 };
 
-/* Cupons do cliente: users/{uid}/cupons/{código}. As regras do Firestore só deixam criar o COMPARTILHE10 (10%, uma vez por conta)
- * e só permitem marcar como usado. Compartilhar não pode ser verificado pelo servidor; o cupom é liberado ao concluir o compartilhamento. */
+/* Convites: referrals/{quemConvidou}/convidados/{amigo} + contador n. Cada amigo (conta Google nova) conta uma vez; com 10 o cliente libera o cupom.
+ * Cupons do cliente: users/{uid}/cupons/{código}. As regras do Firestore só deixam criar o COMPARTILHE10 (10%, uma vez por conta)
+ * quando o contador de convites do próprio cliente já chegou a 10, e só permitem marcar como usado depois. */
 const CUPOM = 'COMPARTILHE10';
 Object.assign(CloutsDB, {
   async _fs() {
@@ -74,8 +75,18 @@ Object.assign(CloutsDB, {
   async darCupom(uid) {
     const { fs, db } = await this._fs(), ref = fs.doc(db, 'users', uid, 'cupons', CUPOM);
     if ((await fs.getDoc(ref)).exists()) return 'existente';
-    await fs.setDoc(ref, { codigo: CUPOM, percent: 10, usado: false, origem: 'compartilhar', criadoEm: fs.serverTimestamp() });
+    await fs.setDoc(ref, { codigo: CUPOM, percent: 10, usado: false, origem: 'indicacao', criadoEm: fs.serverTimestamp() });
     return 'novo';
+  },
+  async convites(uid, onN, onErr) {
+    const { fs, db } = await this._fs();
+    return fs.onSnapshot(fs.doc(db, 'referrals', uid), snap => onN(snap.exists() ? (snap.data().n || 0) : 0), e => onErr && onErr(e));
+  },
+  async registrarConvite(refUid, meuUid) {
+    const { fs, db } = await this._fs(), b = fs.writeBatch(db);
+    b.set(fs.doc(db, 'referrals', refUid, 'convidados', meuUid), { criadoEm: fs.serverTimestamp() });
+    b.set(fs.doc(db, 'referrals', refUid), { n: fs.increment(1) }, { merge: true });
+    await b.commit();
   },
   async usarCupom(uid, codigo) {
     const { fs, db } = await this._fs();
