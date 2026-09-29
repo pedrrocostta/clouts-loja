@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#0e0d0b">
+<title>CLOUTS — sem conexão</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{min-height:100vh;display:grid;place-items:center;background:#0e0d0b;color:#fdf2df;font-family:system-ui,-apple-system,'Segoe UI',sans-serif;padding:24px;text-align:center}
+main{display:grid;justify-items:center;gap:14px;max-width:360px}
+img{height:84px;width:auto}
+.w{font-family:Georgia,'Cormorant Garamond',serif;font-weight:600;letter-spacing:.42em;margin-right:-.42em;font-size:30px;color:#fff}
+.t{font-size:10px;letter-spacing:.4em;color:#cea147;font-weight:600}
+h1{font-family:Georgia,serif;font-weight:500;font-size:30px;margin-top:18px}
+p{color:#cbbf9f;font-size:14px;line-height:1.5}
+button{margin-top:6px;height:46px;padding:0 28px;border-radius:99px;border:0;background:#cea147;color:#0e0d0b;font-weight:700;font-size:13px;letter-spacing:.06em;cursor:pointer}
+button:hover{background:#b0842d;color:#fff}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#b3372b;margin-right:8px}
+.ok .dot{background:#2f7d4f}
+</style>
+</head>
+<body>
+<main id="m">
+  <img src="/img/logo.png" alt="">
+  <div class="w">CLOUTS</div>
+  <div class="t">VISTA SEU MELHOR.</div>
+  <h1>Sem conexão</h1>
+  <p><span class="dot"></span><span id="st">Não conseguimos chegar à loja agora. Verifique seu Wi-Fi ou dados móveis.</span></p>
+  <button type="button" onclick="location.href='/'">Tentar novamente</button>
+</main>
+<script>
+addEventListener('online', function(){ document.getElementById('m').className='ok'; document.getElementById('st').textContent='Conexão de volta. Abrindo a loja…'; setTimeout(function(){ location.href='/'; }, 600); });
+</script>
+</body>
+</html>

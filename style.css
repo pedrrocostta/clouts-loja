@@ -375,3 +375,15 @@ main{padding-top:0}
 .iv-act input{height:44px;border:1px dashed var(--gold-d);border-radius:10px;padding:0 12px;font:inherit;font-size:12.5px;background:var(--cream);width:100%}
 .iv-done{background:#e7f4ec;color:#1f6a3d;border-radius:10px;padding:12px;font-size:13.5px}
 .empty .prog{max-width:420px;margin:0 auto}
+
+/* degraus do desconto e tela de erro */
+.tiers{list-style:none;display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:4px}
+.tiers li{display:grid;gap:2px;justify-items:center;padding:10px 4px;border:1px dashed #cfc4ac;border-radius:12px;background:#fff;font-size:11.5px;color:var(--ink2);transition:.3s}
+.tiers li b{font-size:15px;color:var(--ink)}
+.tiers li.ok{border:1px solid var(--gold);background:var(--cream);color:var(--gold-d)}
+.tiers li.ok b{color:var(--gold-d)}
+.prog-w{display:grid;gap:8px}
+.fatal{display:grid;justify-items:center;gap:14px;text-align:center;padding:70px 16px}
+.fatal img{height:72px;background:var(--dark);border-radius:16px;padding:10px 16px}
+.fatal h1{font-size:34px;font-weight:500}
+.fatal p{color:var(--ink2);max-width:340px}

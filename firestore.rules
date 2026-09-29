@@ -31,27 +31,42 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
-    // Cupons de cada cliente: users/{uid}/cupons/{codigo}
+    // Degrau do desconto conforme os amigos que entraram pelo link do cliente: 1 = 5%, 5 = 10%, 10 = 20%.
+    function nConvites(uid) {
+      return get(/databases/$(database)/documents/referrals/$(uid)).data.n;
+    }
+    function degrau(n) {
+      return n >= 10 ? 20 : (n >= 5 ? 10 : 5);
+    }
+
+    // Cupom único de cada cliente: users/{uid}/cupons/AMIGO
     match /users/{uid}/cupons/{cid} {
       allow read: if request.auth != null && (request.auth.uid == uid || isAdmin());
 
-      // O cliente só pode criar o próprio COMPARTILHE10 (10%), uma única vez, e só depois de 10 amigos convidados.
+      // Criado uma única vez, com o degrau atual, e só depois de pelo menos 1 amigo.
       allow create: if request.auth != null && request.auth.uid == uid
-        && cid == 'COMPARTILHE10'
+        && cid == 'AMIGO'
         && exists(/databases/$(database)/documents/referrals/$(uid))
-        && get(/databases/$(database)/documents/referrals/$(uid)).data.n >= 10
+        && nConvites(uid) >= 1
         && request.resource.data.keys().hasOnly(['codigo', 'percent', 'usado', 'origem', 'criadoEm'])
-        && request.resource.data.codigo == 'COMPARTILHE10'
-        && request.resource.data.percent == 10
+        && request.resource.data.codigo == 'AMIGO'
+        && request.resource.data.percent == degrau(nConvites(uid))
         && request.resource.data.usado == false
         && request.resource.data.origem == 'indicacao'
         && request.resource.data.criadoEm == request.time;
 
-      // Depois de criado, só dá para marcar como usado (nunca desfazer, nunca mudar o valor).
+      // Enquanto não usado: pode subir para o degrau que os convites justificam ou ser marcado como usado. Nunca volta.
       allow update: if request.auth != null && request.auth.uid == uid
         && resource.data.usado == false
-        && request.resource.data.usado == true
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['usado']);
+        && (
+          (request.resource.data.usado == true
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['usado']))
+          ||
+          (request.resource.data.usado == false
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['percent'])
+            && request.resource.data.percent == degrau(nConvites(uid))
+            && request.resource.data.percent > resource.data.percent)
+        );
 
       allow delete: if false;
     }

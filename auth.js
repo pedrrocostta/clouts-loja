@@ -59,9 +59,9 @@ const CloutsDB = {
 };
 
 /* Convites: referrals/{quemConvidou}/convidados/{amigo} + contador n. Cada amigo (conta Google nova) conta uma vez; com 10 o cliente libera o cupom.
- * Cupons do cliente: users/{uid}/cupons/{código}. As regras do Firestore só deixam criar o COMPARTILHE10 (10%, uma vez por conta)
- * quando o contador de convites do próprio cliente já chegou a 10, e só permitem marcar como usado depois. */
-const CUPOM = 'COMPARTILHE10';
+ * Cupons do cliente: users/{uid}/cupons/{código}. As regras do Firestore só deixam criar o cupom AMIGO (5%, 10% ou 20% conforme os convites),
+ * subir de degrau enquanto não usado e marcar como usado. Um por conta. */
+const CUPOM = 'AMIGO';
 Object.assign(CloutsDB, {
   async _fs() {
     const [app, fs] = await Promise.all([CloutsFB.getApp(), import(CloutsFB.base + 'firebase-firestore.js')]);
@@ -72,11 +72,16 @@ Object.assign(CloutsDB, {
     return fs.onSnapshot(fs.collection(db, 'users', uid, 'cupons'),
       snap => onList(snap.docs.map(d => ({ id: d.id, ...d.data() }))), e => onErr && onErr(e));
   },
-  async darCupom(uid) {
-    const { fs, db } = await this._fs(), ref = fs.doc(db, 'users', uid, 'cupons', CUPOM);
-    if ((await fs.getDoc(ref)).exists()) return 'existente';
-    await fs.setDoc(ref, { codigo: CUPOM, percent: 10, usado: false, origem: 'indicacao', criadoEm: fs.serverTimestamp() });
-    return 'novo';
+  // Um único cupom por cliente: cria com o degrau atual e só sobe (5 -> 10 -> 20) enquanto não for usado.
+  async darCupom(uid, percent) {
+    const { fs, db } = await this._fs(), ref = fs.doc(db, 'users', uid, 'cupons', CUPOM), snap = await fs.getDoc(ref);
+    if (!snap.exists()) {
+      await fs.setDoc(ref, { codigo: CUPOM, percent, usado: false, origem: 'indicacao', criadoEm: fs.serverTimestamp() });
+      return 'novo';
+    }
+    const c = snap.data();
+    if (!c.usado && c.percent < percent) { await fs.updateDoc(ref, { percent }); return 'subiu'; }
+    return 'existente';
   },
   async convites(uid, onN, onErr) {
     const { fs, db } = await this._fs();
@@ -96,4 +101,3 @@ Object.assign(CloutsDB, {
 
 window.CloutsAuth = CloutsAuth;
 window.CloutsDB = CloutsDB;
-CloutsAuth.start();

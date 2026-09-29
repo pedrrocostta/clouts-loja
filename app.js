@@ -45,7 +45,11 @@ let ship = store.get('clouts.ship', null);
 let cupons = [];                                   // cupons do usuário logado (Firestore)
 let cupomAtivo = store.get('clouts.cupom', null);   // código aplicado no carrinho
 let stopCupons = null, stopConv = null, pendingShare = false, cuponsLoaded = false, refN = 0, granting = false;
-const REF_MIN = 10;                                // amigos necessários para liberar o cupom
+// Cupom único por cliente, que sobe conforme os amigos entram pelo link dele: 1 amigo = 5%, 5 = 10%, 10 = 20%. Vale uma vez.
+const TIERS = [{ n: 1, p: 5 }, { n: 5, p: 10 }, { n: 10, p: 20 }];
+const REF_MAX = 10;
+const tierPct = n => n >= 10 ? 20 : n >= 5 ? 10 : n >= 1 ? 5 : 0;
+const meuCupom = () => cupons.find(c => c.codigo === 'AMIGO') || null;
 try { const r = new URLSearchParams(location.search).get('ref'); if (r && /^[A-Za-z0-9]{20,40}$/.test(r)) localStorage.setItem('clouts.ref', r); } catch {}
 const cupomObj = () => cupons.find(c => c.codigo === cupomAtivo && !c.usado) || null;
 const descontoValor = () => { const c = cupomObj(); return c ? Math.round(cartTotal() * c.percent) / 100 : 0; };
@@ -78,7 +82,7 @@ function cardHTML(p, rank) {
   const on = favs.includes(p.id);
   return `<article class="card" data-id="${p.id}" tabindex="0" aria-label="${esc(p.nome)}">
     <div class="card-img">
-      <img src="${esc(p.img)}" alt="${esc(p.nome)}" loading="lazy">
+      <img src="${esc(p.img)}" alt="${esc(p.nome)}" loading="lazy" decoding="async">
       ${rank ? `<span class="tag-p rank">#${rank}</span>` : p.premium ? '<span class="tag-p">Premium</span>' : p.diamond ? '<span class="tag-p">Diamond</span>' : ''}
       <button class="fav ${on ? 'on' : ''}" data-fav="${p.id}" aria-label="Favoritar" aria-pressed="${on}">${ICON.heart}</button>
       ${soldOut(p) ? '<span class="soldout">Esgotado</span>' : `<button class="qadd" data-quick="${p.id}" aria-label="Adicionar ao carrinho">${ICON.plus}</button>`}
@@ -99,6 +103,14 @@ const CATS = () => [
 ];
 const catHTML = ([n, h, img]) => `<a class="cat" href="${h}"><span><img src="${img}" alt="" loading="lazy"></span>${n}</a>`;
 
+let vidIO = null;
+function lazyVideos() {
+  vidIO?.disconnect(); vidIO = null;
+  const vs = $$('.vid video'); if (!vs.length || matchMedia('(prefers-reduced-motion: reduce)').matches || !('IntersectionObserver' in window)) return;
+  vidIO = new IntersectionObserver(es => es.forEach(e => { const v = e.target; if (e.isIntersecting) v.play().catch(() => {}); else v.pause(); }), { rootMargin: '80px' });
+  vs.forEach(v => vidIO.observe(v));
+}
+
 function viewHome() {
   const fem = PRODUTOS.filter(p => p.secao === 'feminino'), mas = PRODUTOS.filter(p => p.secao === 'masculino');
   const hero = [pick('f-112271-1', 'feminino'), pick('m-4', 'masculino'), pick('f-112420-1', 'feminino'), pick('m-2', 'masculino')];
@@ -110,7 +122,7 @@ function viewHome() {
       <p>Calças femininas e masculinas com caimento perfeito. Entregamos em Contagem, Betim e Belo Horizonte.</p>
       <a class="btn btn-gold" href="#/mais-vendidos" style="align-self:flex-start">Ver mais vendidos</a>
     </div>
-    <div class="hero-img">${hero.map((p, i) => `<img src="${esc(p.img)}" alt="" class="${i ? '' : 'on'}">`).join('')}
+    <div class="hero-img">${hero.map((p, i) => `<img src="${esc(p.img)}" alt="" class="${i ? '' : 'on'}" decoding="async" ${i ? 'loading="lazy"' : 'fetchpriority="high"'}>`).join('')}
       <div class="hero-dots">${hero.map((_, i) => `<i class="${i ? '' : 'on'}"></i>`).join('')}</div>
     </div>
   </section>
@@ -123,8 +135,8 @@ function viewHome() {
   <section class="cats-grid">${CATS().map(catHTML).join('')}<a class="cat" href="#/entrega"><span class="ic">${ICON.truck}</span>Entrega</a></section>
 
   <section class="sec vids">
-    <a class="vid" href="#/feminino"><video src="img/video/feminino.mp4" poster="img/video/feminino.jpg" autoplay muted loop playsinline preload="metadata" aria-hidden="true"></video><div><span>Caimento que valoriza</span><h3>Feminino</h3></div></a>
-    <a class="vid" href="#/masculino"><video src="img/video/masculino.mp4" poster="img/video/masculino.jpg" autoplay muted loop playsinline preload="metadata" aria-hidden="true"></video><div><span>Ajuste perfeito</span><h3>Masculino</h3></div></a>
+    <a class="vid" href="#/feminino"><video src="img/video/feminino.mp4" poster="img/video/feminino.jpg" muted loop playsinline preload="none" aria-hidden="true"></video><div><span>Caimento que valoriza</span><h3>Feminino</h3></div></a>
+    <a class="vid" href="#/masculino"><video src="img/video/masculino.mp4" poster="img/video/masculino.jpg" muted loop playsinline preload="none" aria-hidden="true"></video><div><span>Ajuste perfeito</span><h3>Masculino</h3></div></a>
   </section>
 
   <section class="sec"><div class="sec-h"><h2>Mais vendidos</h2><a href="#/mais-vendidos">Ver tudo →</a></div>
@@ -133,7 +145,7 @@ function viewHome() {
     <div class="grid">${fem.slice(0, 8).map(p => cardHTML(p)).join('')}</div></section>
   <section class="sec"><div class="sec-h"><h2>Masculino</h2><a href="#/masculino">Ver tudo →</a></div>
     <div class="grid">${mas.map(p => cardHTML(p)).join('')}</div></section>`;
-  if (matchMedia('(prefers-reduced-motion: reduce)').matches) $$('.vid video').forEach(v => v.pause());
+  lazyVideos();
   const imgs = $$('.hero-img img'), dots = $$('.hero-dots i'); let k = 0;
   if (imgs.length > 1) heroTimer = setInterval(() => {
     imgs[k].classList.remove('on'); dots[k].classList.remove('on');
@@ -194,7 +206,7 @@ function viewCupons() {
     app.innerHTML = `<div class="page-h"><h1>Meus cupons</h1></div><div class="empty">Entre com o Google para ver e usar seus cupons.<br><br><button class="btn btn-dark" id="pLogin">Entrar</button></div>`;
     $('#pLogin').onclick = () => openLogin('Entre com o Google para ver seus cupons.'); return;
   }
-  app.innerHTML = `<div class="page-h"><h1>Meus cupons</h1><p>Cupons ganhos ao convidar amigos.</p></div>
+  app.innerHTML = `<div class="page-h"><h1>Meus cupons</h1><p>Seu cupom sobe de 5% a 20% conforme seus amigos entram pelo seu link.</p></div>
   ${cupons.length ? `<div class="cupons">${cupons.map(c => `<article class="ticket ${c.usado ? 'used' : ''}"><div class="tk-pct"><b>${c.percent}%</b><span>OFF</span></div>
       <div class="tk-in"><div class="tk-code">${esc(c.codigo)}</div><p>${c.usado ? 'Cupom já utilizado' : 'Disponível. Vale para todo o pedido, sem incluir o frete.'}</p>
       ${c.usado ? '' : `<div class="tk-act"><button class="btn btn-gold sm" data-usar="${esc(c.codigo)}">Usar no carrinho</button><button class="btn btn-line sm" data-copy="${esc(c.codigo)}">Copiar código</button></div>`}</div></article>`).join('')}</div>`
@@ -351,9 +363,9 @@ function showPromo(force) {
   const el = document.createElement('div'); el.id = 'promo'; el.className = 'promo-ov';
   el.innerHTML = `<div class="promo-card" role="dialog" aria-modal="true" aria-labelledby="prT">
     <button class="pr-x" id="prX" aria-label="Fechar">${ICON.x}</button>
-    <div class="pr-big"><b>10%</b><span>OFF</span></div>
-    <h2 id="prT">Convide ${REF_MIN} amigos e ganhe 10% OFF</h2>
-    <p>Cada amigo que entrar com o Google pelo seu link conta 1. Ao chegar em ${REF_MIN}, o cupom é liberado.</p>
+    <div class="pr-big"><b>5–20%</b><span>OFF</span></div>
+    <h2 id="prT">Convide amigos e ganhe desconto</h2>
+    <p><b>1 amigo</b> = 5% · <b>5 amigos</b> = 10% · <b>10 amigos</b> = 20%<br>Cada amigo entra com o Google pelo seu link.</p>
     <button class="btn btn-gold block" id="prGo">Quero meu desconto</button></div>`;
   document.body.appendChild(el);
   const close = () => { store.set('clouts.promoHide', Date.now()); hidePromo(); };
@@ -369,32 +381,38 @@ function registrarConvite(uid) {
   CloutsDB.registrarConvite(ref, uid).catch(() => {}).finally(() => { try { localStorage.removeItem('clouts.ref'); } catch {} });
 }
 function maybeGrant() {
-  const u = me(); if (!u || !cuponsLoaded || granting || cupons.length || refN < REF_MIN) return;
+  const u = me(); if (!u || !cuponsLoaded || granting) return;
+  const pct = tierPct(refN); if (!pct) return;
+  const c = meuCupom(); if (c && (c.usado || c.percent >= pct)) return;
   granting = true;
-  CloutsDB.darCupom(u.uid).then(r => { if (r === 'novo') { hidePromo(); toast('Parabéns! Seu cupom de 10% OFF foi liberado.'); } }).catch(() => {}).finally(() => { granting = false; });
+  CloutsDB.darCupom(u.uid, pct).then(r => {
+    if (r === 'novo') { hidePromo(); toast(`Seu cupom de ${pct}% OFF foi liberado!`); }
+    else if (r === 'subiu') toast(`Seu cupom subiu para ${pct}% OFF!`);
+  }).catch(() => {}).finally(() => { granting = false; });
 }
 const inviteLink = () => `${location.origin}/?ref=${me().uid}`;
+function progInner() {
+  const c = meuCupom(), n = Math.min(refN, REF_MAX), pct = tierPct(refN);
+  if (c?.usado) return `<p class="iv-done"><b>Você já usou seu cupom.</b> O benefício vale uma vez por cliente.</p>`;
+  return `<div class="prog-h"><b>${pct ? `Seu desconto agora: ${pct}% OFF` : 'Convide seus amigos'}</b><span>${n} ${n === 1 ? 'amigo' : 'amigos'}</span></div>
+    <div class="prog-bar"><i style="width:${n / REF_MAX * 100}%"></i></div>
+    <ul class="tiers">${TIERS.map(t => `<li class="${refN >= t.n ? 'ok' : ''}"><b>${t.p}% OFF</b><span>${t.n} ${t.n === 1 ? 'amigo' : 'amigos'}</span></li>`).join('')}</ul>`;
+}
 function progressHTML() {
-  const n = Math.min(refN, REF_MIN);
-  return `<div class="prog"><div class="prog-h"><b>Convide ${REF_MIN} amigos</b><span id="ivN">${n} de ${REF_MIN}</span></div>
-    <div class="prog-bar"><i style="width:${n / REF_MIN * 100}%"></i></div>
-    <p class="note">Cada amigo precisa criar a conta com o Google pelo seu link.</p>
-    <button class="btn btn-gold" data-invite>Ver meu link de convite</button></div>`;
+  return `<div class="prog"><div class="prog-w">${progInner()}</div>${meuCupom()?.usado ? '' : '<p class="note">Cada amigo precisa criar a conta com o Google pelo seu link.</p><button class="btn btn-gold" data-invite>Ver meu link de convite</button>'}</div>`;
 }
 function updateInvite() {
   const s = $('#sheet .invite'); if (!s) return;
-  const n = Math.min(refN, REF_MIN);
-  $('#ivN', s).textContent = `${n} de ${REF_MIN}`; $('.prog-bar i', s).style.width = `${n / REF_MIN * 100}%`;
-  if (cupons.length) { $('.iv-done', s).hidden = false; $('.iv-act', s).hidden = true; }
+  $('.prog-w', s).innerHTML = progInner();
+  $('.iv-act', s).hidden = !!meuCupom()?.usado;
 }
 function openInvite() {
   const u = me(); if (!u) return;
   const link = inviteLink(), texto = `${SHARE.text} Entre pelo meu link: ${link}`;
-  const s = showSheet(`<div class="invite"><div class="pr-big dk"><b>10%</b><span>OFF</span></div>
-    <h2>Convide ${REF_MIN} amigos</h2>
-    <p class="note">Cada amigo que criar a conta com o Google pelo seu link conta 1. Ao chegar em ${REF_MIN}, seu cupom de 10% OFF é liberado sozinho. O cupom vale uma vez por conta.</p>
-    <div class="prog"><div class="prog-h"><b>Amigos que entraram</b><span id="ivN"></span></div><div class="prog-bar"><i></i></div></div>
-    <p class="iv-done" hidden><b>Cupom liberado!</b> Veja em Perfil → Meus cupons.</p>
+  const s = showSheet(`<div class="invite"><div class="pr-big dk"><b>20%</b><span>OFF</span></div>
+    <h2>Convide amigos e ganhe desconto</h2>
+    <p class="note">Cada amigo que criar a conta com o Google pelo seu link conta 1. Seu desconto sobe sozinho e vale uma vez, no seu primeiro pedido com cupom.</p>
+    <div class="prog"><div class="prog-w"></div></div>
     <div class="iv-act"><input id="ivLink" readonly value="${esc(link)}" aria-label="Seu link de convite">
       <button class="btn btn-gold block" id="ivShare">Compartilhar meu link</button>
       <button class="btn btn-line block" id="ivCopy">Copiar link</button></div></div>`, 'one narrow');
@@ -407,7 +425,7 @@ function openInvite() {
 }
 function shareStore() {
   if (!auth()?.configured) return;
-  if (!me()) { pendingShare = true; hidePromo(); openLogin(`Entre com o Google para gerar seu link e ganhar 10% OFF ao convidar ${REF_MIN} amigos.`); return; }
+  if (!me()) { pendingShare = true; hidePromo(); openLogin('Entre com o Google para gerar seu link e ganhar de 5% a 20% OFF ao convidar amigos.'); return; }
   hidePromo(); openInvite();
 }
 document.addEventListener('click', e => { if (e.target.closest('[data-invite]')) openInvite(); });
@@ -545,7 +563,7 @@ function cupomBox() {
   if (c) return `<div class="cupom on"><span><b>${esc(c.codigo)}</b> · ${c.percent}% OFF aplicado</span><button type="button" id="cupomRm">Remover</button></div>`;
   if (!me()) return `<div class="cupom"><button type="button" id="cupomLogin">Tem cupom? Entre para usar</button></div>`;
   const av = cupons.filter(x => !x.usado);
-  if (!av.length) return `<div class="cupom"><button type="button" id="cupomShare">Convide ${REF_MIN} amigos e ganhe 10% OFF</button></div>`;
+  if (!av.length) return `<div class="cupom"><button type="button" id="cupomShare">Convide amigos e ganhe até 20% OFF</button></div>`;
   return `<div class="cupom"><label for="cupomSel">Cupom</label><select id="cupomSel"><option value="">Escolher cupom</option>${av.map(x => `<option value="${esc(x.codigo)}">${esc(x.codigo)} · ${x.percent}% OFF</option>`).join('')}</select></div>`;
 }
 function bindCupom() {
@@ -609,11 +627,28 @@ function sendOrder() {
 }
 
 /* ---------- Init ---------- */
-setHH(); updateBadges(); renderCart(); route();
+function hideSplash() {
+  const el = $('#splash'); if (!el) return;
+  setTimeout(() => { el.classList.add('off'); setTimeout(() => el.remove(), 600); }, Math.max(0, 500 - performance.now()));
+}
+function fatal() {
+  app.innerHTML = `<div class="fatal"><img src="img/logo.png" alt=""><h1>Algo deu errado</h1><p>Não conseguimos carregar a loja agora. Verifique sua conexão e tente de novo.</p><button class="btn btn-gold" onclick="location.reload()">Tentar de novo</button></div>`;
+}
+const idle = f => ('requestIdleCallback' in window ? requestIdleCallback(f, { timeout: 2500 }) : setTimeout(f, 1200));
+try {
+  setHH(); updateBadges(); renderCart(); route();
+  setTimeout(showPromo, 10000);
+} catch (e) { console.error(e); fatal(); }
+hideSplash();
 if (auth()) auth().onChange(onUser);
-setTimeout(showPromo, 10000);
-if (window.CloutsDB) CloutsDB.watch(docs => {
-  if (!applyCatalog(docs)) return;
-  try { localStorage.setItem('clouts.catalogo', JSON.stringify(docs)); } catch {}
-  refreshCatalog();
-}, e => console.warn('Catálogo online indisponível, usando o catálogo local.', e));
+setTimeout(() => window.CloutsAuth?.start(), 300);
+idle(() => {
+  if (window.CloutsDB) CloutsDB.watch(docs => {
+    if (!applyCatalog(docs)) return;
+    try { localStorage.setItem('clouts.catalogo', JSON.stringify(docs)); } catch {}
+    refreshCatalog();
+  }, e => console.warn('Catálogo online indisponível, usando o catálogo local.', e));
+});
+addEventListener('offline', () => toast('Você está sem internet. Continue navegando; o carrinho fica salvo.'));
+addEventListener('online', () => toast('Conexão restabelecida.'));
+if ('serviceWorker' in navigator && location.protocol === 'https:') addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));
