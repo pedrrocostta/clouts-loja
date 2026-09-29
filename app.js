@@ -97,45 +97,20 @@ const CATS = () => [
 ];
 const catHTML = ([n, h, img]) => `<a class="cat" href="${h}"><span><img src="${img}" alt="" loading="lazy"></span>${n}</a>`;
 
-function heroSlides() {
-  const [t1, t2] = topList().length > 1 ? topList() : [pick('f-112271-1', 'feminino'), pick('m-4', 'masculino')];
-  const vid = (n, kick, h, p, href, cta) => `<article class="hs hs-vid"><video src="img/video/${n}.mp4" poster="img/video/${n}.jpg" autoplay muted loop playsinline preload="metadata" aria-hidden="true"></video>
-    <div class="hs-txt"><span class="kicker">${kick}</span><h1>${h}</h1><p>${p}</p><a class="btn btn-gold" href="${href}">${cta}</a></div></article>`;
-  return vid('feminino', 'Feminino', 'Caimento que <em>valoriza</em>', 'Cigarrete, wide leg e moom com lycra. Do jeans ao dia a dia.', '#/feminino', 'Ver feminino')
-    + vid('masculino', 'Masculino', 'Ajuste <em>perfeito</em>', 'Calças slim fit em sarja e poliviscose com elastano.', '#/masculino', 'Ver masculino')
-    + `<article class="hs hs-split"><div class="hs-txt"><span class="kicker">Mais vendidos</span><h1>As preferidas de <em>quem já vestiu</em></h1><p>Entregamos em Contagem, Betim e Belo Horizonte.</p><a class="btn btn-gold" href="#/mais-vendidos">Ver mais vendidos</a></div>
-      <div class="hs-pic"><img src="${esc(t1.img)}" alt=""><img src="${esc(t2.img)}" alt=""></div></article>`;
-}
-function initHero() {
-  const tr = $('#hsTrack'); if (!tr) return;
-  const n = tr.children.length, dots = $('#hsDots'), calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  let k = 0, x0 = null;
-  dots.innerHTML = [...tr.children].map((_, i) => `<button aria-label="Slide ${i + 1}"></button>`).join('');
-  const go = i => {
-    k = (i + n) % n; tr.style.transform = `translateX(${-100 * k}%)`;
-    [...dots.children].forEach((d, j) => { d.classList.toggle('on', j === k); d.setAttribute('aria-current', j === k); });
-  };
-  const play = () => { clearInterval(heroTimer); if (!calm) heroTimer = setInterval(() => go(k + 1), 6500); };
-  $('#hsPrev').onclick = () => { go(k - 1); play(); };
-  $('#hsNext').onclick = () => { go(k + 1); play(); };
-  dots.onclick = e => { const i = [...dots.children].indexOf(e.target.closest('button')); if (i >= 0) { go(i); play(); } };
-  const hero = $('#hero');
-  hero.addEventListener('touchstart', e => { x0 = e.touches[0].clientX; clearInterval(heroTimer); }, { passive: true });
-  hero.addEventListener('touchend', e => { if (x0 != null) { const d = e.changedTouches[0].clientX - x0; if (Math.abs(d) > 40) go(k + (d < 0 ? 1 : -1)); } x0 = null; play(); });
-  hero.addEventListener('mouseenter', () => clearInterval(heroTimer)); hero.addEventListener('mouseleave', play);
-  if (calm) $$('.hs-vid video', hero).forEach(v => v.pause());
-  go(0); play();
-}
-
 function viewHome() {
   const fem = PRODUTOS.filter(p => p.secao === 'feminino'), mas = PRODUTOS.filter(p => p.secao === 'masculino');
   const hero = [pick('f-112271-1', 'feminino'), pick('m-4', 'masculino'), pick('f-112420-1', 'feminino'), pick('m-2', 'masculino')];
   app.innerHTML = `
-  <section class="hero2" id="hero" aria-roledescription="carrossel" aria-label="Destaques">
-    <div class="hs-track" id="hsTrack">${heroSlides()}</div>
-    <button class="hs-nav prev" id="hsPrev" aria-label="Slide anterior">‹</button>
-    <button class="hs-nav next" id="hsNext" aria-label="Próximo slide">›</button>
-    <div class="hero-dots" id="hsDots"></div>
+  <section class="hero">
+    <div class="hero-txt">
+      <span class="kicker">Coleção 2026</span>
+      <h1>Vista<br>seu <em>melhor.</em></h1>
+      <p>Calças femininas e masculinas com caimento perfeito. Entregamos em Contagem, Betim e Belo Horizonte.</p>
+      <a class="btn btn-gold" href="#/mais-vendidos" style="align-self:flex-start">Ver mais vendidos</a>
+    </div>
+    <div class="hero-img">${hero.map((p, i) => `<img src="${esc(p.img)}" alt="" class="${i ? '' : 'on'}">`).join('')}
+      <div class="hero-dots">${hero.map((_, i) => `<i class="${i ? '' : 'on'}"></i>`).join('')}</div>
+    </div>
   </section>
 
   <section class="strip">
@@ -145,13 +120,23 @@ function viewHome() {
 
   <section class="cats-grid">${CATS().map(catHTML).join('')}<a class="cat" href="#/entrega"><span class="ic">${ICON.truck}</span>Entrega</a></section>
 
+  <section class="sec vids">
+    <a class="vid" href="#/feminino"><video src="img/video/feminino.mp4" poster="img/video/feminino.jpg" autoplay muted loop playsinline preload="metadata" aria-hidden="true"></video><div><span>Caimento que valoriza</span><h3>Feminino</h3></div></a>
+    <a class="vid" href="#/masculino"><video src="img/video/masculino.mp4" poster="img/video/masculino.jpg" autoplay muted loop playsinline preload="metadata" aria-hidden="true"></video><div><span>Ajuste perfeito</span><h3>Masculino</h3></div></a>
+  </section>
+
   <section class="sec"><div class="sec-h"><h2>Mais vendidos</h2><a href="#/mais-vendidos">Ver tudo →</a></div>
     <div class="grid">${topList().slice(0, 8).map((p, i) => cardHTML(p, i + 1)).join('')}</div></section>
   <section class="sec"><div class="sec-h"><h2>Feminino</h2><a href="#/feminino">Ver tudo →</a></div>
     <div class="grid">${fem.slice(0, 8).map(p => cardHTML(p)).join('')}</div></section>
   <section class="sec"><div class="sec-h"><h2>Masculino</h2><a href="#/masculino">Ver tudo →</a></div>
     <div class="grid">${mas.map(p => cardHTML(p)).join('')}</div></section>`;
-  initHero();
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) $$('.vid video').forEach(v => v.pause());
+  const imgs = $$('.hero-img img'), dots = $$('.hero-dots i'); let k = 0;
+  if (imgs.length > 1) heroTimer = setInterval(() => {
+    imgs[k].classList.remove('on'); dots[k].classList.remove('on');
+    k = (k + 1) % imgs.length; imgs[k].classList.add('on'); dots[k].classList.add('on');
+  }, 4500);
 }
 
 function viewList(secao, q) {
@@ -302,7 +287,7 @@ const openCart = () => { checkout = false; renderCart(); openDrawer('cartDrawer'
 $('#cartBtn').onclick = $('#bCart').onclick = openCart;
 $('#favBtn').onclick = () => { location.hash = '#/favoritos'; };
 $('#menuDrawer').addEventListener('click', e => { if (e.target.closest('a')) closeAll(); });
-document.addEventListener('keydown', e => { if (e.key === 'Escape') closeAll(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeAll(); if ($('#promo')) { store.set('clouts.promoHide', Date.now()); hidePromo(); } } });
 $('#menuWa').href = $('#ftrWa').href = waLink('Olá! Vim pelo site da CLOUTS.');
 
 $('#searchForm').onsubmit = e => {
@@ -360,18 +345,22 @@ function promoWanted() {
 }
 function showPromo(force) {
   if (!force && !promoWanted()) return;
-  let el = $('#promo');
-  if (!el) {
-    el = document.createElement('aside'); el.id = 'promo'; el.className = 'promo'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', 'Cupom de desconto');
-    el.innerHTML = `<div class="pr-ic">${ICON.tag}</div><div class="pr-tx"><b>Compartilhe a loja e ganhe 10% OFF</b><span>Envie a CLOUTS para alguém e receba seu cupom.</span></div>
-      <button class="btn btn-gold sm" id="prGo">Compartilhar</button><button class="pr-x" id="prX" aria-label="Fechar">${ICON.x}</button>`;
-    document.body.appendChild(el);
-    $('#prGo').onclick = () => shareStore();
-    $('#prX').onclick = () => { store.set('clouts.promoHide', Date.now()); hidePromo(); };
-  }
-  requestAnimationFrame(() => el.classList.add('on'));
+  if ($('#promo')) return;
+  const el = document.createElement('div'); el.id = 'promo'; el.className = 'promo-ov';
+  el.innerHTML = `<div class="promo-card" role="dialog" aria-modal="true" aria-labelledby="prT">
+    <button class="pr-x" id="prX" aria-label="Fechar">${ICON.x}</button>
+    <div class="pr-big"><b>10%</b><span>OFF</span></div>
+    <h2 id="prT">Compartilhe a loja e ganhe 10% OFF</h2>
+    <p>Envie a CLOUTS para alguém e receba seu cupom na hora.</p>
+    <button class="btn btn-gold block" id="prGo">Quero meu desconto</button></div>`;
+  document.body.appendChild(el);
+  const close = () => { store.set('clouts.promoHide', Date.now()); hidePromo(); };
+  $('#prGo').onclick = () => shareStore();
+  $('#prX').onclick = close;
+  el.addEventListener('mousedown', e => { if (e.target === el) close(); });
+  requestAnimationFrame(() => { el.classList.add('on'); $('#prGo').focus({ preventScroll: true }); });
 }
-function hidePromo() { const el = $('#promo'); if (el) { el.classList.remove('on'); setTimeout(() => el.remove(), 400); } }
+function hidePromo() { const el = $('#promo'); if (el) { el.classList.remove('on'); setTimeout(() => el.remove(), 350); } }
 async function shareStore() {
   if (!auth()?.configured) return;
   if (!me()) { pendingShare = true; hidePromo(); openLogin('Entre com o Google para receber seu cupom de 10% OFF ao compartilhar a loja.'); return; }
@@ -587,7 +576,7 @@ function sendOrder() {
 /* ---------- Init ---------- */
 setHH(); updateBadges(); renderCart(); route();
 if (auth()) auth().onChange(onUser);
-setTimeout(showPromo, 4500);
+setTimeout(showPromo, 10000);
 if (window.CloutsDB) CloutsDB.watch(docs => {
   if (!applyCatalog(docs)) return;
   try { localStorage.setItem('clouts.catalogo', JSON.stringify(docs)); } catch {}
