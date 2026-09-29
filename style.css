@@ -311,3 +311,10 @@ body:not(.is-home) main{padding-top:64px}
 .vid span{font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--gold)}
 .vid h3{font-size:clamp(26px,3.6vw,40px);font-weight:500}
 @media(max-width:640px){.vids{grid-template-columns:1fr;gap:10px}.vid{aspect-ratio:16/10}}
+
+/* catálogo dinâmico */
+.soldout{position:absolute;left:0;right:0;bottom:0;background:rgba(14,13,11,.82);color:#fff;text-align:center;font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;font-weight:600;padding:9px 0}
+.card:has(.soldout) .card-img img{filter:grayscale(.55);opacity:.85}
+.sz:disabled{color:#a99f88;background:#f1ebdd;text-decoration:line-through;cursor:not-allowed;border-style:dashed}
+.warn{background:#fbe9e6;color:var(--red);border-radius:8px;padding:6px 9px;font-size:12px;margin-bottom:4px}
+.btn:disabled{opacity:.6;cursor:default}

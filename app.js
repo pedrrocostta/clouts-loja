@@ -20,6 +20,22 @@ const store = {
   get(k, d) { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
 };
+/* ---------- Catálogo em tempo real (Firestore) ---------- */
+const pick = (id, sec) => byId(id) || PRODUTOS.find(p => p.secao === sec) || PRODUTOS[0] || { img: '' };
+const sizesAll = p => p.secao === 'feminino' ? ['36', '38', '40', '42', '44', '46'] : ['38', '40', '42', '44', '46', '48'];
+const soldOut = p => !!p.esgotado || !(p.tam || []).length;
+const topList = () => MAIS_VENDIDOS.map(byId).filter(Boolean);
+function applyCatalog(docs) {
+  if (!docs || !docs.length) return false;
+  const list = docs.filter(d => d.visivel !== false && d.cod && d.img)
+    .map(d => ({ tam: [], preco: 0, extras: [], modelo: '', nome: d.cod, ...d }))
+    .sort((a, b) => (a.ordem ?? 0) - (b.ordem ?? 0) || String(a.cod).localeCompare(String(b.cod)));
+  PRODUTOS.length = 0; PRODUTOS.push(...list);
+  MAIS_VENDIDOS.length = 0;
+  MAIS_VENDIDOS.push(...list.filter(p => p.maisVendido).sort((a, b) => (a.rankMV ?? 999) - (b.rankMV ?? 999)).map(p => p.id));
+  return true;
+}
+try { applyCatalog(JSON.parse(localStorage.getItem('clouts.catalogo'))); } catch {}
 const auth = () => window.CloutsAuth;
 const me = () => auth()?.user || null;
 const favKey = () => 'clouts.favs.' + (me()?.uid || 'visitante');
@@ -56,7 +72,7 @@ function cardHTML(p, rank) {
       <img src="${p.img}" alt="${esc(p.nome)}" loading="lazy">
       ${rank ? `<span class="tag-p rank">#${rank}</span>` : p.premium ? '<span class="tag-p">Premium</span>' : p.diamond ? '<span class="tag-p">Diamond</span>' : ''}
       <button class="fav ${on ? 'on' : ''}" data-fav="${p.id}" aria-label="Favoritar" aria-pressed="${on}">${ICON.heart}</button>
-      <button class="qadd" data-quick="${p.id}" aria-label="Adicionar ao carrinho">${ICON.plus}</button>
+      ${soldOut(p) ? '<span class="soldout">Esgotado</span>' : `<button class="qadd" data-quick="${p.id}" aria-label="Adicionar ao carrinho">${ICON.plus}</button>`}
     </div>
     <div class="card-b"><div class="cod">Cód. ${esc(p.cod)}</div><h3 class="nm">${esc(p.nome)}</h3><div class="price">${brl(p.preco)}</div></div>
   </article>`;
@@ -66,17 +82,17 @@ function cardHTML(p, rank) {
 const app = $('#app');
 let heroTimer;
 const CATS = () => [
-  ['Feminino', '#/feminino', byId('f-112420-1').img], ['Masculino', '#/masculino', byId('m-3').img],
-  ['Mais vendidos', '#/mais-vendidos', byId('f-112466-1').img], ['Cigarrete', '#/feminino?m=Cigarrete', byId('f-112725-1').img],
-  ['Wide Leg', '#/feminino?m=Wide Leg', byId('f-112271-1').img], ['Moom', '#/feminino?m=Moom', byId('f-111664-1').img],
-  ['Jaquetas', '#/feminino?m=Jaqueta', byId('f-113064-1').img], ['Boot Cut', '#/feminino?m=Boot Cut', byId('f-113238-1').img],
-  ['Slim Fit', '#/masculino?m=Slim Fit', byId('m-5').img]
+  ['Feminino', '#/feminino', pick('f-112420-1', 'feminino').img], ['Masculino', '#/masculino', pick('m-3', 'masculino').img],
+  ['Mais vendidos', '#/mais-vendidos', pick('f-112466-1', 'feminino').img], ['Cigarrete', '#/feminino?m=Cigarrete', pick('f-112725-1', 'feminino').img],
+  ['Wide Leg', '#/feminino?m=Wide Leg', pick('f-112271-1', 'feminino').img], ['Moom', '#/feminino?m=Moom', pick('f-111664-1', 'feminino').img],
+  ['Jaquetas', '#/feminino?m=Jaqueta', pick('f-113064-1', 'feminino').img], ['Boot Cut', '#/feminino?m=Boot Cut', pick('f-113238-1', 'feminino').img],
+  ['Slim Fit', '#/masculino?m=Slim Fit', pick('m-5', 'masculino').img]
 ];
 const catHTML = ([n, h, img]) => `<a class="cat" href="${h}"><span><img src="${img}" alt="" loading="lazy"></span>${n}</a>`;
 
 function viewHome() {
   const fem = PRODUTOS.filter(p => p.secao === 'feminino'), mas = PRODUTOS.filter(p => p.secao === 'masculino');
-  const hero = [byId('f-112271-1'), byId('m-4'), byId('f-112420-1'), byId('m-2')];
+  const hero = [pick('f-112271-1', 'feminino'), pick('m-4', 'masculino'), pick('f-112420-1', 'feminino'), pick('m-2', 'masculino')];
   app.innerHTML = `
   <section class="hero">
     <div class="hero-txt">
@@ -103,14 +119,14 @@ function viewHome() {
   </section>
 
   <section class="sec"><div class="sec-h"><h2>Mais vendidos</h2><a href="#/mais-vendidos">Ver tudo →</a></div>
-    <div class="grid">${MAIS_VENDIDOS.slice(0, 8).map((id, i) => cardHTML(byId(id), i + 1)).join('')}</div></section>
+    <div class="grid">${topList().slice(0, 8).map((p, i) => cardHTML(p, i + 1)).join('')}</div></section>
   <section class="sec"><div class="sec-h"><h2>Feminino</h2><a href="#/feminino">Ver tudo →</a></div>
     <div class="grid">${fem.slice(0, 8).map(p => cardHTML(p)).join('')}</div></section>
   <section class="sec"><div class="sec-h"><h2>Masculino</h2><a href="#/masculino">Ver tudo →</a></div>
     <div class="grid">${mas.map(p => cardHTML(p)).join('')}</div></section>`;
   if (matchMedia('(prefers-reduced-motion: reduce)').matches) $$('.vid video').forEach(v => v.pause());
   const imgs = $$('.hero-img img'), dots = $$('.hero-dots i'); let k = 0;
-  heroTimer = setInterval(() => {
+  if (imgs.length > 1) heroTimer = setInterval(() => {
     imgs[k].classList.remove('on'); dots[k].classList.remove('on');
     k = (k + 1) % imgs.length; imgs[k].classList.add('on'); dots[k].classList.add('on');
   }, 4500);
@@ -140,7 +156,7 @@ function viewList(secao, q) {
 
 function viewTop() {
   app.innerHTML = `<div class="page-h"><h1>Mais vendidos</h1><p>As calças que mais saem, femininas e masculinas.</p></div>
-  <div class="grid" style="margin-top:16px">${MAIS_VENDIDOS.map((id, i) => cardHTML(byId(id), i + 1)).join('')}</div>`;
+  <div class="grid" style="margin-top:16px">${topList().map((p, i) => cardHTML(p, i + 1)).join('')}</div>`;
 }
 
 function viewSearch(term) {
@@ -180,14 +196,9 @@ function viewPerfil() {
 }
 
 /* ---------- Router ---------- */
-let routeKey = 'home';
-function route() {
-  const [path, qs] = (location.hash.slice(1) || '/').split('?');
-  const q = new URLSearchParams(qs || '');
-  clearInterval(heroTimer); closeAll();
-  const seg = path.split('/').filter(Boolean);
-  const r = seg[0] || 'home';
-  routeKey = r;
+let routeKey = 'home', cur = { r: 'home', q: new URLSearchParams() };
+function renderView() {
+  const { r, q } = cur;
   document.body.classList.toggle('is-home', r === 'home');
   if (r === 'feminino' || r === 'masculino') viewList(r, q);
   else if (r === 'mais-vendidos') viewTop();
@@ -195,11 +206,27 @@ function route() {
   else if (r === 'favoritos') viewFavs();
   else if (r === 'entrega') viewEntrega();
   else if (r === 'perfil') viewPerfil();
-  else { routeKey = 'home'; document.body.classList.add('is-home'); viewHome(); }
+  else { document.body.classList.add('is-home'); viewHome(); }
+}
+function route() {
+  const [path, qs] = (location.hash.slice(1) || '/').split('?');
+  clearInterval(heroTimer); closeAll();
+  const r = path.split('/').filter(Boolean)[0] || 'home';
+  cur = { r: ['feminino', 'masculino', 'mais-vendidos', 'busca', 'favoritos', 'entrega', 'perfil'].includes(r) ? r : 'home', q: new URLSearchParams(qs || '') };
+  routeKey = cur.r;
+  renderView();
   $$('[data-isl]').forEach(a => a.classList.toggle('on', a.dataset.isl === routeKey));
   const b = { home: 'home', 'mais-vendidos': 'mais-vendidos', perfil: 'perfil' }[routeKey];
   $$('#bnav [data-b]').forEach(x => x.classList.toggle('on', x.dataset.b === b));
   window.scrollTo({ top: 0 });
+}
+let pendingRefresh = false;
+function refreshCatalog() {
+  if ($('#sheet').classList.contains('open')) { pendingRefresh = true; return; }
+  pendingRefresh = false;
+  cart = cart.filter(i => byId(i.id)); favs = favs.filter(byId); store.set('clouts.cart', cart); store.set(favKey(), favs);
+  const y = window.scrollY; clearInterval(heroTimer); renderView(); window.scrollTo(0, y);
+  renderCart();
 }
 window.addEventListener('hashchange', route);
 const setHH = () => document.documentElement.style.setProperty('--hh', $('#hdr').offsetHeight + 'px');
@@ -225,6 +252,7 @@ function showSheet(html, cls = '') {
 function closeSheet() {
   const s = $('#sheet'); if (!s.classList.contains('open')) return;
   s.classList.remove('open'); s.setAttribute('aria-hidden', 'true'); s.innerHTML = '';
+  if (pendingRefresh) setTimeout(refreshCatalog, 0);
   if (!$('#cartDrawer').classList.contains('open') && !$('#menuDrawer').classList.contains('open')) document.body.style.overflow = '';
 }
 $('#scrim').onclick = closeAll;
@@ -290,8 +318,8 @@ function openSheet(id) {
       <div class="specs"><span>${p.secao === 'feminino' ? 'Feminino' : 'Masculino'}</span><span>${esc(p.modelo)}</span>
         ${p.lycra ? `<span>Lycra ${p.lycra}%</span>` : ''}${p.cor ? `<span>Cor: ${esc(p.cor)}</span>` : ''}${p.tecido ? `<span>${esc(p.tecido)}</span>` : ''}
         ${p.premium ? '<span>Premium</span>' : ''}${p.diamond ? '<span>Diamond</span>' : ''}</div>
-      <div><div class="lbl">Tamanho</div><div class="sizes">${p.tam.map(t => `<button class="sz" data-t="${t}">${t}</button>`).join('')}</div></div>
-      <button class="btn btn-gold block" id="addBtn">${ICON.bag} Adicionar ao carrinho</button>
+      <div><div class="lbl">Tamanho</div><div class="sizes">${sizesAll(p).map(t => `<button class="sz" data-t="${t}" ${p.tam.includes(t) && !p.esgotado ? '' : 'disabled'}>${t}</button>`).join('')}</div></div>
+      ${soldOut(p) ? '<button class="btn btn-dark block" disabled>Esgotado</button>' : `<button class="btn btn-gold block" id="addBtn">${ICON.bag} Adicionar ao carrinho</button>`}
       <button class="btn btn-line block" id="favSheet">${ICON.heart} <span>${favs.includes(p.id) ? 'Remover dos favoritos' : 'Favoritar'}</span></button>
       <p class="note">Entrega em Contagem, Betim e Belo Horizonte · Pix e cartão.</p>
     </div>`);
@@ -299,7 +327,7 @@ function openSheet(id) {
     $('.gal-main', sheet).src = im.dataset.g; $$('.gal-th img', sheet).forEach(x => x.classList.toggle('on', x === im));
   });
   $$('.sz', sheet).forEach(b => b.onclick = () => { sel = b.dataset.t; $$('.sz', sheet).forEach(x => x.classList.toggle('on', x === b)); });
-  $('#addBtn', sheet).onclick = () => {
+  if ($('#addBtn', sheet)) $('#addBtn', sheet).onclick = () => {
     if (!sel) { $$('.sz', sheet).forEach(x => { x.classList.remove('err'); void x.offsetWidth; x.classList.add('err'); }); toast('Escolha um tamanho'); return; }
     addToCart(p.id, sel); closeSheet(); openCart();
   };
@@ -371,8 +399,8 @@ function renderCart() {
   }
   if (checkout) return renderCheckout();
   body.innerHTML = cart.map((i, idx) => {
-    const p = byId(i.id);
-    return `<div class="ci"><img src="${p.img}" alt=""><div>
+    const p = byId(i.id), off = !p.tam.includes(i.tam) || p.esgotado;
+    return `<div class="ci"><img src="${p.img}" alt=""><div>${off ? '<div class="warn">Tamanho indisponível no momento. Remova para continuar.</div>' : ''}
       <div class="t">${esc(p.nome)}</div><div class="m">Cód. ${esc(p.cod)} · Tam. ${i.tam}</div>
       <div class="ci-r"><div class="qty"><button data-dec="${idx}" aria-label="Diminuir">−</button><span>${i.q}</span><button data-inc="${idx}" aria-label="Aumentar">+</button></div>
       <b>${brl(p.preco * i.q)}</b></div><button class="rm" data-rm="${idx}">Remover</button></div></div>`;
@@ -393,6 +421,7 @@ function renderCart() {
     m.classList.remove('bad'); m.textContent = shipMsg(); $('#fLbl').textContent = brl(freteValor()); $('#tLbl').textContent = brl(cartTotal() + freteValor());
   };
   $('#goCheckout').onclick = () => {
+    if (cart.some(i => { const p = byId(i.id); return !p.tam.includes(i.tam) || p.esgotado; })) { toast('Remova os itens indisponíveis'); return; }
     if (auth()?.configured && !me()) { openLogin('Entre com sua conta Google para finalizar o pedido.'); return; }
     if (!ship) { $('#cepMsg').textContent = 'Informe seu CEP para calcular o frete.'; $('#cepMsg').classList.add('bad'); $('#cepIn').focus(); return; }
     checkout = true; renderCart();
@@ -452,3 +481,8 @@ function sendOrder() {
 /* ---------- Init ---------- */
 setHH(); updateBadges(); renderCart(); route();
 if (auth()) auth().onChange(onUser);
+if (window.CloutsDB) CloutsDB.watch(docs => {
+  if (!applyCatalog(docs)) return;
+  try { localStorage.setItem('clouts.catalogo', JSON.stringify(docs)); } catch {}
+  refreshCatalog();
+}, e => console.warn('Catálogo online indisponível, usando o catálogo local.', e));

@@ -1,0 +1,18 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Só o(s) e-mail(s) abaixo, entrando com e-mail e senha no painel, podem alterar o catálogo.
+    function isAdmin() {
+      return request.auth != null
+        && request.auth.token.firebase.sign_in_provider == 'password'
+        && request.auth.token.email in ['TROCAR-PELO-EMAIL-DO-CLIENTE@gmail.com'];
+    }
+
+    // Catálogo: qualquer visitante lê, só o administrador escreve.
+    match /produtos/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+  }
+}
