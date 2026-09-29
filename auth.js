@@ -83,6 +83,13 @@ Object.assign(CloutsDB, {
     if (!c.usado && c.percent < percent) { await fs.updateDoc(ref, { percent }); return 'subiu'; }
     return 'existente';
   },
+  // Avisos e promoções enviados pelo painel (coleção "avisos"; leitura pública, escrita só do administrador).
+  async avisos(onList, onErr) {
+    const { fs, db } = await this._fs();
+    return fs.onSnapshot(fs.query(fs.collection(db, 'avisos'), fs.orderBy('criadoEm', 'desc'), fs.limit(20)),
+      snap => onList(snap.docs.map(d => { const x = d.data(); return { id: d.id, ...x, criado: x.criadoEm?.toMillis?.() ?? Date.now(), expira: x.expiraEm?.toMillis?.() ?? null }; })),
+      e => onErr && onErr(e));
+  },
   async convites(uid, onN, onErr) {
     const { fs, db } = await this._fs();
     return fs.onSnapshot(fs.doc(db, 'referrals', uid), snap => onN(snap.exists() ? (snap.data().n || 0) : 0), e => onErr && onErr(e));

@@ -44,6 +44,7 @@ let favs = store.get(favKey(), []).filter(byId);
 let ship = store.get('clouts.ship', null);
 let cupons = [];                                   // cupons do usuário logado (Firestore)
 let cupomAtivo = store.get('clouts.cupom', null);   // código aplicado no carrinho
+let avisos = store.get('clouts.avisos', []), avisoVisto = Number(store.get('clouts.avisoVisto', 0)) || 0, avisosOk = false;
 let stopCupons = null, stopConv = null, pendingShare = false, cuponsLoaded = false, refN = 0, granting = false;
 // Cupom único por cliente, que sobe conforme os amigos entram pelo link dele: 1 amigo = 5%, 5 = 10%, 10 = 20%. Vale uma vez.
 const TIERS = [{ n: 1, p: 5 }, { n: 5, p: 10 }, { n: 10, p: 20 }];
@@ -508,9 +509,38 @@ function addToCart(id, tam) {
 const cartQty = () => cart.reduce((s, i) => s + i.q, 0);
 const cartTotal = () => cart.reduce((s, i) => s + i.q * byId(i.id).preco, 0);
 
+const avisosAtivos = () => avisos.filter(a => !a.expira || a.expira > Date.now());
+const avisosNovos = () => avisosAtivos().filter(a => a.criado > avisoVisto);
+const linkOk = l => /^#\/[a-z-]+$/.test(l || '');
+const LINKS = { '#/feminino': 'Ver feminino', '#/masculino': 'Ver masculino', '#/mais-vendidos': 'Ver mais vendidos', '#/cupons': 'Ver meus cupons', '#/entrega': 'Ver entrega' };
+function ago(t) {
+  const m = Math.max(0, Math.round((Date.now() - t) / 60000));
+  if (m < 1) return 'agora'; if (m < 60) return `há ${m} min`;
+  const h = Math.round(m / 60); if (h < 24) return `há ${h} h`;
+  const d = Math.round(h / 24); return d === 1 ? 'ontem' : `há ${d} dias`;
+}
+function openAvisos() {
+  const lista = avisosAtivos(), antes = avisoVisto;
+  showSheet(`<div class="avisos"><h2>Avisos</h2>${lista.length ? lista.map(a => `<article class="aviso ${a.criado > antes ? 'new' : ''}">
+      <div class="av-h"><span class="tag-p ${a.tipo === 'promocao' ? 'rank' : ''}">${a.tipo === 'promocao' ? 'Promoção' : 'Aviso'}</span><time>${ago(a.criado)}</time></div>
+      <h3>${esc(a.titulo)}</h3><p>${esc(a.mensagem)}</p>${linkOk(a.link) ? `<a class="btn btn-gold sm" href="${esc(a.link)}">${LINKS[a.link] || 'Ver'}</a>` : ''}</article>`).join('')
+    : '<div class="empty">Nenhum aviso por enquanto.<br>Quando a CLOUTS lançar uma promoção, ela aparece aqui.</div>'}</div>`, 'one');
+  if (lista.length) { avisoVisto = Math.max(avisoVisto, ...lista.map(a => a.criado)); store.set('clouts.avisoVisto', avisoVisto); updateBadges(); }
+}
+$('#bellBtn').onclick = openAvisos;
+function onAvisos(list) {
+  const antigos = new Set(avisos.map(a => a.id)), novos = list.filter(a => !antigos.has(a.id) && (!a.expira || a.expira > Date.now()));
+  avisos = list; store.set('clouts.avisos', list);
+  if (avisosOk && novos.length) {
+    toast(`${novos[0].tipo === 'promocao' ? 'Promoção' : 'Aviso'}: ${novos[0].titulo}`);
+    const b = $('#bellBtn'); b.classList.remove('ring'); void b.offsetWidth; b.classList.add('ring');
+  }
+  avisosOk = true; updateBadges();
+}
+
 function updateBadges() {
   const n = cartQty();
-  [['#cartCount', n], ['#bCartCount', n], ['#favCount', favs.length]].forEach(([s, v]) => { const el = $(s); el.textContent = v; el.hidden = !v; });
+  [['#cartCount', n], ['#bCartCount', n], ['#favCount', favs.length], ['#bellCount', avisosNovos().length]].forEach(([s, v]) => { const el = $(s); el.textContent = v; el.hidden = !v; });
 }
 
 let checkout = false;
@@ -645,6 +675,7 @@ hideSplash();
 if (auth()) auth().onChange(onUser);
 setTimeout(() => window.CloutsAuth?.start(), 300);
 idle(() => {
+  if (window.CloutsDB) CloutsDB.avisos(onAvisos, () => {});
   if (window.CloutsDB) CloutsDB.watch(docs => {
     if (!applyCatalog(docs)) return;
     try { localStorage.setItem('clouts.catalogo', JSON.stringify(docs)); } catch {}

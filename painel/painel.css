@@ -68,3 +68,16 @@ input[type=text],input[type=email],input[type=password],input[type=number],selec
 .toast.bad{border-color:var(--red)}
 .empty{text-align:center;color:var(--ink2);padding:40px 10px}
 @media(max-width:560px){.bar{grid-template-columns:1fr 1fr}.bar input{grid-column:1/-1}.two{grid-template-columns:1fr}.top h1{font-size:18px}}
+
+.tabs{display:flex;gap:6px;margin-bottom:16px;border-bottom:1px solid var(--line)}
+.tab{padding:12px 18px;font-weight:600;font-size:13px;letter-spacing:.04em;color:var(--ink2);border-bottom:3px solid transparent;margin-bottom:-1px}
+.tab.on{color:var(--ink);border-color:var(--gold)}
+textarea{width:100%;border:1px solid #d3c8b0;border-radius:10px;padding:10px 12px;background:#fff;font:inherit;color:inherit;resize:vertical}
+.av-form{background:#fff;border:1px solid var(--line);border-radius:16px;padding:20px;display:grid;gap:14px;max-width:640px;margin-bottom:22px}
+.av-form h2,.av-h2{font-family:var(--serif);font-size:26px;font-weight:600}
+.av-h2{margin:6px 0 12px}
+.cnt{float:right;font-weight:400;color:var(--ink2)}
+.av-prev{display:grid;gap:4px;background:var(--dark);color:#fff;border-radius:12px;padding:14px;justify-items:start}
+.av-prev span:last-child{font-size:13px;color:#d8ccb0}
+.av-prev b{font-size:15px}
+.item.av{grid-template-columns:1fr}

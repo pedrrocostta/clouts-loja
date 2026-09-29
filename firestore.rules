@@ -31,6 +31,25 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // Formato aceito para um aviso/promoção (o link só pode levar para páginas da própria loja).
+    function avisoValido() {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['titulo','mensagem','tipo','link','criadoEm','expiraEm'])
+        && d.titulo is string && d.titulo.size() > 0 && d.titulo.size() <= 80
+        && d.mensagem is string && d.mensagem.size() > 0 && d.mensagem.size() <= 400
+        && d.tipo in ['promocao', 'aviso']
+        && d.get('link', '') in ['', '#/feminino', '#/masculino', '#/mais-vendidos', '#/cupons', '#/entrega']
+        && d.criadoEm == request.time
+        && (d.get('expiraEm', null) == null || d.expiraEm is timestamp);
+    }
+
+    // Avisos e promoções (sininho da loja): qualquer visitante lê; só o administrador envia ou remove.
+    match /avisos/{id} {
+      allow read: if true;
+      allow create: if isAdmin() && avisoValido();
+      allow delete: if isAdmin();
+    }
+
     // Degrau do desconto conforme os amigos que entraram pelo link do cliente: 1 = 5%, 5 = 10%, 10 = 20%.
     function nConvites(uid) {
       return get(/databases/$(database)/documents/referrals/$(uid)).data.n;
