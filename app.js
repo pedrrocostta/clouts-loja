@@ -629,7 +629,9 @@ function sendOrder() {
 /* ---------- Init ---------- */
 function hideSplash() {
   const el = $('#splash'); if (!el) return;
-  setTimeout(() => { el.classList.add('off'); setTimeout(() => el.remove(), 600); }, Math.max(0, 500 - performance.now()));
+  // Primeira abertura da sessão: mostra a marca por ~1,8 s (a animação da logo e do nome termina em ~1,1 s). Nas próximas, 0,6 s.
+  let visto = false; try { visto = sessionStorage.getItem('clouts.splash') === '1'; sessionStorage.setItem('clouts.splash', '1'); } catch {}
+  setTimeout(() => { el.classList.add('off'); setTimeout(() => el.remove(), 600); }, Math.max(0, (visto ? 600 : 1800) - performance.now()));
 }
 function fatal() {
   app.innerHTML = `<div class="fatal"><img src="img/logo.png" alt=""><h1>Algo deu errado</h1><p>Não conseguimos carregar a loja agora. Verifique sua conexão e tente de novo.</p><button class="btn btn-gold" onclick="location.reload()">Tentar de novo</button></div>`;
