@@ -1,9 +1,5 @@
 {
-  "rewrites": [
-    { "source": "/painel", "destination": "/painel/index.html" },
-    { "source": "/", "has": [{ "type": "host", "value": "^painel\..*$" }], "destination": "/painel/index.html" }
-  ],
   "headers": [
-    { "source": "/painel(.*)", "headers": [{ "key": "X-Robots-Tag", "value": "noindex, nofollow" }] }
+    { "source": "/painel/(.*)", "headers": [{ "key": "X-Robots-Tag", "value": "noindex, nofollow" }] }
   ]
 }
