@@ -1,7 +1,14 @@
 /* Login com Google (Firebase Authentication).
  * Para ativar: crie um projeto em https://console.firebase.google.com, ative Authentication > Google,
  * registre um app Web e cole os dados abaixo. Veja o LEIA-ME.md. Enquanto estiver null, o site funciona sem login. */
-const FIREBASE_CONFIG = null;
+const FIREBASE_CONFIG = {
+  apiKey: 'AIzaSyBP1WSRJqAM552UQU5rBRubeVkz7IRc2Ao',
+  authDomain: 'clouts-409b7.firebaseapp.com',
+  projectId: 'clouts-409b7',
+  storageBucket: 'clouts-409b7.firebasestorage.app',
+  messagingSenderId: '153191899322',
+  appId: '1:153191899322:web:8ba2688766cc96ff326283'
+};
 /* exemplo:
 const FIREBASE_CONFIG = {
   apiKey: '...', authDomain: 'SEU-PROJETO.firebaseapp.com', projectId: 'SEU-PROJETO', appId: '...'
