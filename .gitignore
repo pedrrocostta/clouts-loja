@@ -1,0 +1,5 @@
+_originais/
+.claude/
+*.log
+.DS_Store
+Thumbs.db
