@@ -123,7 +123,7 @@ function viewAvisos() {
       await addDoc(collection(db, 'avisos'), { titulo, mensagem, tipo: $$$('#a-tipo').value, link: $$$('#a-link').value, criadoEm: serverTimestamp(),
         expiraEm: dias ? Timestamp.fromMillis(Date.now() + dias * 86400000) : null });
       $('#af', box).reset(); $$$('#a-val').value = '7'; prev(); m.className = 'msg'; m.textContent = ''; toast('Aviso enviado aos clientes.');
-    } catch (er) { m.className = 'msg bad'; m.textContent = er?.code === 'permission-denied' ? 'Sua conta não tem permissão para enviar avisos.' : 'Não foi possível enviar. Tente de novo.'; }
+    } catch (er) { m.className = 'msg bad'; m.textContent = er?.code === 'permission-denied' ? 'O Firebase recusou o envio. Publique as regras mais recentes (Firestore Database → Regras) e tente de novo.' : 'Não foi possível enviar. Tente de novo.'; }
     b.disabled = false; b.textContent = 'Enviar para todos os clientes';
   };
   unsubAv?.(); unsubAv = onSnapshot(query(collection(db, 'avisos'), orderBy('criadoEm', 'desc'), limit(50)), snap => {
