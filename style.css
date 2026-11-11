@@ -431,3 +431,5 @@ main{padding-top:0}
 .ftr .legal-links{display:flex;flex-wrap:wrap;gap:6px 16px;justify-content:center;font-size:13px}
 .ftr .legal-links a{color:inherit;opacity:.85}
 .ftr .cnpj{font-size:12px;opacity:.7}
+
+.pdesc{white-space:pre-line;color:#4a453a;font-size:14px;line-height:1.55;margin:4px 0 2px}

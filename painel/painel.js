@@ -240,6 +240,7 @@ function openEditor(p) {
     <div class="two"><label class="f" for="e-cor">Cor (opcional)<input id="e-cor" type="text" value="${esc(d.cor || '')}"></label>
       <label class="f" for="e-lyc">Lycra % (opcional)<input id="e-lyc" type="number" min="0" max="20" value="${d.lycra ?? ''}"></label></div>
     <label class="f" for="e-tec">Tecido (opcional)<input id="e-tec" type="text" value="${esc(d.tecido || '')}"></label>
+    <label class="f" for="e-desc">Descrição (opcional)<textarea id="e-desc" rows="4" maxlength="600" placeholder="Ex.: Calça wide leg de cintura alta, com elastano para mais conforto." style="width:100%;resize:vertical;font:inherit;padding:10px 12px;border-radius:10px;border:1px solid #d9cfb8">${esc(d.descricao || '')}</textarea></label>
     <div><div class="f" style="font-size:12px;font-weight:600;margin-bottom:6px">Tamanhos disponíveis</div><div class="sizes" id="e-sz"></div></div>
     <div class="ctl"><label class="sw"><input type="checkbox" id="e-vis" ${d.visivel !== false ? 'checked' : ''}><i></i>Visível na loja</label>
       <label class="sw warn"><input type="checkbox" id="e-esg" ${d.esgotado ? 'checked' : ''}><i></i>Esgotado</label>
@@ -287,6 +288,8 @@ function openEditor(p) {
       cor: $('#e-cor', m).value.trim() || null, tecido: $('#e-tec', m).value.trim() || null, lycra: lyc === '' ? null : +lyc,
       tam, visivel: $('#e-vis', m).checked, esgotado: $('#e-esg', m).checked, premium: $('#e-pre2', m).checked, diamond: $('#e-dia', m).checked, img: foto
     };
+    // Só grava a descrição quando há texto (ou quando já existia e foi apagada), para não exigir campo vazio nas regras.
+    const desc = $('#e-desc', m).value.trim(); if (desc || p?.descricao) data.descricao = desc;
     if (novo) Object.assign(data, { ordem: Math.min(0, ...items.map(x => x.ordem ?? 0)) - 10, maisVendido: false, rankMV: null, extras: [] });
     const b = $('#e-ok', m); b.disabled = true; msg('Salvando…');
     try { await setDoc(doc(db, 'produtos', id), data, { merge: true }); toast('Salvo. Já está na loja.'); close(); }
