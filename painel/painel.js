@@ -231,7 +231,7 @@ function openEditor(p) {
   let foto = d.img || '', tam = [...(d.tam || [])], secao = d.secao;
   const m = document.createElement('div'); m.className = 'modal';
   m.innerHTML = `<form class="card" id="ef"><h2>${novo ? 'Nova peça' : 'Editar peça'}</h2>
-    <div class="two"><label class="f" for="e-cod">Código<input id="e-cod" type="text" required value="${esc(d.cod || '')}" ${novo ? '' : 'disabled'}></label>
+    <div class="two"><label class="f" for="e-cod">Código<input id="e-cod" type="text" required value="${esc(d.cod || '')}" maxlength="40"></label>
       <label class="f" for="e-sec">Seção<select id="e-sec" ${novo ? '' : 'disabled'}><option value="feminino">Feminino</option><option value="masculino">Masculino</option></select></label></div>
     <label class="f" for="e-nome">Nome<input id="e-nome" type="text" required value="${esc(d.nome || '')}" placeholder="Ex.: Calça Wide Leg 112999-1"></label>
     <div class="two"><label class="f" for="e-mod">Modelagem<input id="e-mod" type="text" list="mods" value="${esc(d.modelo || '')}" placeholder="Cigarrete, Wide Leg, Slim Fit…"><datalist id="mods">${[...new Set(items.map(x => x.modelo).filter(Boolean))].map(x => `<option value="${esc(x)}">`).join('')}</datalist></label>
@@ -278,6 +278,8 @@ function openEditor(p) {
     if (!foto) return msg('Envie a foto da peça.', true);
     const id = novo ? (secao[0] + '-' + cod.replace(/[^A-Za-z0-9-]/g, '')) : p.id;
     if (novo && items.some(x => x.id === id)) return msg('Já existe uma peça com esse código.', true);
+    // Código igual ao de outra peça confunde a busca e os pedidos (o código pode ser editado; o endereço interno da peça não muda).
+    if (items.some(x => x.id !== id && String(x.cod).trim().toLowerCase() === cod.toLowerCase())) return msg('Já existe outra peça com esse código.', true);
     const lyc = $('#e-lyc', m).value;
     const data = {
       cod, nome, secao, modelo: $('#e-mod', m).value.trim(), preco: Math.max(0, parseFloat($('#e-pre', m).value) || 0),
