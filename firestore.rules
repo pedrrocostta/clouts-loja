@@ -166,7 +166,11 @@ service cloud.firestore {
     // Pedidos pagos online: criados e atualizados só pelo servidor (api/checkout e api/webhook). O cliente lê os próprios; o administrador lê todos.
     match /pedidos/{id} {
       allow read: if request.auth != null && (resource.data.uid == request.auth.uid || isAdmin());
-      allow write: if false;
+      allow create, delete: if false;
+      // O administrador só pode mudar o andamento da entrega (valores, itens e status do pagamento ficam com o servidor).
+      allow update: if isAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['andamento'])
+        && request.resource.data.andamento in ['novo', 'preparando', 'enviado', 'entregue'];
     }
 
     // Todo o resto fica fechado.

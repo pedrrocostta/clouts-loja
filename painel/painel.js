@@ -10,6 +10,7 @@ const APPCHECK_SITE_KEY = '';   // mesma chave de auth.js (App Check / reCAPTCHA
 if (APPCHECK_SITE_KEY) {
   try { const ac = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-app-check.js'); ac.initializeAppCheck(app, { provider: new ac.ReCaptchaV3Provider(APPCHECK_SITE_KEY), isTokenAutoRefreshEnabled: true }); } catch (e) { console.warn('App Check:', e); }
 }
+import { ouvirPedidos, renderDashboard, renderPedidos } from './dashboard.js';
 const auth = getAuth(app), db = getFirestore(app), col = collection(db, 'produtos');
 
 /* ---------- Segurança ---------- */
@@ -42,7 +43,7 @@ const fail = e => toast(e?.code === 'permission-denied' ? 'Sua conta não tem pe
 
 /* ---------- Login ---------- */
 function viewLogin(aviso) {
-  $('#topActs').hidden = true; unsub?.(); unsub = null; unsubAv?.(); unsubAv = null;
+  $('#topActs').hidden = true; unsub?.(); unsub = null; unsubAv?.(); unsubAv = null; unsubPed?.(); unsubPed = null; pedidos = [];
   // Entrada só com a conta Google do dono (com verificação em duas etapas ligada na conta Google). Sem senha própria do painel.
   main.innerHTML = `<form class="login" id="lf"><img src="/img/logo.png" alt=""><h2>Entrar no painel</h2>
     <p class="msg" style="margin:0 0 4px">Entre com a conta Google do administrador.</p>
@@ -71,14 +72,17 @@ onAuthStateChanged(auth, u => {
   bump();
   $('#who').textContent = u.email; $('#topActs').hidden = false;
   viewPanel();
-  unsub?.(); unsub = onSnapshot(col, snap => { items = snap.docs.map(d => ({ id: d.id, ...d.data() })); renderList(); },
+  unsubPed?.(); pedErr = false; unsubPed = ouvirPedidos(db, list => { pedidos = list; pedErr = false; if (abaAtual === 'dash') drawDash(); if (abaAtual === 'pedidos' && document.activeElement?.tagName !== 'SELECT') drawPedidos(true); }, () => { pedErr = true; drawDash(); });
+  abaAtual = 'dash'; drawDash();
+  unsub?.(); unsub = onSnapshot(col, snap => { items = snap.docs.map(d => ({ id: d.id, ...d.data() })); renderList(); if (abaAtual === 'dash') drawDash(); },
     e => toast(e.code === 'permission-denied' ? 'Sem permissão para ler o catálogo.' : 'Falha ao carregar o catálogo.', true));
 });
 
 /* ---------- Painel ---------- */
 function viewPanel() {
-  main.innerHTML = `<div class="tabs" role="tablist"><button class="tab on" role="tab" data-tab="pecas">Peças</button><button class="tab" role="tab" data-tab="avisos">Avisos e promoções</button></div>
-    <section id="tabPecas"><div class="bar"><input id="q" type="text" placeholder="Buscar por código, referência ou nome" aria-label="Buscar">
+  main.innerHTML = `<div class="tabs" role="tablist"><button class="tab on" role="tab" data-tab="dash">Dashboard</button><button class="tab" role="tab" data-tab="pedidos">Pedidos</button><button class="tab" role="tab" data-tab="pecas">Peças</button><button class="tab" role="tab" data-tab="avisos">Avisos e promoções</button></div>
+    <section id="tabDash"></section><section id="tabPedidos" hidden></section>
+    <section id="tabPecas" hidden><div class="bar"><input id="q" type="text" placeholder="Buscar por código, referência ou nome" aria-label="Buscar">
       <select id="fs" aria-label="Seção"><option value="">Todas as seções</option><option value="feminino">Feminino</option><option value="masculino">Masculino</option></select>
       <select id="ft" aria-label="Status"><option value="">Todos os status</option><option value="vis">Visíveis</option><option value="oculta">Ocultas</option><option value="esg">Esgotadas</option></select></div>
     <div style="display:flex;justify-content:space-between;gap:10px;margin-bottom:14px;flex-wrap:wrap"><div class="stats" id="stats" style="margin:0"></div><button class="btn gold" id="novo">+ Nova peça</button></div>
@@ -92,9 +96,19 @@ function viewPanel() {
 
 function showTab(t) {
   $$('.tab').forEach(b => { const on = b.dataset.tab === t; b.classList.toggle('on', on); b.setAttribute('aria-selected', on); });
-  $('#tabPecas').hidden = t !== 'pecas'; $('#tabAvisos').hidden = t !== 'avisos';
+  $('#tabDash').hidden = t !== 'dash'; $('#tabPedidos').hidden = t !== 'pedidos'; $('#tabPecas').hidden = t !== 'pecas'; $('#tabAvisos').hidden = t !== 'avisos';
   if (t === 'avisos' && !$('#tabAvisos').firstChild) viewAvisos();
+  abaAtual = t; if (t === 'dash') drawDash(); if (t === 'pedidos') drawPedidos();
 }
+
+/* ---------- Dashboard e pedidos ---------- */
+let abaAtual = 'dash', pedidos = [], unsubPed = null, periodo = '30', pedFiltro = { q: '', st: '' }, pedErr = false;
+const drawDash = () => { const b = $('#tabDash'); if (!b) return;
+  if (pedErr) { b.innerHTML = '<div class="dsh-hero"><b>Não foi possível ler os pedidos.</b><span>Publique as regras mais recentes do Firestore (arquivo firestore.rules) e recarregue.</span></div>'; return; }
+  renderDashboard(b, pedidos, items, periodo, p => { periodo = p; drawDash(); }); };
+const drawPedidos = (keepFocus) => { const b = $('#tabPedidos'); if (!b) return; const had = keepFocus && document.activeElement?.id === 'pq', pos = had ? document.activeElement.selectionStart : 0;
+  renderPedidos(b, pedidos, db, toast, pedFiltro, (f, foco) => { pedFiltro = f; drawPedidos(foco); });
+  if (had) { const i = $('#pq'); i.focus(); i.setSelectionRange(pos, pos); } };
 
 /* ---------- Avisos e promoções (aparecem no sininho da loja) ---------- */
 const LINKS = { '': 'Nenhum (só a mensagem)', '#/feminino': 'Seção Feminino', '#/masculino': 'Seção Masculino', '#/mais-vendidos': 'Mais vendidos', '#/cupons': 'Meus cupons', '#/entrega': 'Entrega' };
