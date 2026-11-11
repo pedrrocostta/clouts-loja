@@ -18,8 +18,10 @@ module.exports = async (req, res) => {
     const p = await calcular({ itens: b.itens, cupom: b.cupom, cep: cliente.cep }, u.uid);
     if (!(p.total > 0)) throw erro(400, 'Total inválido.');
 
-    const ref = /^[A-Za-z0-9]{20,40}$/.test(b.ref || '') && b.ref !== u.uid ? b.ref : null;
-    const fs = db(), doc = fs.collection('pedidos').doc();
+    // Quem convidou vem do código de amigo que o cliente usou (users/{uid}/meta/indicacao, gravado uma única vez), não do navegador.
+    const fs = db(), ind = await fs.collection('users').doc(u.uid).collection('meta').doc('indicacao').get();
+    const ref = ind.exists && ind.data().ref && ind.data().ref !== u.uid ? String(ind.data().ref) : null;
+    const doc = fs.collection('pedidos').doc();
     await doc.set({
       uid: u.uid, email: u.email || '', cliente, itens: p.linhas, subtotal: p.subtotal, desconto: p.desconto, frete: p.frete, total: p.total,
       cupom: p.cupom, percent: p.percent, cidade: p.cidade, ref, status: 'aguardando', criadoEm: admin.firestore.FieldValue.serverTimestamp()

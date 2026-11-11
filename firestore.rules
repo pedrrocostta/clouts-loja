@@ -14,7 +14,8 @@ service cloud.firestore {
     function produtoValido() {
       let d = request.resource.data;
       return d.keys().hasOnly(['id','cod','nome','secao','modelo','preco','cor','tecido','lycra','tam',
-                               'visivel','esgotado','premium','diamond','img','extras','ordem','maisVendido','rankMV','ref','descricao'])
+                               'visivel','esgotado','premium','diamond','img','extras','ordem','maisVendido','rankMV','ref','descricao','precoAntigo'])
+        && d.get('precoAntigo', 0) is number && d.get('precoAntigo', 0) >= 0 && d.get('precoAntigo', 0) <= 100000
         && d.get('ref', '') is string && d.get('ref', '').size() <= 60
         && d.get('descricao', '') is string && d.get('descricao', '').size() <= 600
         && d.cod is string && d.cod.size() > 0 && d.cod.size() <= 40
@@ -67,15 +68,25 @@ service cloud.firestore {
 
       // Criado uma única vez, com o degrau atual, e só depois de pelo menos 1 amigo.
       allow create: if request.auth != null && request.auth.uid == uid
-        && cid == 'AMIGO'
-        && exists(/databases/$(database)/documents/referrals/$(uid))
-        && nConvites(uid) >= 1
         && request.resource.data.keys().hasOnly(['codigo', 'percent', 'usado', 'origem', 'criadoEm'])
-        && request.resource.data.codigo == 'AMIGO'
-        && request.resource.data.percent == degrau(nConvites(uid))
         && request.resource.data.usado == false
-        && request.resource.data.origem == 'indicacao'
-        && request.resource.data.criadoEm == request.time;
+        && request.resource.data.criadoEm == request.time
+        && (
+          // Cupom de quem convida (AMIGO): 5/10/20% conforme os amigos.
+          (cid == 'AMIGO'
+            && exists(/databases/$(database)/documents/referrals/$(uid))
+            && nConvites(uid) >= 1
+            && request.resource.data.codigo == 'AMIGO'
+            && request.resource.data.percent == degrau(nConvites(uid))
+            && request.resource.data.origem == 'indicacao')
+          ||
+          // Cupom de quem foi convidado e usou o código de um amigo (BEMVINDO): 10% na primeira compra, uma vez.
+          (cid == 'BEMVINDO'
+            && exists(/databases/$(database)/documents/users/$(uid)/meta/indicacao)
+            && request.resource.data.codigo == 'BEMVINDO'
+            && request.resource.data.percent == 10
+            && request.resource.data.origem == 'codigo')
+        );
 
       // Enquanto não usado: pode subir para o degrau que os convites justificam ou ser marcado como usado. Nunca volta.
       allow update: if request.auth != null && request.auth.uid == uid
@@ -84,13 +95,47 @@ service cloud.firestore {
           (request.resource.data.usado == true
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['usado']))
           ||
-          (request.resource.data.usado == false
+          (cid == 'AMIGO'
+            && request.resource.data.usado == false
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['percent'])
             && request.resource.data.percent == degrau(nConvites(uid))
             && request.resource.data.percent > resource.data.percent)
         );
 
       allow delete: if false;
+    }
+
+    // Códigos de convite: codigos/{CÓDIGO} -> dono. Qualquer cliente logado consulta um código que conhece (get), ninguém lista todos.
+    match /codigos/{codigo} {
+      allow get: if request.auth != null;
+      allow list: if false;
+      allow create: if request.auth != null
+        && codigo.matches('^[A-Z0-9]{8}$')
+        && request.resource.data.keys().hasOnly(['uid', 'criadoEm'])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.criadoEm == request.time
+        && !exists(/databases/$(database)/documents/users/$(request.auth.uid)/meta/codigo)
+        && existsAfter(/databases/$(database)/documents/users/$(request.auth.uid)/meta/codigo);
+      allow update, delete: if false;
+    }
+
+    // Dados do cliente: meta/codigo (o código dele, criado uma vez) e meta/indicacao (quem o convidou, registrado uma vez, sem alterar).
+    match /users/{uid}/meta/{doc} {
+      allow read: if request.auth != null && (request.auth.uid == uid || isAdmin());
+      allow create: if request.auth != null && request.auth.uid == uid && (
+        (doc == 'codigo'
+          && request.resource.data.keys().hasOnly(['codigo'])
+          && existsAfter(/databases/$(database)/documents/codigos/$(request.resource.data.codigo))
+          && getAfter(/databases/$(database)/documents/codigos/$(request.resource.data.codigo)).data.uid == uid)
+        ||
+        (doc == 'indicacao'
+          && request.resource.data.keys().hasOnly(['ref', 'codigo', 'criadoEm'])
+          && request.resource.data.ref != uid
+          && request.resource.data.criadoEm == request.time
+          && exists(/databases/$(database)/documents/codigos/$(request.resource.data.codigo))
+          && get(/databases/$(database)/documents/codigos/$(request.resource.data.codigo)).data.uid == request.resource.data.ref)
+      );
+      allow update, delete: if false;
     }
 
     // Convites: referrals/{quemConvidou} guarda o contador n; convidados/{amigo} garante 1 contagem por conta.

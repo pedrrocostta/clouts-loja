@@ -114,6 +114,31 @@ Object.assign(CloutsDB, {
     b.set(fs.doc(db, 'referrals', refUid), { n: fs.increment(1) }, { merge: true });
     await b.commit();
   },
+  /* Código de convite (estilo Shopee): cada cliente tem um código de 8 caracteres. codigos/{CÓDIGO} aponta para o dono (só leitura direta, sem listar);
+   users/{uid}/meta/codigo guarda o código do cliente; users/{uid}/meta/indicacao guarda quem convidou (uma única vez, não pode ser alterado). */
+  async meuCodigo(uid) {
+    const { fs, db } = await this._fs(), meta = fs.doc(db, 'users', uid, 'meta', 'codigo'), s = await fs.getDoc(meta);
+    if (s.exists()) return s.data().codigo;
+    const A = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    for (let t = 0; t < 4; t++) {
+      const r = crypto.getRandomValues(new Uint8Array(8)), codigo = [...r].map(x => A[x % A.length]).join('');
+      try {
+        const b = fs.writeBatch(db);
+        b.set(fs.doc(db, 'codigos', codigo), { uid, criadoEm: fs.serverTimestamp() });
+        b.set(meta, { codigo });
+        await b.commit(); return codigo;
+      } catch (e) { if (t === 3) throw e; }
+    }
+  },
+  async resolverCodigo(codigo) {
+    const { fs, db } = await this._fs(), s = await fs.getDoc(fs.doc(db, 'codigos', codigo));
+    return s.exists() ? s.data().uid : null;
+  },
+  async registrarIndicacao(uid, refUid, codigo) {
+    const { fs, db } = await this._fs();
+    await fs.setDoc(fs.doc(db, 'users', uid, 'meta', 'indicacao'), { ref: refUid, codigo, criadoEm: fs.serverTimestamp() });
+    await fs.setDoc(fs.doc(db, 'users', uid, 'cupons', 'BEMVINDO'), { codigo: 'BEMVINDO', percent: 10, usado: false, origem: 'codigo', criadoEm: fs.serverTimestamp() });
+  },
   async usarCupom(uid, codigo) {
     const { fs, db } = await this._fs();
     await fs.updateDoc(fs.doc(db, 'users', uid, 'cupons', codigo), { usado: true });

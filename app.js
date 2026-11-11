@@ -55,6 +55,41 @@ const REF_MAX = 10;
 const tierPct = n => n >= 10 ? 20 : n >= 5 ? 10 : n >= 1 ? 5 : 0;
 const meuCupom = () => cupons.find(c => c.codigo === 'AMIGO') || null;
 try { const r = new URLSearchParams(location.search).get('ref'); if (r && /^[A-Za-z0-9]{20,40}$/.test(r)) localStorage.setItem('clouts.ref', r); } catch {}
+try { const c = (new URLSearchParams(location.search).get('codigo') || '').toUpperCase(); if (/^[A-Z0-9]{8}$/.test(c)) localStorage.setItem('clouts.codigo', c); } catch {}
+let meuCod = null, aplicando = false;
+const temBemVindo = () => cupons.some(c => c.codigo === 'BEMVINDO');
+/* Quem recebe um código de amigo cola aqui: ganha o cupom BEMVINDO (10% na primeira compra); quem convidou sobe de degrau depois da 1ª compra paga. */
+async function aplicarCodigo(raw) {
+  const u = me(); if (!u) return { ok: false, msg: 'Entre com o Google para usar um código.' };
+  const code = String(raw || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (!/^[A-Z0-9]{8}$/.test(code)) return { ok: false, msg: 'Código inválido. Ele tem 8 letras e números.' };
+  if (aplicando) return { ok: false, msg: 'Aguarde…' };
+  aplicando = true;
+  try {
+    const ref = await CloutsDB.resolverCodigo(code);
+    if (!ref) return { ok: false, msg: 'Código não encontrado.' };
+    if (ref === u.uid) return { ok: false, msg: 'Você não pode usar o seu próprio código.' };
+    await CloutsDB.registrarIndicacao(u.uid, ref, code);
+    try { localStorage.removeItem('clouts.codigo'); } catch {}
+    if (!CONFIG.pagamentoOnline) registrarConvite(u.uid, ref);   // enquanto o pagamento online não está ligado, o amigo conta ao usar o código
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, msg: e?.code === 'permission-denied' ? 'Não foi possível usar este código. Cada cliente usa um código só, uma vez.' : 'Não foi possível validar agora. Tente de novo.' };
+  } finally { aplicando = false; }
+}
+const codigoFormHTML = () => {
+  if (temBemVindo()) return '';
+  return `<form class="codeform" id="codeForm"><label for="codeIn"><b>Recebeu um código de amigo?</b><small>Cole aqui e ganhe 10% OFF na primeira compra.</small></label>
+    <div><input id="codeIn" maxlength="12" autocomplete="off" autocapitalize="characters" placeholder="Ex.: K7M2QX9P" value="${esc(localStorage.getItem('clouts.codigo') || '')}"><button class="btn btn-dark" type="submit">Usar código</button></div><p class="note" id="codeMsg"></p></form>`;
+};
+function bindCodigoForm() {
+  const f = $('#codeForm'); if (!f) return;
+  f.onsubmit = async e => {
+    e.preventDefault(); const m = $('#codeMsg'), b = f.querySelector('button'); b.disabled = true; m.className = 'note'; m.textContent = 'Validando…';
+    const r = await aplicarCodigo($('#codeIn').value); b.disabled = false;
+    if (r.ok) toast('Código aplicado! Seu cupom de 10% OFF foi liberado.'); else { m.className = 'note bad'; m.textContent = r.msg; }
+  };
+}
 const cupomObj = () => cupons.find(c => c.codigo === cupomAtivo && !c.usado) || null;
 const descontoValor = () => { const c = cupomObj(); return c ? Math.round(cartTotal() * c.percent) / 100 : 0; };
 const totalPedido = () => Math.max(0, cartTotal() - descontoValor()) + (freteValor() || 0);   // { cep, cidade, bairro, rua, valor }
@@ -91,7 +126,7 @@ function cardHTML(p, rank) {
       <button class="fav ${on ? 'on' : ''}" data-fav="${p.id}" aria-label="Favoritar" aria-pressed="${on}">${ICON.heart}</button>
       ${soldOut(p) ? '<span class="soldout">Esgotado</span>' : `<button class="qadd" data-quick="${p.id}" aria-label="Adicionar ao carrinho">${ICON.plus}</button>`}
     </div>
-    <div class="card-b"><div class="cod">Cód. ${esc(p.cod)}</div><h3 class="nm">${esc(p.nome)}</h3><div class="price">${brl(p.preco)}</div></div>
+    <div class="card-b"><div class="cod">Cód. ${esc(p.cod)}</div><h3 class="nm">${esc(p.nome)}</h3>${priceHTML(p)}</div>
   </article>`;
 }
 
@@ -111,6 +146,11 @@ const CATS = () => [
   ['Jaquetas', '#/feminino?m=Jaqueta', pick('f-113064-1', 'feminino').img], ['Boot Cut', '#/feminino?m=Boot Cut', pick('f-113238-1', 'feminino').img],
   ['Slim Fit', '#/masculino?m=Slim Fit', pick('m-5', 'masculino').img]
 ];
+/* Preço com "De R$ X por R$ Y" quando a peça tem preço anterior maior que o atual. */
+const emPromo = p => Number(p.precoAntigo) > Number(p.preco) && Number(p.preco) > 0;
+const priceHTML = p => emPromo(p)
+  ? `<div class="price promo"><s>${brl(p.precoAntigo)}</s><b>${brl(p.preco)}</b><em>-${Math.round((1 - p.preco / p.precoAntigo) * 100)}%</em></div>`
+  : `<div class="price">${brl(p.preco)}</div>`;
 const catHTML = ([n, h, img]) => `<a class="cat" href="${h}"><span><img src="${img}" alt="" loading="lazy"></span>${n}</a>`;
 
 let vidIO = null;
@@ -213,11 +253,13 @@ function viewCupons() {
     app.innerHTML = `<div class="page-h"><h1>Meus cupons</h1></div><div class="empty">Entre com o Google para ver e usar seus cupons.<br><br><button class="btn btn-dark" id="pLogin">Entrar</button></div>`;
     $('#pLogin').onclick = () => openLogin('Entre com o Google para ver seus cupons.'); return;
   }
-  app.innerHTML = `<div class="page-h"><h1>Meus cupons</h1><p>Seu cupom sobe de 5% a 20% conforme seus amigos entram pelo seu link.</p></div>
+  app.innerHTML = `<div class="page-h"><h1>Meus cupons</h1><p>Convide amigos com o seu código: seu amigo ganha 10% OFF e o seu cupom sobe de 5% a 20%.</p></div>
+  ${codigoFormHTML()}
   ${cupons.length ? `<div class="cupons">${cupons.map(c => `<article class="ticket ${c.usado ? 'used' : ''}"><div class="tk-pct"><b>${c.percent}%</b><span>OFF</span></div>
       <div class="tk-in"><div class="tk-code">${esc(c.codigo)}</div><p>${c.usado ? 'Cupom já utilizado' : 'Disponível. Vale para todo o pedido, sem incluir o frete.'}</p>
       ${c.usado ? '' : `<div class="tk-act"><button class="btn btn-gold sm" data-usar="${esc(c.codigo)}">Usar no carrinho</button><button class="btn btn-line sm" data-copy="${esc(c.codigo)}">Copiar código</button></div>`}</div></article>`).join('')}</div>`
     : `<div class="empty">${progressHTML()}</div>`}`;
+  bindCodigoForm();
   $$('[data-usar]').forEach(b => b.onclick = () => { cupomAtivo = b.dataset.usar; store.set('clouts.cupom', cupomAtivo); openCart(); toast('Cupom aplicado'); });
   $$('[data-copy]').forEach(b => b.onclick = async () => { try { await navigator.clipboard.writeText(b.dataset.copy); toast('Código copiado'); } catch { toast(b.dataset.copy); } });
 }
@@ -353,9 +395,12 @@ function onUser(u) {
   if (routeKey === 'perfil') viewPerfil();
   if (routeKey === 'favoritos') viewFavs();
   if (u && $('#sheet').querySelector('.login')) closeSheet();
-  stopCupons?.(); stopCupons = null; stopConv?.(); stopConv = null; cupons = []; cuponsLoaded = false; refN = 0;
+  stopCupons?.(); stopCupons = null; stopConv?.(); stopConv = null; cupons = []; cuponsLoaded = false; refN = 0; meuCod = null;
+  if (u && window.CloutsDB) CloutsDB.meuCodigo(u.uid).then(c => { meuCod = c; updateInvite(); if (routeKey === 'cupons') viewCupons(); }).catch(() => {});
   if (u && window.CloutsDB) CloutsDB.cupons(u.uid, list => {
-    cupons = list; cuponsLoaded = true; maybeGrant(); if (cupomAtivo && !cupomObj()) { cupomAtivo = null; store.set('clouts.cupom', null); }
+    cupons = list; cuponsLoaded = true; maybeGrant();
+    // Entrou por um link com código de amigo: aplica sozinho na primeira vez.
+    try { const sv = localStorage.getItem('clouts.codigo'); if (sv && !temBemVindo()) aplicarCodigo(sv).then(r => { if (r.ok) toast('Código de amigo aplicado! Você ganhou 10% OFF na primeira compra.'); else if (r.msg?.startsWith('Código não') || r.msg?.startsWith('Você não') || r.msg?.startsWith('Não foi possível usar')) localStorage.removeItem('clouts.codigo'); }); } catch {} if (cupomAtivo && !cupomObj()) { cupomAtivo = null; store.set('clouts.cupom', null); }
     if (routeKey === 'cupons') viewCupons(); if (routeKey === 'perfil') viewPerfil();
     if ($('#cartDrawer').classList.contains('open')) renderCart();
     if (list.length) hidePromo();
@@ -380,7 +425,7 @@ function showPromo(force) {
     <button class="pr-x" id="prX" aria-label="Fechar">${ICON.x}</button>
     <div class="pr-big"><b>5–20%</b><span>OFF</span></div>
     <h2 id="prT">Convide amigos e ganhe desconto</h2>
-    <p><b>1 amigo</b> = 5% · <b>5 amigos</b> = 10% · <b>10 amigos</b> = 20%<br>${CONFIG.pagamentoOnline ? 'Cada amigo entra pelo seu link e faz a primeira compra.' : 'Cada amigo entra com o Google pelo seu link.'}</p>
+    <p>Seu amigo usa o seu código e ganha <b>10% OFF</b>. Você ganha de <b>5% a 20%</b>: <b>1 amigo</b> = 5% · <b>5</b> = 10% · <b>10</b> = 20%<br>${CONFIG.pagamentoOnline ? 'Cada amigo entra pelo seu link e faz a primeira compra.' : 'Cada amigo entra com o Google pelo seu link.'}</p>
     <button class="btn btn-gold block" id="prGo">Quero meu desconto</button></div>`;
   document.body.appendChild(el);
   const close = () => { store.set('clouts.promoHide', Date.now()); hidePromo(); };
@@ -390,8 +435,8 @@ function showPromo(force) {
   requestAnimationFrame(() => { el.classList.add('on'); $('#prGo').focus({ preventScroll: true }); });
 }
 function hidePromo() { const el = $('#promo'); if (el) { el.classList.remove('on'); setTimeout(() => el.remove(), 350); } }
-function registrarConvite(uid) {
-  let ref = null; try { ref = localStorage.getItem('clouts.ref'); } catch {}
+function registrarConvite(uid, refDireto) {
+  let ref = refDireto || null; if (!ref) { try { ref = localStorage.getItem('clouts.ref'); } catch {} }
   if (!ref || ref === uid) return;
   CloutsDB.registrarConvite(ref, uid).catch(() => {}).finally(() => { try { localStorage.removeItem('clouts.ref'); } catch {} });
 }
@@ -405,7 +450,7 @@ function maybeGrant() {
     else if (r === 'subiu') toast(`Seu cupom subiu para ${pct}% OFF!`);
   }).catch(() => {}).finally(() => { granting = false; });
 }
-const inviteLink = () => `${location.origin}/?ref=${me().uid}`;
+const inviteLink = () => meuCod ? `${location.origin}/?codigo=${meuCod}` : `${location.origin}/?ref=${me().uid}`;
 function progInner() {
   const c = meuCupom(), n = Math.min(refN, REF_MAX), pct = tierPct(refN);
   if (c?.usado) return `<p class="iv-done"><b>Você já usou seu cupom.</b> O benefício vale uma vez por cliente.</p>`;
@@ -418,16 +463,18 @@ function progressHTML() {
 }
 function updateInvite() {
   const s = $('#sheet .invite'); if (!s) return;
+  if ($('#ivCode', s)) { $('#ivCode', s).textContent = meuCod || '…'; if ($('#ivLink', s)) $('#ivLink', s).value = inviteLink(); }
   $('.prog-w', s).innerHTML = progInner();
   $('.iv-act', s).hidden = !!meuCupom()?.usado;
 }
 function openInvite() {
   const u = me(); if (!u) return;
-  const link = inviteLink(), texto = `${SHARE.text} Entre pelo meu link: ${link}`;
+  const link = inviteLink(), texto = `${SHARE.text} Use meu código ${meuCod || ''} e ganhe 10% OFF na primeira compra: ${link}`;
   const s = showSheet(`<div class="invite"><div class="pr-big dk"><b>20%</b><span>OFF</span></div>
     <h2>Convide amigos e ganhe desconto</h2>
     <p class="note">${CONFIG.pagamentoOnline ? 'Cada amigo que entrar pelo seu link e fizer a primeira compra conta 1.' : 'Cada amigo que criar a conta com o Google pelo seu link conta 1.'} Seu desconto sobe sozinho e vale uma vez, no seu primeiro pedido com cupom.</p>
     <div class="prog"><div class="prog-w"></div></div>
+    <div class="mycode"><small>Seu código de amigo</small><b id="ivCode">${esc(meuCod || '…')}</b><button class="btn btn-line sm" id="ivCopyCode" type="button">Copiar código</button></div>
     <div class="iv-act"><input id="ivLink" readonly value="${esc(link)}" aria-label="Seu link de convite">
       <button class="btn btn-gold block" id="ivShare">Compartilhar meu link</button>
       <button class="btn btn-line block" id="ivCopy">Copiar link</button></div></div>`, 'one narrow');
@@ -436,6 +483,7 @@ function openInvite() {
     if (navigator.share) { try { await navigator.share({ title: SHARE.title, text: SHARE.text + ' Entre pelo meu link:', url: link }); return; } catch (e) { if (e.name === 'AbortError') return; } }
     window.open('https://wa.me/?text=' + encodeURIComponent(texto), '_blank', 'noopener');
   };
+  $('#ivCopyCode', s).onclick = async () => { if (!meuCod) return toast('Gerando seu código…'); try { await navigator.clipboard.writeText(meuCod); toast('Código copiado'); } catch { toast(meuCod); } };
   $('#ivCopy', s).onclick = async () => { try { await navigator.clipboard.writeText(link); toast('Link copiado'); } catch { $('#ivLink', s).select(); toast('Selecione e copie o link'); } };
 }
 function shareStore() {
@@ -456,7 +504,7 @@ function openSheet(id) {
     <div class="pinfo">
       <div class="cod">CÓDIGO ${esc(p.cod)}${p.ref ? ` · REF. ${esc(p.ref)}` : ''}</div>
       <h2>${esc(p.nome)}</h2>
-      <div class="price">${brl(p.preco)}</div>
+      ${priceHTML(p)}
       <div class="specs"><span>${p.secao === 'feminino' ? 'Feminino' : 'Masculino'}</span><span>${esc(p.modelo)}</span>
         ${p.lycra ? `<span>Lycra ${p.lycra}%</span>` : ''}${p.cor ? `<span>Cor: ${esc(p.cor)}</span>` : ''}${p.tecido ? `<span>${esc(p.tecido)}</span>` : ''}
         ${p.premium ? '<span>Premium</span>' : ''}${p.diamond ? '<span>Diamond</span>' : ''}</div>

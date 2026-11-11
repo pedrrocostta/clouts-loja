@@ -237,6 +237,7 @@ function openEditor(p) {
     <label class="f" for="e-ref">Referência do fornecedor (opcional)<input id="e-ref" type="text" maxlength="60" value="${esc(d.ref || '')}" placeholder="Ex.: a referência que aparece no site do fornecedor"></label>
     <div class="two"><label class="f" for="e-mod">Modelagem<input id="e-mod" type="text" list="mods" value="${esc(d.modelo || '')}" placeholder="Cigarrete, Wide Leg, Slim Fit…"><datalist id="mods">${[...new Set(items.map(x => x.modelo).filter(Boolean))].map(x => `<option value="${esc(x)}">`).join('')}</datalist></label>
       <label class="f" for="e-pre">Preço (R$)<input id="e-pre" type="number" min="0" step="0.01" inputmode="decimal" value="${d.preco ?? 0}"></label></div>
+    <label class="f" for="e-pant">Preço anterior (R$, opcional) — mostra "De R$ … por R$ …" na loja<input id="e-pant" type="number" min="0" step="0.01" inputmode="decimal" value="${d.precoAntigo || ''}" placeholder="Deixe vazio se não houver promoção"></label>
     <div class="two"><label class="f" for="e-cor">Cor (opcional)<input id="e-cor" type="text" value="${esc(d.cor || '')}"></label>
       <label class="f" for="e-lyc">Lycra % (opcional)<input id="e-lyc" type="number" min="0" max="20" value="${d.lycra ?? ''}"></label></div>
     <label class="f" for="e-tec">Tecido (opcional)<input id="e-tec" type="text" value="${esc(d.tecido || '')}"></label>
@@ -290,6 +291,9 @@ function openEditor(p) {
     };
     // Só grava a descrição quando há texto (ou quando já existia e foi apagada), para não exigir campo vazio nas regras.
     const desc = $('#e-desc', m).value.trim(); if (desc || p?.descricao) data.descricao = desc;
+    const pant = Math.max(0, parseFloat($('#e-pant', m).value) || 0);
+    if (pant && pant <= data.preco) return msg('O preço anterior precisa ser maior que o preço atual.', true);
+    if (pant || p?.precoAntigo) data.precoAntigo = pant;
     if (novo) Object.assign(data, { ordem: Math.min(0, ...items.map(x => x.ordem ?? 0)) - 10, maisVendido: false, rankMV: null, extras: [] });
     const b = $('#e-ok', m); b.disabled = true; msg('Salvando…');
     try { await setDoc(doc(db, 'produtos', id), data, { merge: true }); toast('Salvo. Já está na loja.'); close(); }

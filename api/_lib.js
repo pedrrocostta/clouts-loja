@@ -61,6 +61,11 @@ async function calcular({ itens, cupom, cep }, uid) {
     const c = await fs.collection('users').doc(uid).collection('cupons').doc(String(cupom)).get();
     if (!c.exists || c.data().usado || !DEGRAUS.includes(c.data().percent)) throw erro(409, 'Cupom indisponível.');
     percent = c.data().percent;
+    // BEMVINDO (código de amigo) vale só na primeira compra: quem já tem pedido pago não usa.
+    if (String(cupom) === 'BEMVINDO') {
+      const ja = await fs.collection('pedidos').where('uid', '==', uid).where('status', '==', 'pago').limit(1).get();
+      if (!ja.empty) throw erro(409, 'O cupom BEMVINDO vale apenas na primeira compra.');
+    }
   }
   const desc = Math.round(sub * percent / 100);
   const total = sub - desc + cents(frete);
