@@ -53,7 +53,9 @@ const CloutsAuth = (() => {
       const r = await mod.signInWithPopup(auth, new mod.GoogleAuthProvider());
       return { ...pick(r.user), isNew: !!mod.getAdditionalUserInfo(r)?.isNewUser };
     },
-    async signOut() { await init(); await mod.signOut(auth); }
+    async signOut() { await init(); await mod.signOut(auth); },
+    // Token de identidade do cliente (enviado ao servidor no pagamento para provar quem é).
+    async token() { await init(); return auth.currentUser ? auth.currentUser.getIdToken() : null; }
   };
 })();
 

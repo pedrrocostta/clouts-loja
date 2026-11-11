@@ -5,7 +5,10 @@ const CONFIG = {
   cidades: ['Contagem', 'Betim', 'Belo Horizonte'],
   // Frete por cidade, em reais. Zerado por enquanto (igual aos preços). Edite aqui quando definir os valores.
   frete: { 'Contagem': 0, 'Betim': 0, 'Belo Horizonte': 0 },
-  freteGratisAcima: null                     // ex.: 299 => frete grátis em pedidos a partir de R$ 299
+  freteGratisAcima: null,                    // ex.: 299 => frete grátis em pedidos a partir de R$ 299
+  // Pagamento online (Mercado Pago, Pix e cartão). Mude para true SÓ depois de configurar as chaves na Vercel (veja LEIA-ME.md → Pagamento)
+  // e de definir os preços. Ligado, o amigo indicado só conta depois da primeira compra paga.
+  pagamentoOnline: false
 };
 
 const $ = (s, r = document) => r.querySelector(s);
@@ -331,7 +334,7 @@ function openLogin(motivo) {
     <p class="note" id="gMsg"></p></div>`, 'one narrow');
   $('#gBtn', s).onclick = async () => {
     if (!auth()?.configured) { $('#gMsg', s).textContent = 'O login com Google será ativado assim que a configuração do Firebase for concluída (veja o LEIA-ME).'; return; }
-    try { const u = await auth().signIn(); closeSheet(); toast('Bem-vindo(a) à CLOUTS!'); if (u.isNew) registrarConvite(u.uid); }
+    try { const u = await auth().signIn(); closeSheet(); toast('Bem-vindo(a) à CLOUTS!'); if (u.isNew && !CONFIG.pagamentoOnline) registrarConvite(u.uid); }
     catch (e) { $('#gMsg', s).textContent = e.code === 'auth/popup-closed-by-user' ? 'Login cancelado.' : 'Não foi possível entrar agora. Tente novamente.'; }
   };
 }
@@ -377,7 +380,7 @@ function showPromo(force) {
     <button class="pr-x" id="prX" aria-label="Fechar">${ICON.x}</button>
     <div class="pr-big"><b>5–20%</b><span>OFF</span></div>
     <h2 id="prT">Convide amigos e ganhe desconto</h2>
-    <p><b>1 amigo</b> = 5% · <b>5 amigos</b> = 10% · <b>10 amigos</b> = 20%<br>Cada amigo entra com o Google pelo seu link.</p>
+    <p><b>1 amigo</b> = 5% · <b>5 amigos</b> = 10% · <b>10 amigos</b> = 20%<br>${CONFIG.pagamentoOnline ? 'Cada amigo entra pelo seu link e faz a primeira compra.' : 'Cada amigo entra com o Google pelo seu link.'}</p>
     <button class="btn btn-gold block" id="prGo">Quero meu desconto</button></div>`;
   document.body.appendChild(el);
   const close = () => { store.set('clouts.promoHide', Date.now()); hidePromo(); };
@@ -411,7 +414,7 @@ function progInner() {
     <ul class="tiers">${TIERS.map(t => `<li class="${refN >= t.n ? 'ok' : ''}"><b>${t.p}% OFF</b><span>${t.n} ${t.n === 1 ? 'amigo' : 'amigos'}</span></li>`).join('')}</ul>`;
 }
 function progressHTML() {
-  return `<div class="prog"><div class="prog-w">${progInner()}</div>${meuCupom()?.usado ? '' : '<p class="note">Cada amigo precisa criar a conta com o Google pelo seu link.</p><button class="btn btn-gold" data-invite>Ver meu link de convite</button>'}</div>`;
+  return `<div class="prog"><div class="prog-w">${progInner()}</div>${meuCupom()?.usado ? '' : `<p class="note">${CONFIG.pagamentoOnline ? 'Cada amigo precisa entrar pelo seu link e fazer a primeira compra.' : 'Cada amigo precisa criar a conta com o Google pelo seu link.'}</p><button class="btn btn-gold" data-invite>Ver meu link de convite</button>`}</div>`;
 }
 function updateInvite() {
   const s = $('#sheet .invite'); if (!s) return;
@@ -423,7 +426,7 @@ function openInvite() {
   const link = inviteLink(), texto = `${SHARE.text} Entre pelo meu link: ${link}`;
   const s = showSheet(`<div class="invite"><div class="pr-big dk"><b>20%</b><span>OFF</span></div>
     <h2>Convide amigos e ganhe desconto</h2>
-    <p class="note">Cada amigo que criar a conta com o Google pelo seu link conta 1. Seu desconto sobe sozinho e vale uma vez, no seu primeiro pedido com cupom.</p>
+    <p class="note">${CONFIG.pagamentoOnline ? 'Cada amigo que entrar pelo seu link e fizer a primeira compra conta 1.' : 'Cada amigo que criar a conta com o Google pelo seu link conta 1.'} Seu desconto sobe sozinho e vale uma vez, no seu primeiro pedido com cupom.</p>
     <div class="prog"><div class="prog-w"></div></div>
     <div class="iv-act"><input id="ivLink" readonly value="${esc(link)}" aria-label="Seu link de convite">
       <button class="btn btn-gold block" id="ivShare">Compartilhar meu link</button>
@@ -640,7 +643,9 @@ function renderCheckout() {
     ${descontoValor() ? `<div class="tot disc"><span>Cupom ${esc(cupomAtivo)}</span><span>− ${brl(descontoValor())}</span></div>` : ''}
     <div class="tot"><span>Frete (${esc(ship.cidade)})</span><span id="ckFrete">${brl(freteValor())}</span></div>
     <div class="tot big"><span>Total</span><b id="ckTotal">${brl(totalPedido())}</b></div>
-    <button class="btn btn-gold block" id="sendWa">${ICON.chat} Enviar pedido no WhatsApp</button>
+    ${CONFIG.pagamentoOnline ? `<button class="btn btn-gold block" id="payMp">${ICON.card} Pagar com Pix ou cartão</button>
+    <button class="btn btn-line block" id="sendWa">${ICON.chat} Prefiro finalizar pelo WhatsApp</button>`
+      : `<button class="btn btn-gold block" id="sendWa">${ICON.chat} Enviar pedido no WhatsApp</button>`}
     <button class="btn block link" id="backCart">← Voltar ao carrinho</button>`;
   const f = $('#ckForm');
   f.elements.cep.oninput = e => { e.target.value = maskCep(e.target.value); };
@@ -653,6 +658,40 @@ function renderCheckout() {
   };
   $('#backCart').onclick = () => { checkout = false; renderCart(); };
   $('#sendWa').onclick = sendOrder;
+  if ($('#payMp')) $('#payMp').onclick = payMp;
+}
+/* Pagamento online: o servidor (api/checkout.js) recalcula preço, frete e cupom e devolve o link do Mercado Pago. */
+let pagando = false;
+async function payMp() {
+  const f = $('#ckForm'), d = Object.fromEntries(new FormData(f)); let ok = true;
+  ['nome', 'tel', 'cep', 'rua', 'num', 'bairro'].forEach(k => { const el = f.elements[k]; const bad = !String(d[k] || '').trim(); el.classList.toggle('err', bad); if (bad) ok = false; });
+  if (!ok) { toast('Preencha os campos obrigatórios'); return; }
+  if (pagando) return;
+  const btn = $('#payMp'), txt = btn.innerHTML; pagando = true; btn.disabled = true; btn.textContent = 'Abrindo o pagamento…';
+  try {
+    const token = await window.CloutsAuth.token(); if (!token) throw new Error('Entre com sua conta Google para pagar.');
+    store.set('clouts.cliente', { nome: d.nome, tel: d.tel, rua: d.rua, num: d.num, bairro: d.bairro, comp: d.comp });
+    let ref = null; try { ref = localStorage.getItem('clouts.ref'); } catch {}
+    const r = await fetch('/api/checkout', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      body: JSON.stringify({ itens: cart.map(i => ({ id: i.id, tam: i.tam, q: i.q })), cupom: cupomObj()?.codigo || null, ref,
+        cliente: { nome: d.nome, tel: d.tel, rua: d.rua, num: d.num, bairro: d.bairro, comp: d.comp, cep: d.cep } })
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || !j.url) throw new Error(j.erro || 'Não foi possível abrir o pagamento. Tente de novo ou finalize pelo WhatsApp.');
+    location.href = j.url;
+  } catch (e) { toast(e.message || 'Não foi possível abrir o pagamento.'); pagando = false; btn.disabled = false; btn.innerHTML = txt; }
+}
+/* Volta do Mercado Pago: ?pedido=...&s=ok|pendente|falha (só mensagem; quem confirma o pagamento é o servidor). */
+function voltaDoPagamento() {
+  let q; try { q = new URLSearchParams(location.search); } catch { return; }
+  const s = q.get('s'); if (!q.get('pedido') || !s) return;
+  history.replaceState(null, '', location.pathname + location.hash);
+  if (s === 'ok' || s === 'pendente') { cart = []; cupomAtivo = null; store.set('clouts.cart', []); store.set('clouts.cupom', null); renderCart(); updateBadges(); }
+  const msg = s === 'ok' ? ['Pagamento recebido!', 'Obrigado pela compra. Vamos preparar seu pedido e falar com você no WhatsApp para combinar a entrega.']
+    : s === 'pendente' ? ['Pagamento em análise', 'Assim que o Pix ou o cartão for confirmado, seu pedido segue. Se tiver dúvidas, chame no WhatsApp.']
+    : ['Pagamento não concluído', 'Nada foi cobrado. Seu carrinho continua salvo; tente de novo ou finalize pelo WhatsApp.'];
+  showSheet(`<div class="avisos"><h2>${msg[0]}</h2><p class="note" style="margin:10px 0 16px">${msg[1]}</p><a class="btn btn-gold block" href="${waLink('Olá! Tenho uma dúvida sobre meu pedido.')}" target="_blank" rel="noopener">Falar no WhatsApp</a></div>`);
 }
 function sendOrder() {
   const f = $('#ckForm'), d = Object.fromEntries(new FormData(f)); let ok = true;
@@ -684,6 +723,7 @@ try {
   setTimeout(showPromo, 10000);
 } catch (e) { console.error(e); fatal(); }
 hideSplash();
+voltaDoPagamento();
 if (auth()) auth().onChange(onUser);
 setTimeout(() => window.CloutsAuth?.start(), 300);
 idle(() => {

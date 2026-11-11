@@ -1,0 +1,10 @@
+{
+  "name": "clouts-loja",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Loja CLOUTS (site estático) + funções de pagamento Mercado Pago em /api",
+  "engines": { "node": ">=20" },
+  "dependencies": {
+    "firebase-admin": "^12.7.0"
+  }
+}
