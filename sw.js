@@ -1,6 +1,6 @@
 /* CLOUTS: cache para carregar rápido e página própria quando a conexão cai. */
-const V = 'clouts-v1';
-const SHELL = ['/', '/style.css', '/app.js', '/products.js', '/auth.js', '/img/logo.png', '/offline.html'];
+const V = 'clouts-v2';
+const SHELL = ['/', '/style.css', '/app.js', '/products.js', '/auth.js', '/splash.js', '/img/logo.png', '/img/banners/b1-desktop.webp', '/offline.html', '/offline.js'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(V).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));

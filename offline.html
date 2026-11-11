@@ -28,10 +28,8 @@ button:hover{background:#b0842d;color:#fff}
   <div class="t">VISTA SEU MELHOR.</div>
   <h1>Sem conexão</h1>
   <p><span class="dot"></span><span id="st">Não conseguimos chegar à loja agora. Verifique seu Wi-Fi ou dados móveis.</span></p>
-  <button type="button" onclick="location.href='/'">Tentar novamente</button>
+  <button type="button" id="retry">Tentar novamente</button>
 </main>
-<script>
-addEventListener('online', function(){ document.getElementById('m').className='ok'; document.getElementById('st').textContent='Conexão de volta. Abrindo a loja…'; setTimeout(function(){ location.href='/'; }, 600); });
-</script>
+<script src="/offline.js"></script>
 </body>
 </html>

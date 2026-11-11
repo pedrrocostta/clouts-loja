@@ -2,10 +2,11 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Administrador do painel: só este e-mail, entrando com e-mail e senha.
+    // Administrador do painel: só este e-mail, entrando com a conta Google dele (com verificação em duas etapas ligada no Google).
     function isAdmin() {
       return request.auth != null
-        && request.auth.token.firebase.sign_in_provider == 'password'
+        && request.auth.token.firebase.sign_in_provider == 'google.com'
+        && request.auth.token.email_verified == true
         && request.auth.token.email in ['clouts.oficial2026@gmail.com'];
     }
 

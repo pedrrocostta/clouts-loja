@@ -95,6 +95,12 @@ function cardHTML(p, rank) {
 /* ---------- Views ---------- */
 const app = $('#app');
 let heroTimer;
+const BANNERS = [
+  { f: 'b1', href: '#/feminino', alt: 'CLOUTS — Vista seu melhor. Moda feminina' },
+  { f: 'b2', href: '#/feminino', alt: 'CLOUTS — Calças jeans femininas' },
+  { f: 'b3', href: '#/masculino', alt: 'CLOUTS — Moda masculina' },
+  { f: 'b4', href: '#/mais-vendidos', alt: 'Estilo para todos os momentos — ver mais vendidos' }
+];
 const CATS = () => [
   ['Feminino', '#/feminino', pick('f-112420-1', 'feminino').img], ['Masculino', '#/masculino', pick('m-3', 'masculino').img],
   ['Mais vendidos', '#/mais-vendidos', pick('f-112466-1', 'feminino').img], ['Cigarrete', '#/feminino?m=Cigarrete', pick('f-112725-1', 'feminino').img],
@@ -114,18 +120,11 @@ function lazyVideos() {
 
 function viewHome() {
   const fem = PRODUTOS.filter(p => p.secao === 'feminino'), mas = PRODUTOS.filter(p => p.secao === 'masculino');
-  const hero = [pick('f-112271-1', 'feminino'), pick('m-4', 'masculino'), pick('f-112420-1', 'feminino'), pick('m-2', 'masculino')];
   app.innerHTML = `
-  <section class="hero">
-    <div class="hero-txt">
-      <span class="kicker">Coleção 2026</span>
-      <h1>Vista<br>seu <em>melhor.</em></h1>
-      <p>Calças femininas e masculinas com caimento perfeito. Entregamos em Contagem, Betim e Belo Horizonte.</p>
-      <a class="btn btn-gold" href="#/mais-vendidos" style="align-self:flex-start">Ver mais vendidos</a>
-    </div>
-    <div class="hero-img">${hero.map((p, i) => `<img src="${esc(p.img)}" alt="" class="${i ? '' : 'on'}" decoding="async" ${i ? 'loading="lazy"' : 'fetchpriority="high"'}>`).join('')}
-      <div class="hero-dots">${hero.map((_, i) => `<i class="${i ? '' : 'on'}"></i>`).join('')}</div>
-    </div>
+  <section class="bn" aria-roledescription="carrossel" aria-label="Destaques">
+    <div class="bn-track">${BANNERS.map((b, i) => `<a class="bn-slide${i ? '' : ' on'}" href="${b.href}" aria-label="${esc(b.alt)}"><picture><source media="(max-width:700px)" srcset="img/banners/${b.f}-mobile.webp"><img src="img/banners/${b.f}-desktop.webp" alt="${esc(b.alt)}" width="2496" height="1040" decoding="async" ${i ? 'loading="lazy"' : 'fetchpriority="high"'}></picture></a>`).join('')}</div>
+    <button class="bn-arr prev" type="button" aria-label="Anterior">‹</button><button class="bn-arr next" type="button" aria-label="Próximo">›</button>
+    <div class="hero-dots">${BANNERS.map((_, i) => `<button type="button" class="${i ? '' : 'on'}" aria-label="Banner ${i + 1}"></button>`).join('')}</div>
   </section>
 
   <section class="strip">
@@ -147,11 +146,15 @@ function viewHome() {
   <section class="sec"><div class="sec-h"><h2>Masculino</h2><a href="#/masculino">Ver tudo →</a></div>
     <div class="grid">${mas.map(p => cardHTML(p)).join('')}</div></section>`;
   lazyVideos();
-  const imgs = $$('.hero-img img'), dots = $$('.hero-dots i'); let k = 0;
-  if (imgs.length > 1) heroTimer = setInterval(() => {
-    imgs[k].classList.remove('on'); dots[k].classList.remove('on');
-    k = (k + 1) % imgs.length; imgs[k].classList.add('on'); dots[k].classList.add('on');
-  }, 4500);
+  const sl = $$('.bn-slide'), dots = $$('.hero-dots button'), box = $('.bn'); let k = 0, hold = false;
+  const go = n => { sl[k].classList.remove('on'); dots[k].classList.remove('on'); k = (n + sl.length) % sl.length; sl[k].classList.add('on'); dots[k].classList.add('on'); };
+  $('.bn-arr.prev').onclick = () => go(k - 1); $('.bn-arr.next').onclick = () => go(k + 1);
+  dots.forEach((d, i) => d.onclick = () => go(i));
+  let x0 = null;
+  box.addEventListener('touchstart', e => { x0 = e.touches[0].clientX; hold = true; }, { passive: true });
+  box.addEventListener('touchend', e => { if (x0 != null) { const dx = e.changedTouches[0].clientX - x0; if (Math.abs(dx) > 40) go(k + (dx < 0 ? 1 : -1)); } x0 = null; hold = false; }, { passive: true });
+  box.onmouseenter = () => hold = true; box.onmouseleave = () => hold = false;
+  heroTimer = setInterval(() => { if (!hold && !document.hidden) go(k + 1); }, 5000);
 }
 
 function viewList(secao, q) {
@@ -230,7 +233,7 @@ function viewPerfil() {
   <a class="btn btn-line" href="${waLink('Olá! Preciso de ajuda com meu pedido.')}" target="_blank" rel="noopener">${ICON.chat} Falar no WhatsApp</a>
   <a class="btn btn-line" href="https://instagram.com/${CONFIG.instagram}" target="_blank" rel="noopener">Instagram @${CONFIG.instagram}</a>
   <button class="btn btn-dark" id="pOut">Sair da conta</button></div>`;
-  $('#pOut').onclick = async () => { await auth().signOut(); toast('Você saiu da conta'); };
+  $('#pOut').onclick = async () => { await auth().signOut(); limparDadosDaConta(); toast('Você saiu da conta. Carrinho e endereço foram apagados deste aparelho.'); };
 }
 
 /* ---------- Router ---------- */
@@ -332,8 +335,16 @@ function openLogin(motivo) {
     catch (e) { $('#gMsg', s).textContent = e.code === 'auth/popup-closed-by-user' ? 'Login cancelado.' : 'Não foi possível entrar agora. Tente novamente.'; }
   };
 }
+/* Ao sair da conta, apaga do aparelho o que é pessoal (carrinho, endereço, dados do cliente, cupom aplicado). */
+let lastUid = null;
+function limparDadosDaConta() {
+  cart = []; ship = null; cupomAtivo = null;
+  ['clouts.cart', 'clouts.ship', 'clouts.cliente', 'clouts.cupom'].forEach(k => { try { localStorage.removeItem(k); } catch {} });
+  renderCart(); updateBadges();
+}
 function onUser(u) {
-  favs = store.get(favKey(), []).filter(byId);
+  if (u) lastUid = u.uid; else if (lastUid) { lastUid = null; limparDadosDaConta(); }
+  favs =store.get(favKey(), []).filter(byId);
   $('#bPerfilLbl').textContent = u ? (u.nome.split(' ')[0] || 'Conta').slice(0, 10) : 'Perfil';
   updateBadges();
   if (routeKey === 'perfil') viewPerfil();
@@ -664,7 +675,8 @@ function hideSplash() {
   setTimeout(() => { el.classList.add('off'); setTimeout(() => el.remove(), 600); }, Math.max(0, (visto ? 600 : 1800) - performance.now()));
 }
 function fatal() {
-  app.innerHTML = `<div class="fatal"><img src="img/logo.png" alt=""><h1>Algo deu errado</h1><p>Não conseguimos carregar a loja agora. Verifique sua conexão e tente de novo.</p><button class="btn btn-gold" onclick="location.reload()">Tentar de novo</button></div>`;
+  app.innerHTML = `<div class="fatal"><img src="img/logo.png" alt=""><h1>Algo deu errado</h1><p>Não conseguimos carregar a loja agora. Verifique sua conexão e tente de novo.</p><button class="btn btn-gold" id="fatalRetry">Tentar de novo</button></div>`;
+  $('#fatalRetry').onclick = () => location.reload();
 }
 const idle = f => ('requestIdleCallback' in window ? requestIdleCallback(f, { timeout: 2500 }) : setTimeout(f, 1200));
 try {

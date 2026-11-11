@@ -1,11 +1,15 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
-import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut, setPersistence, browserSessionPersistence } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut, setPersistence, browserSessionPersistence } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
 import { getFirestore, collection, onSnapshot, doc, setDoc, updateDoc, deleteDoc, writeBatch, addDoc, serverTimestamp, query, orderBy, limit, Timestamp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
 const app = initializeApp({
   apiKey: 'AIzaSyBP1WSRJqAM552UQU5rBRubeVkz7IRc2Ao', authDomain: 'clouts-409b7.firebaseapp.com', projectId: 'clouts-409b7',
   storageBucket: 'clouts-409b7.firebasestorage.app', messagingSenderId: '153191899322', appId: '1:153191899322:web:8ba2688766cc96ff326283'
 });
+const APPCHECK_SITE_KEY = '';   // mesma chave de auth.js (App Check / reCAPTCHA v3); vazia = desligado
+if (APPCHECK_SITE_KEY) {
+  try { const ac = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-app-check.js'); ac.initializeAppCheck(app, { provider: new ac.ReCaptchaV3Provider(APPCHECK_SITE_KEY), isTokenAutoRefreshEnabled: true }); } catch (e) { console.warn('App Check:', e); }
+}
 const auth = getAuth(app), db = getFirestore(app), col = collection(db, 'produtos');
 
 /* ---------- Segurança ---------- */
@@ -39,28 +43,31 @@ const fail = e => toast(e?.code === 'permission-denied' ? 'Sua conta não tem pe
 /* ---------- Login ---------- */
 function viewLogin(aviso) {
   $('#topActs').hidden = true; unsub?.(); unsub = null; unsubAv?.(); unsubAv = null;
+  // Entrada só com a conta Google do dono (com verificação em duas etapas ligada na conta Google). Sem senha própria do painel.
   main.innerHTML = `<form class="login" id="lf"><img src="/img/logo.png" alt=""><h2>Entrar no painel</h2>
-    <label class="f" for="em">E-mail<input id="em" type="email" autocomplete="username" required></label>
-    <label class="f" for="pw">Senha<input id="pw" type="password" autocomplete="current-password" required></label>
-    <button class="btn gold" id="lb" type="submit">Entrar</button><p class="msg ${aviso ? 'bad' : ''}" id="lm">${esc(aviso || '')}</p></form>`;
+    <p class="msg" style="margin:0 0 4px">Entre com a conta Google do administrador.</p>
+    <button class="btn gold" id="lb" type="submit">Entrar com o Google</button><p class="msg ${aviso ? 'bad' : ''}" id="lm">${esc(aviso || '')}</p></form>`;
   $('#lf').onsubmit = async e => {
     e.preventDefault(); const b = $('#lb'), m = $('#lm');
     if (falta()) { m.className = 'msg bad'; m.textContent = `Muitas tentativas. Aguarde ${falta()} s.`; return; }
-    b.disabled = true; m.className = 'msg'; m.textContent = 'Entrando…';
-    try { await signInWithEmailAndPassword(auth, $('#em').value.trim(), $('#pw').value); lockSave({ n: 0, ate: 0 }); }
-    catch (er) {
+    b.disabled = true; m.className = 'msg'; m.textContent = 'Abrindo o Google…';
+    try {
+      const p = new GoogleAuthProvider(); p.setCustomParameters({ prompt: 'select_account' });
+      await signInWithPopup(auth, p); lockSave({ n: 0, ate: 0 }); m.textContent = '';
+    } catch (er) {
+      if (er?.code === 'auth/popup-closed-by-user' || er?.code === 'auth/cancelled-popup-request') { m.textContent = ''; b.disabled = false; return; }
       const st = lockInfo(), n = st.n + 1;
       lockSave({ n, ate: n >= 5 ? Date.now() + Math.min(15 * 60, 30 * 2 ** (n - 5)) * 1000 : 0 });
       m.className = 'msg bad';
-      m.textContent = er?.code === 'auth/too-many-requests' ? 'Muitas tentativas. Tente novamente em alguns minutos.' : n >= 5 ? `Muitas tentativas. Aguarde ${falta()} s.` : 'E-mail ou senha incorretos.';
-      b.disabled = false; $('#pw').value = '';
+      m.textContent = er?.code === 'auth/popup-blocked' ? 'O navegador bloqueou a janela do Google. Permita pop-ups para este site.' : er?.code === 'auth/unauthorized-domain' ? 'Este endereço não está autorizado no Firebase (Authentication → Configurações → Domínios autorizados).' : 'Não foi possível entrar. Tente de novo.';
+      b.disabled = false;
     }
   };
 }
 $('#outBtn').onclick = () => signOut(auth);
 onAuthStateChanged(auth, u => {
   if (!u) { clearTimeout(idleT); return viewLogin(); }
-  if (!ADMINS.includes((u.email || '').toLowerCase())) { signOut(auth); return viewLogin('Esta conta não tem acesso ao painel.'); }
+  if (!ADMINS.includes((u.email || '').toLowerCase()) || !u.emailVerified) { signOut(auth); return viewLogin('Esta conta não tem acesso ao painel.'); }
   bump();
   $('#who').textContent = u.email; $('#topActs').hidden = false;
   viewPanel();
