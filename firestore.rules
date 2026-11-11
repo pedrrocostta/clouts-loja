@@ -14,7 +14,8 @@ service cloud.firestore {
     function produtoValido() {
       let d = request.resource.data;
       return d.keys().hasOnly(['id','cod','nome','secao','modelo','preco','cor','tecido','lycra','tam',
-                               'visivel','esgotado','premium','diamond','img','extras','ordem','maisVendido','rankMV'])
+                               'visivel','esgotado','premium','diamond','img','extras','ordem','maisVendido','rankMV','ref'])
+        && d.get('ref', '') is string && d.get('ref', '').size() <= 60
         && d.cod is string && d.cod.size() > 0 && d.cod.size() <= 40
         && d.nome is string && d.nome.size() > 0 && d.nome.size() <= 140
         && d.secao in ['feminino', 'masculino']

@@ -189,7 +189,7 @@ function viewTop() {
 
 function viewSearch(term) {
   const t = norm(term);
-  const list = PRODUTOS.filter(p => norm([p.cod, p.nome, p.modelo, p.secao, p.cor || ''].join(' ')).includes(t));
+  const list = PRODUTOS.filter(p => norm([p.cod, p.ref || '', p.nome, p.modelo, p.secao, p.cor || ''].join(' ')).includes(t));
   app.innerHTML = `<div class="page-h"><h1>Busca</h1><p>${list.length} resultado(s) para “${esc(term)}”</p></div>
   ${list.length ? `<div class="grid" style="margin-top:16px">${list.map(p => cardHTML(p)).join('')}</div>` : '<div class="empty">Nada encontrado. Tente o código da peça ou “wide leg”, “cigarrete”, “slim”.</div>'}`;
 }
@@ -454,7 +454,7 @@ function openSheet(id) {
     <div class="gal"><img class="gal-main" src="${esc(p.img)}" alt="${esc(p.nome)}">
       ${gal.length > 1 ? `<div class="gal-th">${gal.map((g, i) => `<img src="${esc(g)}" alt="" class="${i ? '' : 'on'}" data-g="${esc(g)}">`).join('')}</div>` : ''}</div>
     <div class="pinfo">
-      <div class="cod">CÓDIGO ${esc(p.cod)}</div>
+      <div class="cod">CÓDIGO ${esc(p.cod)}${p.ref ? ` · REF. ${esc(p.ref)}` : ''}</div>
       <h2>${esc(p.nome)}</h2>
       <div class="price">${brl(p.preco)}</div>
       <div class="specs"><span>${p.secao === 'feminino' ? 'Feminino' : 'Masculino'}</span><span>${esc(p.modelo)}</span>

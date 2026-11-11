@@ -78,7 +78,7 @@ onAuthStateChanged(auth, u => {
 /* ---------- Painel ---------- */
 function viewPanel() {
   main.innerHTML = `<div class="tabs" role="tablist"><button class="tab on" role="tab" data-tab="pecas">Peças</button><button class="tab" role="tab" data-tab="avisos">Avisos e promoções</button></div>
-    <section id="tabPecas"><div class="bar"><input id="q" type="text" placeholder="Buscar por código ou nome" aria-label="Buscar">
+    <section id="tabPecas"><div class="bar"><input id="q" type="text" placeholder="Buscar por código, referência ou nome" aria-label="Buscar">
       <select id="fs" aria-label="Seção"><option value="">Todas as seções</option><option value="feminino">Feminino</option><option value="masculino">Masculino</option></select>
       <select id="ft" aria-label="Status"><option value="">Todos os status</option><option value="vis">Visíveis</option><option value="oculta">Ocultas</option><option value="esg">Esgotadas</option></select></div>
     <div style="display:flex;justify-content:space-between;gap:10px;margin-bottom:14px;flex-wrap:wrap"><div class="stats" id="stats" style="margin:0"></div><button class="btn gold" id="novo">+ Nova peça</button></div>
@@ -161,7 +161,7 @@ function renderList() {
   $('#seed').innerHTML = items.length || typeof PRODUTOS === 'undefined' ? '' : `<div class="seed"><b>O catálogo online está vazio.</b><span>Importe as ${PRODUTOS.length} peças que já estão na loja para começar a gerenciá-las por aqui.</span><button class="btn gold" id="seedBtn">Importar catálogo inicial</button></div>`;
   if ($('#seedBtn')) $('#seedBtn').onclick = seed;
   const q = filtro.q.toLowerCase();
-  const list = [...items].filter(p => (!q || (p.cod + ' ' + p.nome).toLowerCase().includes(q)) && (!filtro.secao || p.secao === filtro.secao)
+  const list = [...items].filter(p => (!q || (p.cod + ' ' + (p.ref || '') + ' ' + p.nome).toLowerCase().includes(q)) && (!filtro.secao || p.secao === filtro.secao)
     && (!filtro.status || (filtro.status === 'vis' ? p.visivel !== false : filtro.status === 'oculta' ? p.visivel === false : (p.esgotado || !(p.tam || []).length))))
     .sort((a, b) => (a.ordem ?? 0) - (b.ordem ?? 0) || String(a.cod).localeCompare(String(b.cod)));
   $('#list').innerHTML = list.length ? list.map(itemHTML).join('') : (items.length ? '<div class="empty">Nenhuma peça encontrada.</div>' : '');
@@ -172,7 +172,7 @@ function itemHTML(p) {
   const sw = (k, on, label, cls = '') => `<label class="sw ${cls}"><input type="checkbox" data-k="${k}" ${on ? 'checked' : ''}><i></i>${label}</label>`;
   return `<article class="item ${off ? 'off' : ''}" data-id="${esc(p.id)}">
     <img class="thumb" src="${esc(img(p))}" alt="" loading="lazy">
-    <div><div class="cod">${esc(p.cod)}<span class="tags">${off ? '<span class="tag g">Oculta</span>' : ''}${out ? '<span class="tag r">Esgotada</span>' : ''}${p.maisVendido ? '<span class="tag">Mais vendido</span>' : ''}</span></div>
+    <div><div class="cod">${esc(p.cod)}${p.ref ? ` <small style="font-weight:500;opacity:.75">· Ref. ${esc(p.ref)}</small>` : ''}<span class="tags">${off ? '<span class="tag g">Oculta</span>' : ''}${out ? '<span class="tag r">Esgotada</span>' : ''}${p.maisVendido ? '<span class="tag">Mais vendido</span>' : ''}</span></div>
       <h3>${esc(p.nome)}</h3><div class="meta">${p.secao === 'feminino' ? 'Feminino' : 'Masculino'} · ${esc(p.modelo || '')} · ${brl(p.preco)}</div>
       <div class="ctl">${sw('visivel', !off, 'Visível na loja')}${sw('esgotado', !!p.esgotado, 'Esgotado', 'warn')}${sw('maisVendido', !!p.maisVendido, 'Mais vendido')}</div>
       <div class="sizes" role="group" aria-label="Tamanhos disponíveis">${(SIZES[p.secao] || SIZES.feminino).map(t => `<button class="sz ${tam.includes(t) ? 'on' : ''}" data-t="${t}" aria-pressed="${tam.includes(t)}">${t}</button>`).join('')}</div>
@@ -234,6 +234,7 @@ function openEditor(p) {
     <div class="two"><label class="f" for="e-cod">Código<input id="e-cod" type="text" required value="${esc(d.cod || '')}" maxlength="40"></label>
       <label class="f" for="e-sec">Seção<select id="e-sec" ${novo ? '' : 'disabled'}><option value="feminino">Feminino</option><option value="masculino">Masculino</option></select></label></div>
     <label class="f" for="e-nome">Nome<input id="e-nome" type="text" required value="${esc(d.nome || '')}" placeholder="Ex.: Calça Wide Leg 112999-1"></label>
+    <label class="f" for="e-ref">Referência do fornecedor (opcional)<input id="e-ref" type="text" maxlength="60" value="${esc(d.ref || '')}" placeholder="Ex.: a referência que aparece no site do fornecedor"></label>
     <div class="two"><label class="f" for="e-mod">Modelagem<input id="e-mod" type="text" list="mods" value="${esc(d.modelo || '')}" placeholder="Cigarrete, Wide Leg, Slim Fit…"><datalist id="mods">${[...new Set(items.map(x => x.modelo).filter(Boolean))].map(x => `<option value="${esc(x)}">`).join('')}</datalist></label>
       <label class="f" for="e-pre">Preço (R$)<input id="e-pre" type="number" min="0" step="0.01" inputmode="decimal" value="${d.preco ?? 0}"></label></div>
     <div class="two"><label class="f" for="e-cor">Cor (opcional)<input id="e-cor" type="text" value="${esc(d.cor || '')}"></label>
@@ -282,7 +283,7 @@ function openEditor(p) {
     if (items.some(x => x.id !== id && String(x.cod).trim().toLowerCase() === cod.toLowerCase())) return msg('Já existe outra peça com esse código.', true);
     const lyc = $('#e-lyc', m).value;
     const data = {
-      cod, nome, secao, modelo: $('#e-mod', m).value.trim(), preco: Math.max(0, parseFloat($('#e-pre', m).value) || 0),
+      cod, nome, ref: $('#e-ref', m).value.trim(), secao, modelo: $('#e-mod', m).value.trim(), preco: Math.max(0, parseFloat($('#e-pre', m).value) || 0),
       cor: $('#e-cor', m).value.trim() || null, tecido: $('#e-tec', m).value.trim() || null, lycra: lyc === '' ? null : +lyc,
       tam, visivel: $('#e-vis', m).checked, esgotado: $('#e-esg', m).checked, premium: $('#e-pre2', m).checked, diamond: $('#e-dia', m).checked, img: foto
     };
