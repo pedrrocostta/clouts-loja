@@ -85,7 +85,7 @@ export function renderDashboard(box, orders, items, periodo = '30', setPeriodo) 
 
   <div class="dsh-grid">
     <section class="dsh-card"><h3>Peças mais pedidas</h3>
-      ${top.length ? `<ol class="top">${top.map((p, i) => `<li><span class="rk">${i + 1}</span>${img(p.id) ? `<img src="${esc(img(p.id))}" alt="">` : '<span class="ph"></span>'}<div><b>${esc(p.nome)}</b><small>Cód. ${esc(p.cod)} · ${brl(p.v)}</small><span class="hb-b"><i style="width:${p.q / maxQ * 100}%"></i></span></div><em>${p.q}<small> un.</small></em></li>`).join('')}</ol>` : '<p class="dsh-empty">Nenhuma venda no período.</p>'}
+      ${top.length ? `<ol class="rank">${top.map((p, i) => `<li><span class="rk">${i + 1}</span>${img(p.id) ? `<img src="${esc(img(p.id))}" alt="">` : '<span class="ph"></span>'}<div><b>${esc(p.nome)}</b><small>Cód. ${esc(p.cod)} · ${brl(p.v)}</small><span class="hb-b"><i style="width:${p.q / maxQ * 100}%"></i></span></div><em>${p.q}<small> un.</small></em></li>`).join('')}</ol>` : '<p class="dsh-empty">Nenhuma venda no período.</p>'}
       <p class="dsh-note">${semVenda} peça${semVenda === 1 ? '' : 's'} visível${semVenda === 1 ? '' : 'is'} sem nenhuma venda no período.</p></section>
     <section class="dsh-card"><h3>Feminino × Masculino</h3>${barras(porSecao, brl)}
       <h3 style="margin-top:18px">Tamanhos mais vendidos</h3>${barras(porTam.slice(0, 6))}</section>
