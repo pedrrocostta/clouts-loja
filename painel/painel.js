@@ -34,7 +34,7 @@ const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const brl = v => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const img = p => /^(data:|https?:)/.test(p.img || '') ? p.img : '/' + (p.img || '');
-const TAMS = ['34', '36', '38', '40', '42', '44', '46', '48', '50', '52', '54'];   // numeração disponível no cadastro (feminino e masculino)
+const TAMS = ['34', '36', '38', '40', '42', '44', '46', '48', '50', '52', '54', 'PP', 'P', 'M', 'G', 'GG', 'GGG'];   // numeração disponível no cadastro (números e letras, feminino e masculino)
 const SIZES = { feminino: TAMS, masculino: TAMS };
 const main = $('#main');
 let items = [], unsub = null, unsubAv = null, avisosEnv = [], filtro = { q: '', secao: '', status: '' };

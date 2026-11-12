@@ -24,7 +24,7 @@ service cloud.firestore {
         && d.secao in ['feminino', 'masculino']
         && d.get('modelo', '') is string && d.get('modelo', '').size() <= 60
         && d.preco is number && d.preco >= 0 && d.preco <= 100000
-        && d.tam is list && d.tam.size() <= 12
+        && d.tam is list && d.tam.size() <= 20
         && d.img is string && d.img.size() > 0 && d.img.size() < 950000
         && (!('extras' in d) || (d.extras is list && d.extras.size() <= 9));
     }

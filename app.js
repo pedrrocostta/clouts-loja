@@ -25,7 +25,8 @@ const store = {
 };
 /* ---------- Catálogo em tempo real (Firestore) ---------- */
 const pick = (id, sec) => byId(id) || PRODUTOS.find(p => p.secao === sec) || PRODUTOS[0] || { img: '' };
-const sizesAll = p => [...new Set([...(p.secao === 'feminino' ? ['36', '38', '40', '42', '44', '46'] : ['38', '40', '42', '44', '46', '48']), ...(p.tam || [])])].sort((a, b) => a - b);
+const TAM_ORDEM = ['34', '36', '38', '40', '42', '44', '46', '48', '50', '52', '54', 'PP', 'P', 'M', 'G', 'GG', 'GGG'];
+const sizesAll = p => [...new Set([...(p.secao === 'feminino' ? ['36', '38', '40', '42', '44', '46'] : ['38', '40', '42', '44', '46', '48']), ...(p.tam || [])])].sort((a, b) => TAM_ORDEM.indexOf(a) - TAM_ORDEM.indexOf(b));
 const soldOut = p => !!p.esgotado || !(p.tam || []).length;
 const topList = () => MAIS_VENDIDOS.map(byId).filter(Boolean);
 function applyCatalog(docs) {
