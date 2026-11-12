@@ -513,3 +513,12 @@ body.sem-ind [data-invite]{display:none!important}
   .strip>a,.strip>div{padding:10px 11px;gap:8px}.strip b{font-size:12px}
   .cta-row .btn{height:46px;font-size:13px}
 }
+
+/* Menu de categorias no computador */
+.dnav{display:none;background:#16140f;border-top:1px solid #26231a}
+.dnav-in{max-width:1280px;margin:auto;padding:0 16px;display:flex;gap:26px;overflow-x:auto;scrollbar-width:none}
+.dnav-in::-webkit-scrollbar{display:none}
+.dnav a{padding:11px 0;color:#d9cfb9;font-size:13px;font-weight:500;white-space:nowrap;border-bottom:2px solid transparent}
+.dnav a:hover,.dnav a.on{color:var(--gold);border-color:var(--gold)}
+.dnav a.hot{color:#ff9a7a}.dnav a.hot:hover,.dnav a.hot.on{color:#ffb59c;border-color:#ffb59c}
+@media(min-width:900px){.dnav{display:block}}

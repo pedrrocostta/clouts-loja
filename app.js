@@ -265,6 +265,12 @@ function viewTop() {
   <div class="grid" style="margin-top:16px">${topList().map((p, i) => cardHTML(p, i + 1)).join('')}</div>`;
 }
 
+function viewPromo() {
+  const list = PRODUTOS.filter(p => emPromo(p) && !soldOut(p)).sort((a, b) => (1 - b.preco / b.precoAntigo) - (1 - a.preco / a.precoAntigo));
+  app.innerHTML = `<div class="page-h"><h1>Promoções</h1><p>${list.length ? 'Peças com preço reduzido, enquanto durar o estoque.' : 'Nenhuma promoção no momento.'}</p></div>
+  ${list.length ? `<div class="grid" style="margin-top:16px">${list.map(p => cardHTML(p)).join('')}</div>` : '<div class="empty">Volte em breve ou veja os <a href="#/mais-vendidos">mais vendidos</a>.</div>'}`;
+}
+
 function viewSearch(term) {
   const t = norm(term);
   const list = PRODUTOS.filter(p => norm([p.cod, p.ref || '', p.nome, p.modelo, p.secao, p.cor || ''].join(' ')).includes(t));
@@ -326,6 +332,7 @@ function renderView() {
   document.body.classList.toggle('is-home', r === 'home');
   if (r === 'feminino' || r === 'masculino') viewList(r, q);
   else if (r === 'mais-vendidos') viewTop();
+  else if (r === 'promocoes') viewPromo();
   else if (r === 'busca') viewSearch(q.get('q') || '');
   else if (r === 'favoritos') viewFavs();
   else if (r === 'entrega') viewEntrega();
@@ -337,11 +344,12 @@ function route() {
   const [path, qs] = (location.hash.slice(1) || '/').split('?');
   clearInterval(heroTimer); closeAll();
   const r = path.split('/').filter(Boolean)[0] || 'home';
-  cur = { r: ['feminino', 'masculino', 'mais-vendidos', 'busca', 'favoritos', 'entrega', 'perfil', 'cupons'].includes(r) ? r : 'home', q: new URLSearchParams(qs || '') };
+  cur = { r: ['feminino', 'masculino', 'mais-vendidos', 'promocoes', 'busca', 'favoritos', 'entrega', 'perfil', 'cupons'].includes(r) ? r : 'home', q: new URLSearchParams(qs || '') };
   routeKey = cur.r;
   renderView();
   $$('[data-isl]').forEach(a => a.classList.toggle('on', a.dataset.isl === routeKey));
   document.body.classList.toggle('on-home', routeKey === 'home');
+  { const full = location.hash.slice(1) || '/'; $$('.dnav a').forEach(a => { const h = a.getAttribute('href').slice(1); a.classList.toggle('on', h === full || (h === '/' && routeKey === 'home') || (!full.includes('?') && h === '/' + routeKey)); }); }
   const b = { home: 'home', 'mais-vendidos': 'mais-vendidos', perfil: 'perfil' }[routeKey];
   $$('#bnav [data-b]').forEach(x => x.classList.toggle('on', x.dataset.b === b));
   window.scrollTo({ top: 0 });
@@ -674,7 +682,7 @@ const cartTotal = () => cart.reduce((s, i) => s + i.q * byId(i.id).preco, 0);
 const avisosAtivos = () => avisos.filter(a => !a.expira || a.expira > Date.now());
 const avisosNovos = () => avisosAtivos().filter(a => a.criado > avisoVisto);
 const linkOk = l => /^#\/[a-z-]+$/.test(l || '');
-const LINKS = { '#/feminino': 'Ver feminino', '#/masculino': 'Ver masculino', '#/mais-vendidos': 'Ver mais vendidos', '#/cupons': 'Ver meus cupons', '#/entrega': 'Ver entrega' };
+const LINKS = { '#/feminino': 'Ver feminino', '#/masculino': 'Ver masculino', '#/mais-vendidos': 'Ver mais vendidos', '#/promocoes': 'Ver promoções', '#/cupons': 'Ver meus cupons', '#/entrega': 'Ver entrega' };
 function ago(t) {
   const m = Math.max(0, Math.round((Date.now() - t) / 60000));
   if (m < 1) return 'agora'; if (m < 60) return `há ${m} min`;
