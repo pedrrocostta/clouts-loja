@@ -2,6 +2,7 @@
  * confere valor e pedido, marca como pago, queima o cupom e conta a indicação (só na primeira compra paga do amigo). */
 const crypto = require('crypto');
 const { admin, db, configurado, mp, cents } = require('./_lib');
+const { emailConfigurado, enviar, pedido: emailPedido } = require('./_mail');
 
 function assinaturaOk(req, dataId) {
   const secret = process.env.MP_WEBHOOK_SECRET;
@@ -28,6 +29,7 @@ module.exports = async (req, res) => {
     if (!/^[A-Za-z0-9]{10,40}$/.test(pedidoId)) return res.status(200).end();
 
     const fs = db(), ref = fs.collection('pedidos').doc(pedidoId);
+    let virouPago = null;
     await fs.runTransaction(async t => {
       const snap = await t.get(ref); if (!snap.exists) return;
       const o = snap.data();
@@ -38,6 +40,7 @@ module.exports = async (req, res) => {
       if (novo === 'pago' && cents(pg.transaction_amount) !== cents(o.total)) { t.update(ref, { status: 'divergente', mpPagamento: String(id) }); return; }
       t.update(ref, { status: novo, mpPagamento: String(id), pagoEm: novo === 'pago' ? admin.firestore.FieldValue.serverTimestamp() : null });
       if (novo !== 'pago') return;
+      virouPago = o;
 
       // Cupom usado
       if (o.cupom === 'AMIGO' || o.cupom === 'BEMVINDO') t.set(fs.collection('users').doc(o.uid).collection('cupons').doc(o.cupom), { usado: true }, { merge: true });
@@ -47,6 +50,10 @@ module.exports = async (req, res) => {
         t.set(fs.collection('referrals').doc(o.ref), { n: admin.firestore.FieldValue.increment(1) }, { merge: true });
       }
     });
+    if (virouPago && virouPago.email && emailConfigurado()) {
+      const o = virouPago;   // e-mail de pagamento confirmado; falha de e-mail nunca derruba o webhook
+      try { await enviar({ para: o.email, ...emailPedido({ evento: 'confirmado', nome: o.cliente?.nome, pedidoId, itens: o.itens, subtotal: o.subtotal, desconto: o.desconto, frete: o.frete, total: o.total, cidade: o.cidade }) }); } catch (e) { console.error('email pago:', e.message); }
+    }
     res.status(200).end();
   } catch (e) { console.error('webhook:', e); res.status(500).end(); }
 };

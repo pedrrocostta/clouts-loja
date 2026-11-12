@@ -1,5 +1,6 @@
 /* Dashboard e pedidos do painel CLOUTS. Lê a coleção "pedidos" (criada pelo servidor quando o cliente paga online). */
 import { collection, onSnapshot, query, orderBy, limit, doc, updateDoc } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+import { getAuth } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -103,6 +104,15 @@ export function renderDashboard(box, orders, items, periodo = '30', setPeriodo) 
   box.querySelectorAll('[data-per]').forEach(b => b.onclick = () => setPeriodo(b.dataset.per));
 }
 
+/* Avisa o cliente por e-mail (confirmado / enviado / entregue) pelo servidor. Se o e-mail não estiver configurado, ignora em silêncio. */
+async function avisarCliente(pedidoId, evento) {
+  if (!['confirmado', 'enviado', 'entregue'].includes(evento)) return;
+  try {
+    const u = getAuth().currentUser; if (!u) return;
+    await fetch('/api/email', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + await u.getIdToken() }, body: JSON.stringify({ acao: 'andamento', pedidoId, evento }) });
+  } catch {}
+}
+
 /* Lista de pedidos: filtros, andamento da entrega, WhatsApp do cliente e planilha CSV. */
 export function renderPedidos(box, orders, db, toast, filtro, setFiltro) {
   const q = (filtro.q || '').toLowerCase();
@@ -125,11 +135,11 @@ export function renderPedidos(box, orders, db, toast, filtro, setFiltro) {
   $('#pst', box).onchange = e => setFiltro({ ...filtro, st: e.target.value });
   box.querySelectorAll('[data-and]').forEach(s => s.onchange = async () => {
     const id = s.closest('.ordc').dataset.id;
-    try { await updateDoc(doc(db, 'pedidos', id), { andamento: s.value }); toast('Andamento atualizado.'); }
+    try { await updateDoc(doc(db, 'pedidos', id), { andamento: s.value }); toast('Andamento atualizado.'); avisarCliente(id, s.value); }
     catch (e) { toast(e?.code === 'permission-denied' ? 'Sem permissão. Publique as regras mais recentes do Firestore.' : 'Não foi possível atualizar.', true); }
   });
   const mudar = async (id, status) => {
-    try { await updateDoc(doc(db, 'pedidos', id), { status, andamento: 'novo' }); toast(status === 'pago' ? 'Venda confirmada. Já está no dashboard.' : 'Pedido cancelado.'); }
+    try { await updateDoc(doc(db, 'pedidos', id), { status, andamento: 'novo' }); toast(status === 'pago' ? 'Venda confirmada. Já está no dashboard.' : 'Pedido cancelado.'); if (status === 'pago') avisarCliente(id, 'confirmado'); }
     catch (e) { toast(e?.code === 'permission-denied' ? 'Sem permissão. Publique as regras mais recentes do Firestore.' : 'Não foi possível atualizar.', true); }
   };
   box.querySelectorAll('[data-conf]').forEach(b => b.onclick = () => {

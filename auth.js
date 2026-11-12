@@ -157,7 +157,15 @@ Object.assign(CloutsDB, {
   // Registra o pedido enviado pelo WhatsApp (fica aguardando; o dono confirma a venda no painel e ela entra no dashboard).
   async registrarPedido(dados) {
     const { fs, db } = await this._fs();
-    await fs.addDoc(fs.collection(db, 'pedidos'), { ...dados, origem: 'whatsapp', status: 'aguardando', criadoEm: fs.serverTimestamp() });
+    const r = await fs.addDoc(fs.collection(db, 'pedidos'), { ...dados, origem: 'whatsapp', status: 'aguardando', criadoEm: fs.serverTimestamp() });
+    return r.id;
+  },
+  // E-mails automáticos (boas-vindas, carrinho, pedido) via /api/email. Nunca atrapalha a loja se falhar.
+  async email(corpo) {
+    try {
+      const t = await CloutsAuth.token(); if (!t) return;
+      await fetch('/api/email', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + t }, body: JSON.stringify(corpo), keepalive: true });
+    } catch {}
   },
   async usarCupom(uid, codigo) {
     const { fs, db } = await this._fs();

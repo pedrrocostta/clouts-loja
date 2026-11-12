@@ -122,7 +122,10 @@ async function aplicarCampanha(raw) {
 }
 const descontoValor = () => { const c = cupomObj(); return c ? Math.round(cartTotal() * c.percent) / 100 : 0; };
 const totalPedido = () => Math.max(0, cartTotal() - descontoValor()) + (freteValor() || 0);   // { cep, cidade, bairro, rua, valor }
-const saveCart = () => { store.set('clouts.cart', cart); renderCart(); };
+/* Guarda o carrinho do cliente logado no servidor (com calma, 8 s depois da última mudança) para o lembrete de carrinho abandonado. */
+let cartTm;
+const syncCarrinho = () => { clearTimeout(cartTm); cartTm = setTimeout(() => { if (me()) CloutsDB.email({ acao: 'carrinho', itens: cart.map(i => ({ id: i.id, q: i.q, tam: i.tam })) }); }, 8000); };
+const saveCart = () => { store.set('clouts.cart', cart); renderCart(); syncCarrinho(); };
 const saveFavs = () => { store.set(favKey(), favs); updateBadges(); };
 
 const svg = d => `<svg viewBox="0 0 24 24">${d}</svg>`;
@@ -405,7 +408,7 @@ function openLogin(motivo) {
     <p class="note" id="gMsg"></p></div>`, 'one narrow');
   $('#gBtn', s).onclick = async () => {
     if (!auth()?.configured) { $('#gMsg', s).textContent = 'O login com Google será ativado assim que a configuração do Firebase for concluída (veja o LEIA-ME).'; return; }
-    try { const u = await auth().signIn(); closeSheet(); toast('Bem-vindo(a) à CLOUTS!'); if (u.isNew && !CONFIG.pagamentoOnline) registrarConvite(u.uid); }
+    try { const u = await auth().signIn(); closeSheet(); toast('Bem-vindo(a) à CLOUTS!'); if (u.isNew && !CONFIG.pagamentoOnline) registrarConvite(u.uid); if (u.isNew) CloutsDB.meuCodigo(u.uid).catch(() => {}).finally(() => CloutsDB.email({ acao: 'boasvindas' })); else syncCarrinho(); }
     catch (e) { $('#gMsg', s).textContent = e.code === 'auth/popup-closed-by-user' ? 'Login cancelado.' : 'Não foi possível entrar agora. Tente novamente.'; }
   };
 }
@@ -804,7 +807,7 @@ function sendOrder() {
   // Registra o pedido para o dono ver no painel (dashboard); a venda só conta depois que ele confirma o pagamento.
   if (u) CloutsDB.registrarPedido({ uid: u.uid, email: u.email || '', cliente: { nome: d.nome, tel: d.tel, rua: d.rua, num: d.num, bairro: d.bairro, comp: d.comp || '', cep: d.cep },
     itens: cart.map(i => { const p = byId(i.id); return { id: p.id, cod: String(p.cod), nome: String(p.nome).slice(0, 140), tam: String(i.tam), q: i.q, preco: p.preco }; }),
-    subtotal: cartTotal(), desconto: desc, frete, total, cupom: cp ? cp.codigo : null, percent: cp ? cp.percent : 0, cidade: ship.cidade }).catch(e => console.warn('Pedido não registrado', e));
+    subtotal: cartTotal(), desconto: desc, frete, total, cupom: cp ? cp.codigo : null, percent: cp ? cp.percent : 0, cidade: ship.cidade }).then(id => { clearTimeout(cartTm); CloutsDB.email({ acao: 'pedido', pedidoId: id }); CloutsDB.email({ acao: 'carrinho', itens: [] }); }).catch(e => console.warn('Pedido não registrado', e));
   if (cp && u) { if (!cp.camp) CloutsDB.usarCupom(u.uid, cp.codigo).catch(() => {}); cupomAtivo = null; campAtiva = null; store.set('clouts.cupom', null); store.set('clouts.camp', null); }
 }
 

@@ -53,3 +53,12 @@ Depois de entrar pelo Google com sucesso, desligue o login por e-mail/senha: Fir
 - **Cupom de indicação:** as regras limitam a um cupom por conta, com degrau 5/10/20% conforme os amigos contados. Contas Google falsas ainda podem inflar a contagem; o fechamento definitivo é contar o amigo só depois da primeira compra paga (exige o pagamento integrado, veja `api/` e a seção Pagamento).
 - **App Check (recomendado):** Firebase → App Check → Apps → registrar o app web com reCAPTCHA v3 → copiar a chave do site para `APPCHECK_SITE_KEY` em `auth.js` e `painel/painel.js` → publicar → só então clicar em "Impor" (Enforce) para Firestore e Authentication.
 - **Chave da API (recomendado):** no Google Cloud Console (projeto clouts-409b7) → APIs e serviços → Credenciais → chave "Browser key" → Restrições de aplicativo → Sites (referenciadores HTTP): `https://clouts-loja.vercel.app/*`, `https://clouts-409b7.firebaseapp.com/*` e, se usar, `http://localhost:5173/*` e o domínio próprio. Em "Restrições de API", deixe só as APIs do Firebase usadas (Identity Toolkit, Token Service, Cloud Firestore, Firebase App Check).
+
+## E-mails automáticos (boas-vindas, pedido, carrinho abandonado)
+
+Rotas: `api/email.js` (disparos), `api/cron.js` (lembrete de carrinho, 1x por dia), `api/descadastrar.js` (link "parar de receber"). Modelos visuais em `api/_mail.js`.
+Variáveis na Vercel (Settings → Environment Variables), depois **Redeploy**:
+- `FIREBASE_SERVICE_ACCOUNT` e `SITE_URL` (as mesmas do pagamento)
+- Envio, UMA das opções: Gmail (`GMAIL_USER` + `GMAIL_APP_PASSWORD`, senha de app de 16 letras) **ou** Resend (`RESEND_API_KEY` + `MAIL_FROM`, exige domínio verificado)
+- `CRON_SECRET` (texto aleatório longo)
+Sem essas variáveis os e-mails simplesmente não saem e a loja funciona normal.
