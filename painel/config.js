@@ -82,15 +82,32 @@ export function renderSite(box, cfg, db, toast) {
     <p class="msg">O que você mudar aqui aparece na loja na hora, sem precisar publicar nada.</p>
     <label class="f" for="s-barra">Frase da barra dourada do topo <span class="cnt" id="s-cnt">${(cfg.barra || '').length}/140</span><input id="s-barra" type="text" maxlength="140" value="${esc(cfg.barra || '')}" placeholder="Deixe vazio para usar: Entregamos em Contagem · Betim · Belo Horizonte"></label>
     <label class="f" for="s-wa">WhatsApp de pedidos (com DDI e DDD, só números)<input id="s-wa" type="text" inputmode="numeric" maxlength="15" value="${esc(cfg.whatsapp || '')}" placeholder="Ex.: 5531994810359 (vazio = número atual da loja)"></label>
+    <h2 style="margin-top:22px">Guia de medidas</h2>
+    <p class="msg">Uma linha por tamanho, com as colunas separadas por vírgula. A 1ª linha é o título das colunas. Aparece na página de cada peça. Deixe vazio para esconder.<br>Exemplo: <code>Tamanho, Cintura (cm), Quadril (cm)</code> e na linha de baixo <code>38, 68, 94</code>.</p>
+    <label class="f" for="s-guia">Tabela de medidas <span class="cnt" id="g-cnt">${(cfg.guiaMedidas || '').length}/3000</span><textarea id="s-guia" rows="8" maxlength="3000" style="width:100%;font:inherit;padding:10px 12px;border-radius:10px;border:1px solid #d9cfb8" placeholder="Tamanho, Cintura (cm), Quadril (cm)">${esc(cfg.guiaMedidas || '')}</textarea></label>
+    <h2 style="margin-top:22px">Medição e anúncios</h2>
+    <p class="msg">Cole os códigos e a loja passa a medir as visitas e as compras. Só mede quem aceita os cookies. Vazio = desligado.</p>
+    <div class="two"><label class="f" for="s-ga">Google Analytics (ID G-XXXXXXX)<input id="s-ga" type="text" maxlength="20" value="${esc(cfg.gaId || '')}" placeholder="G-ABC123XYZ"></label>
+      <label class="f" for="s-px">Pixel da Meta (só números)<input id="s-px" type="text" inputmode="numeric" maxlength="20" value="${esc(cfg.pixelId || '')}" placeholder="123456789012345"></label></div>
+    <h2 style="margin-top:22px">Fotos (Cloudinary)</h2>
+    <p class="msg">Com isto preenchido, as fotos novas vão para o Cloudinary em vez de ficarem dentro do banco, e a loja fica bem mais rápida. Crie a conta gratuita em cloudinary.com, copie o "Cloud name" e crie um "Upload preset" do tipo <b>Unsigned</b>.</p>
+    <div class="two"><label class="f" for="s-cn">Cloud name<input id="s-cn" type="text" maxlength="60" value="${esc(cfg.cloudName || '')}" placeholder="meu-cloud"></label>
+      <label class="f" for="s-up">Upload preset (Unsigned)<input id="s-up" type="text" maxlength="60" value="${esc(cfg.uploadPreset || '')}" placeholder="clouts"></label></div>
     <p class="msg" id="s-msg"></p>
     <button class="btn gold" type="submit">Salvar</button></form>
   <div class="cfg-card"><h2>Onde editar o resto</h2>
     <ul class="mini"><li><b>Peças</b>: aba Peças (preço, De/Por, fotos, tamanhos, descrição, visibilidade).</li><li><b>Promoções e recados</b>: aba Avisos e promoções.</li><li><b>Cupons e códigos</b>: aba Cupons.</li><li><b>Banners da página inicial e preços de frete</b>: ainda são arquivos do site; me peça a troca que eu faço.</li></ul></div>`;
   $('#s-barra', box).oninput = e => { $('#s-cnt', box).textContent = e.target.value.length + '/140'; };
+  $('#s-guia', box).oninput = e => { $('#g-cnt', box).textContent = e.target.value.length + '/3000'; };
   $('#siteForm', box).onsubmit = async e => {
     e.preventDefault(); const m = $('#s-msg', box), wa = $('#s-wa', box).value.replace(/\D/g, ''), barra = $('#s-barra', box).value.trim();
     if (wa && (wa.length < 12 || wa.length > 15)) { m.className = 'msg bad'; m.textContent = 'Digite o WhatsApp com 55 + DDD + número (12 a 13 dígitos).'; return; }
+    const ga = $('#s-ga', box).value.trim().toUpperCase(), px = $('#s-px', box).value.replace(/\D/g, ''), cn = $('#s-cn', box).value.trim(), up = $('#s-up', box).value.trim(), guia = $('#s-guia', box).value.trim();
+    if (ga && !/^G-[A-Z0-9]{4,15}$/.test(ga)) { m.className = 'msg bad'; m.textContent = 'O ID do Google Analytics começa com G- (ex.: G-ABC123XYZ).'; return; }
+    if (cn && !/^[A-Za-z0-9_-]{1,60}$/.test(cn)) { m.className = 'msg bad'; m.textContent = 'Cloud name inválido: use só letras, números, - e _.'; return; }
+    if (up && !/^[A-Za-z0-9_-]{1,60}$/.test(up)) { m.className = 'msg bad'; m.textContent = 'Upload preset inválido: use só letras, números, - e _.'; return; }
     const novo = { ...cfg }; if (barra) novo.barra = barra; else delete novo.barra; if (wa) novo.whatsapp = wa; else delete novo.whatsapp;
+    [['gaId', ga], ['pixelId', px], ['cloudName', cn], ['uploadPreset', up], ['guiaMedidas', guia]].forEach(([k, v]) => { if (v) novo[k] = v; else delete novo[k]; });
     try { await setDoc(doc(db, 'config', 'loja'), novo); m.className = 'msg'; m.textContent = ''; toast('Salvo. Já está na loja.'); } catch (er) { m.className = 'msg bad'; m.textContent = msgErro(er); }
   };
 }

@@ -17,6 +17,8 @@ const brl = v => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' 
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const byId = id => PRODUTOS.find(p => p.id === id);
 const norm = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+/* Fotos hospedadas no Cloudinary: pede uma versão menor e em formato leve (WebP/AVIF) conforme o uso. Outras fotos passam direto. */
+const foto = (u, w) => (typeof u === 'string' && /^https:\/\/res\.cloudinary\.com\/[^/]+\/image\/upload\/v?\d/.test(u)) ? u.replace('/image/upload/', `/image/upload/f_auto,q_auto,w_${w}/`) : u;
 const waLink = txt => `https://wa.me/${CONFIG.whatsapp}${txt ? '?text=' + encodeURIComponent(txt) : ''}`;
 
 const store = {
@@ -72,6 +74,32 @@ function aplicarConfig(c) {
   if (/^[0-9]{10,15}$/.test(loja.whatsapp || '')) CONFIG.whatsapp = loja.whatsapp;
   document.body.classList.toggle('sem-ind', !ligado('cupomAmigo') && !ligado('cupomBemvindo'));
   if (!ligado('cupomBemvindo')) $('#codeForm')?.remove();
+  iniciarMedicao(); avisoCookies();
+}
+/* ---------- Medição (Google Analytics e Pixel da Meta): só depois que o visitante aceita os cookies ---------- */
+const medicao = { ga: false, px: false };
+function iniciarMedicao() {
+  if (store.get('clouts.cookies', null) !== 'sim') return;
+  if (!medicao.ga && /^G-[A-Z0-9]{4,15}$/.test(loja.gaId || '')) {
+    medicao.ga = true; window.dataLayer = window.dataLayer || []; window.gtag = function () { dataLayer.push(arguments); };
+    gtag('js', new Date()); gtag('config', loja.gaId);
+    const s = document.createElement('script'); s.async = true; s.src = 'https://www.googletagmanager.com/gtag/js?id=' + loja.gaId; document.head.appendChild(s);
+  }
+  if (!medicao.px && /^[0-9]{5,20}$/.test(loja.pixelId || '')) {
+    medicao.px = true;
+    !function (f, b, e, v, n, t, s) { if (f.fbq) return; n = f.fbq = function () { n.callMethod ? n.callMethod.apply(n, arguments) : n.queue.push(arguments); }; if (!f._fbq) f._fbq = n; n.push = n; n.loaded = !0; n.version = '2.0'; n.queue = []; t = b.createElement(e); t.async = !0; t.src = v; s = b.getElementsByTagName(e)[0]; s.parentNode.insertBefore(t, s); }(window, document, 'script', 'https://connect.facebook.net/en_US/fbevents.js');
+    fbq('init', loja.pixelId); fbq('track', 'PageView');
+  }
+}
+/* Evento para o Analytics (ga) e para o Pixel (fb). d = { ga: {...}, fb: {...} } */
+const track = (ga, fb, d = {}) => { try { if (medicao.ga) gtag('event', ga, d.ga || {}); if (medicao.px && fb) fbq('track', fb, d.fb || {}); } catch {} };
+const trkItem = (p, q = 1) => ({ item_id: p.cod, item_name: p.nome, price: p.preco, quantity: q });
+function avisoCookies() {
+  if (!(loja.gaId || loja.pixelId) || store.get('clouts.cookies', null) || $('#ckBar')) return;
+  const el = document.createElement('div'); el.id = 'ckBar'; el.className = 'ck'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', 'Cookies');
+  el.innerHTML = '<p>Usamos cookies para entender o uso da loja e mostrar anúncios mais úteis. Veja a <a href="privacidade.html">Política de privacidade</a>.</p><div><button type="button" data-ck="nao">Recusar</button><button type="button" data-ck="sim" class="y">Aceitar</button></div>';
+  el.onclick = e => { const b = e.target.closest('[data-ck]'); if (!b) return; store.set('clouts.cookies', b.dataset.ck); el.remove(); iniciarMedicao(); };
+  document.body.appendChild(el);
 }
 const temBemVindo = () => cupons.some(c => c.codigo === 'BEMVINDO');
 /* ---------- Cupom de primeira compra (virtual: vale para conta nova, sem pedidos, dentro do prazo) e convite liberado após a 1ª compra ---------- */
@@ -195,7 +223,7 @@ function cardHTML(p, rank) {
   const on = favs.includes(p.id);
   return `<article class="card" data-id="${p.id}" tabindex="0" aria-label="${esc(p.nome)}">
     <div class="card-img">
-      <img src="${esc(p.img)}" alt="${esc(p.nome)}" loading="lazy" decoding="async">
+      <img src="${esc(foto(p.img, 600))}" alt="${esc(p.nome)}" loading="lazy" decoding="async">
       ${rank ? `<span class="tag-p rank">#${rank}</span>` : p.premium ? '<span class="tag-p">Premium</span>' : p.diamond ? '<span class="tag-p">Diamond</span>' : ''}
       <button class="fav ${on ? 'on' : ''}" data-fav="${p.id}" aria-label="Favoritar" aria-pressed="${on}">${ICON.heart}</button>
       ${soldOut(p) ? '<span class="soldout">Esgotado</span>' : `<button class="qadd" data-quick="${p.id}" aria-label="Adicionar ao carrinho">${ICON.plus}</button>`}
@@ -630,13 +658,21 @@ function abrirZoom(list, i0) {
   setTimeout(() => el.querySelector('.zm-h')?.remove(), 3500);
 }
 
+/* Guia de medidas do painel (Site → Guia de medidas): linhas separadas por vírgula; a 1ª linha é o cabeçalho. */
+function guiaHTML() {
+  const linhas = String(loja.guiaMedidas || '').split('\n').map(l => l.split(',').map(c => c.trim())).filter(l => l.some(Boolean));
+  if (linhas.length < 2) return '';
+  const [h, ...rest] = linhas;
+  return `<div class="guia"><table><thead><tr>${h.map(c => `<th>${esc(c)}</th>`).join('')}</tr></thead><tbody>${rest.map(l => `<tr>${l.map(c => `<td>${esc(c)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+}
 function openSheet(id) {
   const p = byId(id); if (!p) return;
   let sel = null;
+  track('view_item', 'ViewContent', { ga: { currency: 'BRL', value: p.preco, items: [trkItem(p)] }, fb: { content_ids: [p.cod], content_name: p.nome, content_type: 'product', value: p.preco, currency: 'BRL' } });
   // Cores: peças com a mesma REF são a mesma peça em cores diferentes (ex.: 113216-1, 113216-2...).
   const cores = p.ref ? PRODUTOS.filter(x => x.ref === p.ref && x.secao === p.secao) : [];
   const sheet = showSheet(`
-    <div class="gal"><div class="gal-vw"><img class="gal-main" src="${esc(p.img)}" alt="${esc(p.nome)}"><button class="gal-nv prev" hidden aria-label="Foto anterior">‹</button><button class="gal-nv next" hidden aria-label="Próxima foto">›</button><span class="gal-ct" hidden></span><span class="gal-zm" aria-hidden="true">Toque para ampliar</span></div><div class="gal-th" hidden></div></div>
+    <div class="gal"><div class="gal-vw"><img class="gal-main" src="${esc(foto(p.img, 1000))}" alt="${esc(p.nome)}"><button class="gal-nv prev" hidden aria-label="Foto anterior">‹</button><button class="gal-nv next" hidden aria-label="Próxima foto">›</button><span class="gal-ct" hidden></span><span class="gal-zm" aria-hidden="true">Toque para ampliar</span></div><div class="gal-th" hidden></div></div>
     <div class="pinfo">
       <div class="cod">CÓDIGO ${esc(p.cod)}${p.ref ? ` · REF. ${esc(p.ref)}` : ''}</div>
       <h2>${esc(p.nome)}</h2>
@@ -644,27 +680,28 @@ function openSheet(id) {
       <div class="specs"><span>${p.secao === 'feminino' ? 'Feminino' : 'Masculino'}</span><span>${esc(p.modelo)}</span>
         ${p.lycra ? `<span>Lycra ${p.lycra}%</span>` : ''}${p.cor ? `<span>Cor: ${esc(p.cor)}</span>` : ''}${p.tecido ? `<span>${esc(p.tecido)}</span>` : ''}
         ${p.premium ? '<span>Premium</span>' : ''}${p.diamond ? '<span>Diamond</span>' : ''}</div>
-      ${cores.length > 1 ? `<div><div class="lbl">Cor: <b>${esc(p.cor || 'Escolha')}</b></div><div class="swatches">${cores.map(c => `<button class="swc ${c.id === p.id ? 'on' : ''}" data-c="${esc(c.id)}" aria-label="Cor ${esc(c.cor || c.cod)}" title="${esc(c.cor || c.cod)}"><img src="${esc(c.img)}" alt=""></button>`).join('')}</div></div>` : ''}
+      ${cores.length > 1 ? `<div><div class="lbl">Cor: <b>${esc(p.cor || 'Escolha')}</b></div><div class="swatches">${cores.map(c => `<button class="swc ${c.id === p.id ? 'on' : ''}" data-c="${esc(c.id)}" aria-label="Cor ${esc(c.cor || c.cod)}" title="${esc(c.cor || c.cod)}"><img src="${esc(foto(c.img, 140))}" alt=""></button>`).join('')}</div></div>` : ''}
       <div><div class="lbl">Tamanho</div><div class="sizes">${sizesAll(p).map(t => `<button class="sz" data-t="${t}" ${p.tam.includes(t) && !p.esgotado ? '' : 'disabled'}>${t}</button>`).join('')}</div></div>
       <div class="buy"><span class="buy-pr">${brl(p.preco)}</span>${soldOut(p) ? '<button class="btn btn-dark block" disabled>Esgotado</button>' : `<button class="btn btn-gold block" id="addBtn">${ICON.bag} Adicionar ao carrinho</button>`}</div>
       <button class="btn btn-line block" id="favSheet">${ICON.heart} <span>${favs.includes(p.id) ? 'Remover dos favoritos' : 'Favoritar'}</span></button>
+      <button class="btn btn-line block" id="shareSheet" type="button">Compartilhar esta peça</button>
       <div class="fr"><span>${ICON.truck || ''} <b>Entrega</b> em Contagem, Betim e Belo Horizonte</span><span>${ICON.chat || ''} Dúvida de tamanho? <a href="${waLink('Olá! Tenho uma dúvida de tamanho na peça ' + p.cod + ' (' + p.nome + ').')}" target="_blank" rel="noopener"><b>Chame no WhatsApp</b></a></span></div>
       <div class="acc">
         ${p.descricao ? `<details open><summary>Descrição</summary><p class="pdesc">${esc(p.descricao)}</p></details>` : ''}
-        <details><summary>Tamanho e ajuste</summary><p>Em dúvida entre dois tamanhos? Mande sua altura e medidas no WhatsApp que a gente indica o melhor para você.</p></details>
+        <details><summary>Tamanho e ajuste</summary>${guiaHTML()}<p>Em dúvida entre dois tamanhos? Mande sua altura e medidas no WhatsApp que a gente indica o melhor para você.</p></details>
         <details><summary>Entrega e pagamento</summary><p>Entregamos em Contagem, Betim e Belo Horizonte. Pagamento por Pix e cartão.</p></details>
       </div>
     </div>`);
   // Galeria (até 10 fotos): a principal está na peça; as outras ficam em produtos/{id}/fotos e carregam ao abrir.
   let gal = [p.img, ...(p.extras || [])], gi = 0;
   const gShow = i => {
-    gi = (i + gal.length) % gal.length; $('.gal-main', sheet).src = gal[gi];
+    gi = (i + gal.length) % gal.length; $('.gal-main', sheet).src = foto(gal[gi], 1000);
     $$('.gal-th img', sheet).forEach((x, k) => x.classList.toggle('on', k === gi)); $('.gal-ct', sheet).textContent = `${gi + 1}/${gal.length}`;
   };
   const gDraw = () => {
     const mu = gal.length > 1;
     $('.gal-th', sheet).hidden = !mu; $('.gal-ct', sheet).hidden = !mu; $$('.gal-nv', sheet).forEach(x => x.hidden = !mu);
-    $('.gal-th', sheet).innerHTML = gal.map((g, i) => `<img src="${esc(g)}" alt="Foto ${i + 1}" class="${i === gi ? 'on' : ''}" data-i="${i}">`).join('');
+    $('.gal-th', sheet).innerHTML = gal.map((g, i) => `<img src="${esc(foto(g, 160))}" alt="Foto ${i + 1}" class="${i === gi ? 'on' : ''}" data-i="${i}">`).join('');
     $$('.gal-th img', sheet).forEach(im => im.onclick = () => gShow(+im.dataset.i)); gShow(gi);
   };
   $('.gal-nv.prev', sheet).onclick = () => gShow(gi - 1); $('.gal-nv.next', sheet).onclick = () => gShow(gi + 1);
@@ -679,6 +716,10 @@ function openSheet(id) {
   if ($('#addBtn', sheet)) $('#addBtn', sheet).onclick = () => {
     if (!sel) { $$('.sz', sheet).forEach(x => { x.classList.remove('err'); void x.offsetWidth; x.classList.add('err'); }); toast('Escolha um tamanho'); return; }
     addToCart(p.id, sel); closeSheet(); openCart();
+  };
+  $('#shareSheet', sheet).onclick = async () => {
+    const url = location.origin + '/p/' + encodeURIComponent(p.id), data = { title: p.nome + ' — CLOUTS', text: 'Olha essa peça da CLOUTS:', url };
+    try { if (navigator.share) { await navigator.share(data); return; } await navigator.clipboard.writeText(url); toast('Link copiado'); } catch (e) { if (e?.name !== 'AbortError') toast('Não foi possível compartilhar'); }
   };
   $('#favSheet', sheet).onclick = () => { toggleFav(p.id); $('#favSheet span', sheet).textContent = favs.includes(p.id) ? 'Remover dos favoritos' : 'Favoritar'; };
 }
@@ -726,6 +767,7 @@ function addToCart(id, tam) {
   const it = cart.find(i => i.id === id && i.tam === tam);
   if (it) it.q++; else cart.push({ id, tam, q: 1 });
   saveCart(); toast('Adicionado ao carrinho');
+  const p = byId(id); if (p) track('add_to_cart', 'AddToCart', { ga: { currency: 'BRL', value: p.preco, items: [trkItem(p)] }, fb: { content_ids: [p.cod], content_type: 'product', value: p.preco, currency: 'BRL' } });
 }
 const cartQty = () => cart.reduce((s, i) => s + i.q, 0);
 const cartTotal = () => cart.reduce((s, i) => s + i.q * byId(i.id).preco, 0);
@@ -778,7 +820,7 @@ function renderCart() {
   if (checkout) return renderCheckout();
   body.innerHTML = cart.map((i, idx) => {
     const p = byId(i.id), off = !p.tam.includes(i.tam) || p.esgotado;
-    return `<div class="ci"><img src="${esc(p.img)}" alt=""><div>${off ? '<div class="warn">Tamanho indisponível no momento. Remova para continuar.</div>' : ''}
+    return `<div class="ci"><img src="${esc(foto(p.img, 160))}" alt=""><div>${off ? '<div class="warn">Tamanho indisponível no momento. Remova para continuar.</div>' : ''}
       <div class="t">${esc(p.nome)}</div><div class="m">Cód. ${esc(p.cod)} · Tam. ${i.tam}</div>
       <div class="ci-r"><div class="qty"><button data-dec="${idx}" aria-label="Diminuir">−</button><span>${i.q}</span><button data-inc="${idx}" aria-label="Aumentar">+</button></div>
       <b>${brl(p.preco * i.q)}</b></div><button class="rm" data-rm="${idx}">Remover</button></div></div>`;
@@ -916,6 +958,7 @@ function sendOrder() {
   const u = me();
   const msg = `*Novo pedido — CLOUTS*\n\n${linhas.join('\n')}\n\n*Subtotal:* ${brl(cartTotal())}${cp ? `\n*Cupom ${cupNome(cp.codigo)} (${cp.percent}% OFF):* − ${brl(desc)}` : ''}\n*Frete (${ship.cidade}):* ${brl(frete)}\n*Total:* ${brl(total)}\n*Pagamento:* ${d.pag}\n\n*Cliente:* ${d.nome}${u?.email ? '\n*E-mail:* ' + u.email : ''}\n*WhatsApp:* ${d.tel}\n*Entrega:* ${d.rua}, ${d.num}${d.comp ? ' — ' + d.comp : ''} — ${d.bairro}, ${ship.cidade} — CEP ${d.cep}`;
   window.open(waLink(msg), '_blank', 'noopener');
+  track('generate_lead', 'Lead', { ga: { currency: 'BRL', value: total, items: cart.map(i => trkItem(byId(i.id), i.q)) }, fb: { value: total, currency: 'BRL', content_type: 'product', content_ids: cart.map(i => byId(i.id).cod) } });
   // Registra o pedido para o dono ver no painel (dashboard); a venda só conta depois que ele confirma o pagamento.
   if (u) CloutsDB.registrarPedido({ uid: u.uid, email: u.email || '', cliente: { nome: d.nome, tel: d.tel, rua: d.rua, num: d.num, bairro: d.bairro, comp: d.comp || '', cep: d.cep },
     itens: cart.map(i => { const p = byId(i.id); return { id: p.id, cod: String(p.cod), nome: String(p.nome).slice(0, 140), tam: String(i.tam), q: i.q, preco: p.preco }; }),
@@ -935,8 +978,11 @@ function fatal() {
   $('#fatalRetry').onclick = () => location.reload();
 }
 const idle = f => ('requestIdleCallback' in window ? requestIdleCallback(f, { timeout: 2500 }) : setTimeout(f, 1200));
+// Endereço próprio da peça (/p/ID): abre a peça e volta para o endereço normal da loja.
+let pecaInicial = (location.pathname.match(/^\/p\/([\w.-]+)\/?$/) || [])[1] || null;
+const abrirPecaInicial = () => { if (pecaInicial && byId(pecaInicial)) { const id = pecaInicial; pecaInicial = null; history.replaceState(null, '', '/' + location.hash); openSheet(id); } };
 try {
-  setHH(); updateBadges(); renderCart(); route();
+  setHH(); updateBadges(); renderCart(); route(); abrirPecaInicial();
   setTimeout(showPromo, 10000);
   setTimeout(() => { barOk = true; renderPcBar(); if (!me() && auth()?.configured && ligado('cupomPrimeira') && !$('#sheet').classList.contains('open') && !$('#promo') && Date.now() - store.get('clouts.boasHide', 0) > 24 * 3600 * 1000) { store.set('clouts.boasHide', Date.now()); openLogin('', true); } }, 2600);
 } catch (e) { console.error(e); fatal(); }
@@ -951,7 +997,7 @@ idle(() => {
   if (window.CloutsDB) CloutsDB.watch(docs => {
     if (!applyCatalog(docs)) return;
     try { localStorage.setItem('clouts.catalogo', JSON.stringify(docs)); } catch {}
-    refreshCatalog();
+    refreshCatalog(); abrirPecaInicial();
   }, e => console.warn('Catálogo online indisponível, usando o catálogo local.', e));
 });
 addEventListener('offline', () => toast('Você está sem internet. Continue navegando; o carrinho fica salvo.'));

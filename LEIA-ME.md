@@ -68,3 +68,13 @@ Sem essas variáveis os e-mails simplesmente não saem e a loja funciona normal.
 - Cupom **Primeira compra** (padrão 10%, 7 dias): criado para quem entra com o Google, vale só para quem nunca comprou. Liga/desliga e valor/validade no painel (aba Cupons). Exige as regras do Firestore mais recentes publicadas.
 - Tela de boas-vindas e faixa dourada no topo para quem ainda não entrou; lembrete de 3 dias na tela e por e-mail (rotina diária /api/cron).
 - **Convide amigos** só aparece depois da primeira compra paga (pedido com status "pago"). Ao detectar a compra, o cliente vê "Novo cupom desbloqueado".
+
+## Fotos, SEO, medição e preços em massa (painel)
+
+- **Fotos no Cloudinary**: crie a conta gratuita em cloudinary.com, copie o *Cloud name* e crie um *Upload preset* do tipo **Unsigned** (Settings → Upload → Upload presets). Cole os dois no painel em **Site → Fotos (Cloudinary)**. Fotos novas já vão para lá; para as antigas, na aba **Peças** aparece o botão "Mover fotos para o Cloudinary".
+- **Medição**: no painel em **Site → Medição e anúncios**, cole o ID do Google Analytics (G-XXXX) e/ou o ID do Pixel da Meta. A loja pede consentimento de cookies e só mede quem aceitar.
+- **Guia de medidas**: em **Site → Guia de medidas** (uma linha por tamanho, colunas separadas por vírgula). Some da loja se ficar vazio.
+- **Preços em massa**: aba **Preços** (reajuste em %, preço fixo, "De/Por", custo e margem, localizar/substituir nos nomes).
+- **SEO**: cada peça tem endereço próprio `/p/ID` (com título, descrição, foto de compartilhamento e dados de produto). `/sitemap.xml` e `/robots.txt` são gerados sozinhos e acompanham o domínio. Depois de ligar o domínio próprio, troque `https://clouts-loja.vercel.app` pelo novo endereço no `index.html` (tags `canonical`, `og:url`, `og:image` e `ld+json`) e cadastre o domínio no Google Search Console enviando o sitemap.
+- **App Check**: Firebase → App Check → Apps → registrar o app web com reCAPTCHA v3, colar a *chave do site* em `APPCHECK_SITE_KEY` (auth.js e painel/painel.js), publicar e só então ativar "Impor".
+- Regras do Firestore novas (campos `estoque`, `custo` e as chaves de configuração): **republique o `firestore.rules`**.

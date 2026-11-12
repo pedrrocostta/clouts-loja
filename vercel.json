@@ -1,5 +1,11 @@
 {
   "crons": [{ "path": "/api/cron", "schedule": "0 14 * * *" }],
+  "rewrites": [
+    { "source": "/p/:id", "destination": "/api/p?id=:id" },
+    { "source": "/sitemap.xml", "destination": "/api/sitemap" },
+    { "source": "/robots.txt", "destination": "/api/sitemap?tipo=robots" }
+  ],
+  "functions": { "api/p.js": { "includeFiles": "index.html" } },
   "headers": [
     {
       "source": "/(.*)",
@@ -14,7 +20,7 @@
     {
       "source": "/((?!painel).*)",
       "headers": [
-        { "key": "Content-Security-Policy", "value": "default-src 'self'; script-src 'self' https://www.gstatic.com https://apis.google.com https://www.google.com/recaptcha/ https://www.gstatic.com/recaptcha/; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob: https://*.googleusercontent.com; media-src 'self'; connect-src 'self' https://*.googleapis.com https://www.gstatic.com https://viacep.com.br https://www.google.com; frame-src https://clouts-409b7.firebaseapp.com https://accounts.google.com https://www.google.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'" }
+        { "key": "Content-Security-Policy", "value": "default-src 'self'; script-src 'self' https://www.gstatic.com https://apis.google.com https://www.google.com/recaptcha/ https://www.gstatic.com/recaptcha/ https://www.googletagmanager.com https://connect.facebook.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob: https://*.googleusercontent.com https://res.cloudinary.com https://www.google-analytics.com https://*.google-analytics.com https://www.googletagmanager.com https://www.facebook.com; media-src 'self'; connect-src 'self' https://*.googleapis.com https://www.gstatic.com https://viacep.com.br https://www.google.com https://*.google-analytics.com https://*.analytics.google.com https://www.googletagmanager.com https://www.facebook.com https://connect.facebook.net; frame-src https://clouts-409b7.firebaseapp.com https://accounts.google.com https://www.google.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'" }
       ]
     },
     {
@@ -35,7 +41,7 @@
         { "key": "X-Robots-Tag", "value": "noindex, nofollow" },
         { "key": "Cache-Control", "value": "no-store" },
         { "key": "Cross-Origin-Opener-Policy", "value": "same-origin-allow-popups" },
-        { "key": "Content-Security-Policy", "value": "default-src 'self'; script-src 'self' https://www.gstatic.com https://apis.google.com https://www.google.com/recaptcha/ https://www.gstatic.com/recaptcha/; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob: https://*.googleusercontent.com; connect-src https: wss:; frame-src https://clouts-409b7.firebaseapp.com https://accounts.google.com https://www.google.com; frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'" }
+        { "key": "Content-Security-Policy", "value": "default-src 'self'; script-src 'self' https://www.gstatic.com https://apis.google.com https://www.google.com/recaptcha/ https://www.gstatic.com/recaptcha/; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob: https://*.googleusercontent.com https://res.cloudinary.com; connect-src https: wss:; frame-src https://clouts-409b7.firebaseapp.com https://accounts.google.com https://www.google.com; frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'" }
       ]
     }
   ]

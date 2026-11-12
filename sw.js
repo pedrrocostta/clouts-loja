@@ -1,5 +1,5 @@
 /* CLOUTS: cache para carregar rápido e página própria quando a conexão cai. */
-const V = 'clouts-v12';
+const V = 'clouts-v13';
 const SHELL = ['/', '/style.css', '/app.js', '/products.js', '/auth.js', '/splash.js', '/img/logo.png', '/img/banners/b1-desktop.webp', '/offline.html', '/offline.js'];
 
 self.addEventListener('install', e => {

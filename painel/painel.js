@@ -12,6 +12,7 @@ if (APPCHECK_SITE_KEY) {
 }
 import { ouvirPedidos, renderDashboard, renderPedidos } from './dashboard.js';
 import { ouvirConfig, ouvirCampanhas, renderCupons, renderSite } from './config.js';
+import { renderPrecos, novoEstadoPrecos } from './precos.js';
 const auth = getAuth(app), db = getFirestore(app), col = collection(db, 'produtos');
 
 /* ---------- Segurança ---------- */
@@ -81,19 +82,19 @@ onAuthStateChanged(auth, u => {
   abaAtual = 'dash'; drawDash();
   unsubCfg?.(); unsubCfg = ouvirConfig(db, c => { cfg = c; if (abaAtual === 'cupons') drawCupons(); if (abaAtual === 'site') drawSite(); }, () => {});
   unsubCamp?.(); unsubCamp = ouvirCampanhas(db, l => { camps = l; if (abaAtual === 'cupons') drawCupons(); }, () => {});
-  unsub?.(); unsub = onSnapshot(col, snap => { items = snap.docs.map(d => ({ id: d.id, ...d.data() })); renderList(); if (abaAtual === 'dash') drawDash(); },
+  unsub?.(); unsub = onSnapshot(col, snap => { items = snap.docs.map(d => ({ id: d.id, ...d.data() })); renderList(); if (abaAtual === 'dash') drawDash(); if (abaAtual === 'precos') drawPrecos(); },
     e => toast(e.code === 'permission-denied' ? 'Sem permissão para ler o catálogo.' : 'Falha ao carregar o catálogo.', true));
 });
 
 /* ---------- Painel ---------- */
 function viewPanel() {
-  main.innerHTML = `<div class="tabs" role="tablist"><button class="tab on" role="tab" data-tab="dash">Dashboard</button><button class="tab" role="tab" data-tab="pedidos">Pedidos</button><button class="tab" role="tab" data-tab="pecas">Peças</button><button class="tab" role="tab" data-tab="cupons">Cupons</button><button class="tab" role="tab" data-tab="avisos">Avisos e promoções</button><button class="tab" role="tab" data-tab="site">Site</button></div>
+  main.innerHTML = `<div class="tabs" role="tablist"><button class="tab on" role="tab" data-tab="dash">Dashboard</button><button class="tab" role="tab" data-tab="pedidos">Pedidos</button><button class="tab" role="tab" data-tab="pecas">Peças</button><button class="tab" role="tab" data-tab="precos">Preços</button><button class="tab" role="tab" data-tab="cupons">Cupons</button><button class="tab" role="tab" data-tab="avisos">Avisos e promoções</button><button class="tab" role="tab" data-tab="site">Site</button></div>
     <section id="tabDash"></section><section id="tabPedidos" hidden></section>
     <section id="tabPecas" hidden><div class="bar"><input id="q" type="text" placeholder="Buscar por código, referência ou nome" aria-label="Buscar">
       <select id="fs" aria-label="Seção"><option value="">Todas as seções</option><option value="feminino">Feminino</option><option value="masculino">Masculino</option></select>
       <select id="ft" aria-label="Status"><option value="">Todos os status</option><option value="vis">Visíveis</option><option value="oculta">Ocultas</option><option value="esg">Esgotadas</option></select></div>
     <div style="display:flex;justify-content:space-between;gap:10px;margin-bottom:14px;flex-wrap:wrap"><div class="stats" id="stats" style="margin:0"></div><button class="btn gold" id="novo">+ Nova peça</button></div>
-    <div id="seed"></div><div class="list" id="list"></div></section><section id="tabCupons" hidden></section><section id="tabAvisos" hidden></section><section id="tabSite" hidden></section>`;
+    <div id="seed"></div><div class="list" id="list"></div></section><section id="tabPrecos" hidden></section><section id="tabCupons" hidden></section><section id="tabAvisos" hidden></section><section id="tabSite" hidden></section>`;
   $$('.tab').forEach(t => t.onclick = () => showTab(t.dataset.tab));
   $('#q').oninput = e => { filtro.q = e.target.value; renderList(); };
   $('#fs').onchange = e => { filtro.secao = e.target.value; renderList(); };
@@ -103,15 +104,20 @@ function viewPanel() {
 
 function showTab(t) {
   $$('.tab').forEach(b => { const on = b.dataset.tab === t; b.classList.toggle('on', on); b.setAttribute('aria-selected', on); });
-  $('#tabDash').hidden = t !== 'dash'; $('#tabPedidos').hidden = t !== 'pedidos'; $('#tabPecas').hidden = t !== 'pecas'; $('#tabAvisos').hidden = t !== 'avisos'; $('#tabCupons').hidden = t !== 'cupons'; $('#tabSite').hidden = t !== 'site';
+  $('#tabDash').hidden = t !== 'dash'; $('#tabPedidos').hidden = t !== 'pedidos'; $('#tabPecas').hidden = t !== 'pecas'; $('#tabAvisos').hidden = t !== 'avisos'; $('#tabCupons').hidden = t !== 'cupons'; $('#tabSite').hidden = t !== 'site'; $('#tabPrecos').hidden = t !== 'precos';
   if (t === 'avisos' && !$('#tabAvisos').firstChild) viewAvisos();
-  abaAtual = t; if (t === 'cupons') drawCupons(); if (t === 'site') drawSite(); if (t === 'dash') drawDash(); if (t === 'pedidos') drawPedidos();
+  abaAtual = t; if (t === 'cupons') drawCupons(); if (t === 'site') drawSite(); if (t === 'dash') drawDash(); if (t === 'pedidos') drawPedidos(); if (t === 'precos') drawPrecos();
 }
 
 /* ---------- Cupons e configurações do site ---------- */
 let cfg = {}, camps = [], unsubCfg = null, unsubCamp = null;
 const drawCupons = () => { const b = $('#tabCupons'); if (!b || b.contains(document.activeElement) && document.activeElement.tagName === 'INPUT' && document.activeElement.type !== 'checkbox') return; renderCupons(b, cfg, camps, db, toast, divulgarCampanha); };
-const drawSite = () => { const b = $('#tabSite'); if (!b || b.contains(document.activeElement) && document.activeElement.tagName === 'INPUT') return; renderSite(b, cfg, db, toast); };
+let prSt = novoEstadoPrecos();
+const drawPrecos = foco => { const b = $('#tabPrecos'); if (!b) return; if (!foco && b.contains(document.activeElement) && ['INPUT', 'SELECT'].includes(document.activeElement.tagName)) return;
+  const had = foco && document.activeElement?.id === 'pr-q', pos = had ? document.activeElement.selectionStart : 0;
+  renderPrecos(b, items, db, toast, prSt, () => drawPrecos(true));
+  if (had) { const i = $('#pr-q'); i.focus(); i.setSelectionRange(pos, pos); } };
+const drawSite = () => { const b = $('#tabSite'); if (!b || b.contains(document.activeElement) && ['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) return; renderSite(b, cfg, db, toast); };
 async function divulgarCampanha(c) {
   const ex = c.expiraEm?.toMillis?.();
   try {
@@ -191,8 +197,11 @@ function renderList() {
   if (!$('#list')) return;
   const n = x => items.filter(x).length;
   $('#stats').innerHTML = `<span class="pill"><b>${items.length}</b> peças</span><span class="pill"><b>${n(p => p.visivel !== false)}</b> visíveis</span><span class="pill"><b>${n(p => p.visivel === false)}</b> ocultas</span><span class="pill"><b>${n(p => p.esgotado || !(p.tam || []).length)}</b> esgotadas</span>`;
-  $('#seed').innerHTML = items.length || typeof PRODUTOS === 'undefined' ? '' : `<div class="seed"><b>O catálogo online está vazio.</b><span>Importe as ${PRODUTOS.length} peças que já estão na loja para começar a gerenciá-las por aqui.</span><button class="btn gold" id="seedBtn">Importar catálogo inicial</button></div>`;
+  const pesadas = items.filter(p => String(p.img || '').startsWith('data:')).length;
+  $('#seed').innerHTML = (nuvemOk() && pesadas ? `<div class="seed"><b>${pesadas} peça${pesadas === 1 ? '' : 's'} com foto dentro do banco.</b><span>Mova para o Cloudinary para a loja carregar bem mais rápido. Pode levar alguns minutos; deixe esta página aberta.</span><button class="btn gold" id="migBtn" type="button" ${migrando ? 'disabled' : ''}>Mover fotos para o Cloudinary</button><span id="migMsg" class="msg">${esc(migTxt)}</span></div>` : !nuvemOk() && pesadas ? `<div class="seed"><b>Fotos dentro do banco.</b><span>Configure o Cloudinary na aba Site → Fotos para deixar a loja mais rápida.</span></div>` : '')
+    + (items.length || typeof PRODUTOS === 'undefined' ? '' : `<div class="seed"><b>O catálogo online está vazio.</b><span>Importe as ${PRODUTOS.length} peças que já estão na loja para começar a gerenciá-las por aqui.</span><button class="btn gold" id="seedBtn">Importar catálogo inicial</button></div>`);
   if ($('#seedBtn')) $('#seedBtn').onclick = seed;
+  if ($('#migBtn')) $('#migBtn').onclick = migrarFotos;
   const q = filtro.q.toLowerCase();
   const list = [...items].filter(p => (!q || (p.cod + ' ' + (p.ref || '') + ' ' + p.nome).toLowerCase().includes(q)) && (!filtro.secao || p.secao === filtro.secao)
     && (!filtro.status || (filtro.status === 'vis' ? p.visivel !== false : filtro.status === 'oculta' ? p.visivel === false : (p.esgotado || !(p.tam || []).length))))
@@ -244,7 +253,7 @@ async function seed() {
 }
 
 /* ---------- Editor ---------- */
-function shrink(file, max = 900) {
+function shrink(file, max = 900, cap = 700000) {
   return new Promise((ok, no) => {
     const url = URL.createObjectURL(file), im = new Image();
     im.onload = () => {
@@ -252,11 +261,39 @@ function shrink(file, max = 900) {
       c.width = Math.round(im.width * k); c.height = Math.round(im.height * k);
       c.getContext('2d').drawImage(im, 0, 0, c.width, c.height); URL.revokeObjectURL(url);
       let q = .84, d = c.toDataURL('image/jpeg', q);
-      while (d.length > 700000 && q > .4) { q -= .08; d = c.toDataURL('image/jpeg', q); }
-      d.length > 900000 ? no(new Error('grande')) : ok(d);
+      while (d.length > cap && q > .4) { q -= .08; d = c.toDataURL('image/jpeg', q); }
+      d.length > cap + 200000 ? no(new Error('grande')) : ok(d);
     };
     im.onerror = () => no(new Error('imagem')); im.src = url;
   });
+}
+
+/* Fotos no Cloudinary (configurado em Site → Fotos). Sem configuração, a foto continua dentro do banco, como antes. */
+const nuvemOk = () => !!(cfg.cloudName && cfg.uploadPreset);
+async function nuvem(dataUrl) {
+  const fd = new FormData(); fd.append('file', dataUrl); fd.append('upload_preset', cfg.uploadPreset); fd.append('folder', 'clouts');
+  const r = await fetch(`https://api.cloudinary.com/v1_1/${encodeURIComponent(cfg.cloudName)}/image/upload`, { method: 'POST', body: fd });
+  const j = await r.json().catch(() => ({})); if (!r.ok || !/^https:\/\/res\.cloudinary\.com\//.test(j.secure_url || '')) throw new Error(j?.error?.message || 'cloudinary');
+  return j.secure_url;
+}
+const prepararFoto = async f => nuvemOk() ? nuvem(await shrink(f, 1600, 2500000)) : shrink(f);
+/* Move as fotos que ainda estão dentro do banco (base64) para o Cloudinary, uma peça por vez. */
+let migrando = false, migTxt = '';
+async function migrarFotos() {
+  if (migrando) return; migrando = true;
+  const msg = t => { migTxt = t; if ($('#migMsg')) $('#migMsg').textContent = t; };
+  const alvo = items.filter(p => String(p.img || '').startsWith('data:') || (p.nFotos || 0) > 0);
+  if ($('#migBtn')) $('#migBtn').disabled = true; let feitas = 0, falhas = 0;
+  for (const p of alvo) {
+    msg(`Movendo ${++feitas} de ${alvo.length}…`);
+    try {
+      const up = {}; if (String(p.img || '').startsWith('data:')) up.img = await nuvem(p.img);
+      const sn = (p.nFotos || 0) > 0 ? await getDocs(collection(db, 'produtos', p.id, 'fotos')) : { docs: [] };
+      for (const d of sn.docs) { const x = d.data(); if (String(x.img || '').startsWith('data:')) await updateDoc(d.ref, { img: await nuvem(x.img) }); }
+      if (up.img) await updateDoc(doc(db, 'produtos', p.id), up);
+    } catch (e) { falhas++; console.warn('migração', p.cod, e); }
+  }
+  msg(falhas ? `Pronto, mas ${falhas} peça(s) falharam. Clique de novo para tentar só as que faltam.` : 'Pronto! Todas as fotos estão no Cloudinary.'); migrando = false; renderList();
 }
 
 function openEditor(p) {
@@ -316,7 +353,7 @@ function openEditor(p) {
   };
   $('#e-file', m).onchange = async e => {
     const fs = [...e.target.files].slice(0, 10 - fotos.length); e.target.value = ''; if (!fs.length) return; msg('Ajustando fotos…');
-    let falhou = 0; for (const f of fs) { try { fotos.push(await shrink(f)); drawFotos(); } catch { falhou++; } }
+    let falhou = 0; for (const f of fs) { try { fotos.push(await prepararFoto(f)); drawFotos(); } catch { falhou++; } }
     msg(falhou ? `${falhou} foto(s) não puderam ser usadas. Tente outras.` : 'Fotos prontas.', !!falhou);
   };
   $('#e-can', m).onclick = close;

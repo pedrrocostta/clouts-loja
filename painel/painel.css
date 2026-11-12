@@ -153,3 +153,15 @@ textarea{width:100%;border:1px solid #d3c8b0;border-radius:10px;padding:10px 12p
 .pz-l li{display:grid;grid-template-columns:12px 1fr auto 38px;gap:8px;align-items:center;font-size:13px}
 .pz-l i{width:12px;height:12px;border-radius:4px}
 .pz-l small{color:#5f584c;text-align:right}
+.pr-wrap{overflow-x:auto;background:#fff;border:1px solid #e5dcc6;border-radius:12px;margin:14px 0}
+.pr-t{width:100%;border-collapse:collapse;font-size:13px;min-width:720px}
+.pr-t th{position:sticky;top:0;background:#f6efdc;text-align:left;padding:9px 10px;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#6b5d37}
+.pr-t td{padding:6px 8px;border-top:1px solid #efe7d2;vertical-align:middle}
+.pr-t td small{display:block;color:#8a8272;font-size:10px}
+.pr-t input{width:100%;min-width:0;padding:8px 9px;border:1px solid #d9cfb8;border-radius:8px;font:inherit;background:#fffdf8}
+.pr-t td:nth-child(3) input,.pr-t td:nth-child(4) input,.pr-t td:nth-child(5) input{width:104px}
+.pr-t td:nth-child(2){min-width:240px}
+.pr-t tr.dirty td{background:#fff7de}
+.pr-t .mg{font-weight:700;color:#2f8f5b;white-space:nowrap}
+.pr-save{position:sticky;bottom:0;display:flex;gap:10px;align-items:center;justify-content:flex-end;padding:12px 4px;background:linear-gradient(0deg,#f4efe3 70%,transparent);margin-top:-6px}
+.pr-save span{margin-right:auto;font-weight:600;color:#6b5d37;font-size:13px}
