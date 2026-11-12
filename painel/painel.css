@@ -128,7 +128,7 @@ textarea{width:100%;border:1px solid #d3c8b0;border-radius:10px;padding:10px 12p
 @media(max-width:560px){.hb li{grid-template-columns:78px 1fr auto}.kpi b{font-size:26px}}
 
 /* Tipografia do painel: Inter, títulos firmes. */
-.top h1{font-weight:700;letter-spacing:.2em;font-size:19px}.login h2,.card h2,.av-form h2,.av-h2,.dsh-head h2{font-weight:700;letter-spacing:-.015em}.kpi b{font-weight:800;letter-spacing:-.02em}.top em,.ord-ft b{font-weight:800}
+.top h1{font-family:'Cormorant Garamond',Georgia,serif;font-weight:700;letter-spacing:.28em;font-size:22px}.login h2,.card h2,.av-form h2,.av-h2,.dsh-head h2{font-weight:700;letter-spacing:-.015em}.kpi b{font-weight:800;letter-spacing:-.02em}.top em,.ord-ft b{font-weight:800}
 
 /* Galeria de fotos no editor */
 .gal-ed{display:grid;gap:8px}.gal-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:8px}

@@ -417,7 +417,7 @@ main{padding-top:0}
 
 /* ===== páginas legais (privacidade, trocas, termos) ===== */
 .legal-top{background:var(--dark);padding:14px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px}
-.legal-top a{display:flex;align-items:center;gap:10px;color:#fff;text-decoration:none;font-family:'Inter',system-ui,sans-serif;font-weight:600;letter-spacing:.3em;font-size:20px}
+.legal-top a{display:flex;align-items:center;gap:10px;color:#fff;text-decoration:none;font-family:'Cormorant Garamond',Georgia,serif;font-weight:600;letter-spacing:.3em;font-size:20px}
 .legal-top img{height:34px;width:auto}
 .legal-top .back{font:600 12px Inter,system-ui,sans-serif;letter-spacing:.08em;color:var(--gold);text-transform:uppercase}
 .legal{max-width:760px;margin:0 auto;padding:28px 18px 60px;line-height:1.65;color:#2b2823}
@@ -450,7 +450,7 @@ main{padding-top:0}
 
 /* ===== Tipografia: Inter (profissional, legível). Títulos firmes, sem serifa. ===== */
 h1,h2,h3{font-weight:700;letter-spacing:-.015em}
-.brand-word{font-weight:700;letter-spacing:.3em}
+.brand-word{font-family:'Cormorant Garamond',Georgia,serif;font-weight:700;letter-spacing:.34em}
 .tile h3{font-weight:700;letter-spacing:-.01em}
 .tk-pct b{font-weight:800;font-size:34px}
 .pr-big b{font-weight:800;font-size:64px;letter-spacing:-.03em}
