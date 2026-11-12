@@ -25,7 +25,7 @@ const store = {
 };
 /* ---------- Catálogo em tempo real (Firestore) ---------- */
 const pick = (id, sec) => byId(id) || PRODUTOS.find(p => p.secao === sec) || PRODUTOS[0] || { img: '' };
-const sizesAll = p => p.secao === 'feminino' ? ['36', '38', '40', '42', '44', '46'] : ['38', '40', '42', '44', '46', '48'];
+const sizesAll = p => [...new Set([...(p.secao === 'feminino' ? ['36', '38', '40', '42', '44', '46'] : ['38', '40', '42', '44', '46', '48']), ...(p.tam || [])])].sort((a, b) => a - b);
 const soldOut = p => !!p.esgotado || !(p.tam || []).length;
 const topList = () => MAIS_VENDIDOS.map(byId).filter(Boolean);
 function applyCatalog(docs) {
@@ -57,6 +57,16 @@ const meuCupom = () => cupons.find(c => c.codigo === 'AMIGO') || null;
 try { const r = new URLSearchParams(location.search).get('ref'); if (r && /^[A-Za-z0-9]{20,40}$/.test(r)) localStorage.setItem('clouts.ref', r); } catch {}
 try { const c = (new URLSearchParams(location.search).get('codigo') || '').toUpperCase(); if (/^[A-Z0-9]{8}$/.test(c)) localStorage.setItem('clouts.codigo', c); } catch {}
 let meuCod = null, aplicando = false;
+/* Configurações da loja feitas no painel (liga/desliga cupons, frase da barra, WhatsApp). */
+let loja = store.get('clouts.cfg', {});
+const ligado = k => loja[k] !== false;
+function aplicarConfig(c) {
+  loja = c || {}; store.set('clouts.cfg', loja);
+  const tb = $('.topbar'); if (tb && loja.barra) tb.textContent = loja.barra;
+  if (/^[0-9]{10,15}$/.test(loja.whatsapp || '')) CONFIG.whatsapp = loja.whatsapp;
+  document.body.classList.toggle('sem-ind', !ligado('cupomAmigo') && !ligado('cupomBemvindo'));
+  if (!ligado('cupomBemvindo')) $('#codeForm')?.remove();
+}
 const temBemVindo = () => cupons.some(c => c.codigo === 'BEMVINDO');
 /* Quem recebe um código de amigo cola aqui: ganha o cupom BEMVINDO (10% na primeira compra); quem convidou sobe de degrau depois da 1ª compra paga. */
 async function aplicarCodigo(raw) {
@@ -78,7 +88,7 @@ async function aplicarCodigo(raw) {
   } finally { aplicando = false; }
 }
 const codigoFormHTML = () => {
-  if (temBemVindo()) return '';
+  if (temBemVindo() || !ligado('cupomBemvindo')) return '';
   return `<form class="codeform" id="codeForm"><label for="codeIn"><b>Recebeu um código de amigo?</b><small>Cole aqui e ganhe 10% OFF na primeira compra.</small></label>
     <div><input id="codeIn" maxlength="12" autocomplete="off" autocapitalize="characters" placeholder="Ex.: K7M2QX9P" value="${esc(localStorage.getItem('clouts.codigo') || '')}"><button class="btn btn-dark" type="submit">Usar código</button></div><p class="note" id="codeMsg"></p></form>`;
 };
@@ -90,7 +100,20 @@ function bindCodigoForm() {
     if (r.ok) toast('Código aplicado! Seu cupom de 10% OFF foi liberado.'); else { m.className = 'note bad'; m.textContent = r.msg; }
   };
 }
-const cupomObj = () => cupons.find(c => c.codigo === cupomAtivo && !c.usado) || null;
+let campAtiva = store.get('clouts.camp', null);   // código promocional do dono aplicado no carrinho {codigo, percent}
+const cupomObj = () => (campAtiva && cupomAtivo === campAtiva.codigo && ligado('campanhas') ? { ...campAtiva, camp: true } : null)
+  || cupons.find(c => c.codigo === cupomAtivo && !c.usado && ligado(c.codigo === 'AMIGO' ? 'cupomAmigo' : 'cupomBemvindo')) || null;
+async function aplicarCampanha(raw) {
+  const code = String(raw || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (code.length < 3) return { ok: false, msg: 'Digite o código promocional.' };
+  if (!ligado('campanhas')) return { ok: false, msg: 'Códigos promocionais estão desativados no momento.' };
+  try {
+    const c = await CloutsDB.campanha(code), exp = c?.expiraEm?.toMillis?.();
+    if (!c || c.ativo !== true || (exp && exp < Date.now())) return { ok: false, msg: 'Código inválido ou expirado.' };
+    campAtiva = { codigo: code, percent: c.percent }; store.set('clouts.camp', campAtiva); cupomAtivo = code; store.set('clouts.cupom', code);
+    return { ok: true, percent: c.percent };
+  } catch { return { ok: false, msg: 'Não foi possível validar agora. Tente de novo.' }; }
+}
 const descontoValor = () => { const c = cupomObj(); return c ? Math.round(cartTotal() * c.percent) / 100 : 0; };
 const totalPedido = () => Math.max(0, cartTotal() - descontoValor()) + (freteValor() || 0);   // { cep, cidade, bairro, rua, valor }
 const saveCart = () => { store.set('clouts.cart', cart); renderCart(); };
@@ -418,7 +441,8 @@ function promoWanted() {
   const h = store.get('clouts.promoHide', 0); return !h || Date.now() - h > 24 * 3600 * 1000;
 }
 function showPromo(force) {
-  if (!force && !promoWanted()) return;
+  if (!ligado('cupomAmigo') && !ligado('cupomBemvindo')) return;
+  if (!force && (!promoWanted() || !ligado('popupConvite'))) return;
   if ($('#promo')) return;
   const el = document.createElement('div'); el.id = 'promo'; el.className = 'promo-ov';
   el.innerHTML = `<div class="promo-card" role="dialog" aria-modal="true" aria-labelledby="prT">
@@ -497,10 +521,8 @@ document.addEventListener('click', e => { if (e.target.closest('[data-invite]'))
 function openSheet(id) {
   const p = byId(id); if (!p) return;
   let sel = null;
-  const gal = [p.img, ...(p.extras || [])];
   const sheet = showSheet(`
-    <div class="gal"><img class="gal-main" src="${esc(p.img)}" alt="${esc(p.nome)}">
-      ${gal.length > 1 ? `<div class="gal-th">${gal.map((g, i) => `<img src="${esc(g)}" alt="" class="${i ? '' : 'on'}" data-g="${esc(g)}">`).join('')}</div>` : ''}</div>
+    <div class="gal"><div class="gal-vw"><img class="gal-main" src="${esc(p.img)}" alt="${esc(p.nome)}"><button class="gal-nv prev" hidden aria-label="Foto anterior">‹</button><button class="gal-nv next" hidden aria-label="Próxima foto">›</button><span class="gal-ct" hidden></span></div><div class="gal-th" hidden></div></div>
     <div class="pinfo">
       <div class="cod">CÓDIGO ${esc(p.cod)}${p.ref ? ` · REF. ${esc(p.ref)}` : ''}</div>
       <h2>${esc(p.nome)}</h2>
@@ -514,9 +536,24 @@ function openSheet(id) {
       <button class="btn btn-line block" id="favSheet">${ICON.heart} <span>${favs.includes(p.id) ? 'Remover dos favoritos' : 'Favoritar'}</span></button>
       <p class="note">Entrega em Contagem, Betim e Belo Horizonte · Pix e cartão.</p>
     </div>`);
-  $$('.gal-th img', sheet).forEach(im => im.onclick = () => {
-    $('.gal-main', sheet).src = im.dataset.g; $$('.gal-th img', sheet).forEach(x => x.classList.toggle('on', x === im));
-  });
+  // Galeria (até 10 fotos): a principal está na peça; as outras ficam em produtos/{id}/fotos e carregam ao abrir.
+  let gal = [p.img, ...(p.extras || [])], gi = 0;
+  const gShow = i => {
+    gi = (i + gal.length) % gal.length; $('.gal-main', sheet).src = gal[gi];
+    $$('.gal-th img', sheet).forEach((x, k) => x.classList.toggle('on', k === gi)); $('.gal-ct', sheet).textContent = `${gi + 1}/${gal.length}`;
+  };
+  const gDraw = () => {
+    const mu = gal.length > 1;
+    $('.gal-th', sheet).hidden = !mu; $('.gal-ct', sheet).hidden = !mu; $$('.gal-nv', sheet).forEach(x => x.hidden = !mu);
+    $('.gal-th', sheet).innerHTML = gal.map((g, i) => `<img src="${esc(g)}" alt="Foto ${i + 1}" class="${i === gi ? 'on' : ''}" data-i="${i}">`).join('');
+    $$('.gal-th img', sheet).forEach(im => im.onclick = () => gShow(+im.dataset.i)); gShow(gi);
+  };
+  $('.gal-nv.prev', sheet).onclick = () => gShow(gi - 1); $('.gal-nv.next', sheet).onclick = () => gShow(gi + 1);
+  let x0 = null; const gm = $('.gal-vw', sheet);
+  gm.addEventListener('touchstart', e => { x0 = e.touches[0].clientX; }, { passive: true });
+  gm.addEventListener('touchend', e => { if (x0 == null || gal.length < 2) return; const dx = e.changedTouches[0].clientX - x0; x0 = null; if (Math.abs(dx) > 40) gShow(gi + (dx < 0 ? 1 : -1)); });
+  gDraw();
+  if (p.nFotos > 0 && window.CloutsDB) CloutsDB.fotos(p.id).then(ex => { if (ex.length && sheet.isConnected) { gal = [p.img, ...ex]; gDraw(); } }).catch(() => {});
   $$('.sz', sheet).forEach(b => b.onclick = () => { sel = b.dataset.t; $$('.sz', sheet).forEach(x => x.classList.toggle('on', x === b)); });
   if ($('#addBtn', sheet)) $('#addBtn', sheet).onclick = () => {
     if (!sel) { $$('.sz', sheet).forEach(x => { x.classList.remove('err'); void x.offsetWidth; x.classList.add('err'); }); toast('Escolha um tamanho'); return; }
@@ -656,14 +693,20 @@ function cupomBox() {
   if (c) return `<div class="cupom on"><span><b>${esc(c.codigo)}</b> · ${c.percent}% OFF aplicado</span><button type="button" id="cupomRm">Remover</button></div>`;
   if (!me()) return `<div class="cupom"><button type="button" id="cupomLogin">Tem cupom? Entre para usar</button></div>`;
   const av = cupons.filter(x => !x.usado);
-  if (!av.length) return `<div class="cupom"><button type="button" id="cupomShare">Convide amigos e ganhe até 20% OFF</button></div>`;
-  return `<div class="cupom"><label for="cupomSel">Cupom</label><select id="cupomSel"><option value="">Escolher cupom</option>${av.map(x => `<option value="${esc(x.codigo)}">${esc(x.codigo)} · ${x.percent}% OFF</option>`).join('')}</select></div>`;
+  const camp = ligado('campanhas') ? `<form class="cupom-camp" id="campForm"><input id="campIn" maxlength="20" autocomplete="off" autocapitalize="characters" placeholder="Código promocional"><button class="btn btn-dark sm" type="submit">Aplicar</button><p class="note" id="campMsg"></p></form>` : '';
+  const dis = av.filter(x => ligado(x.codigo === 'AMIGO' ? 'cupomAmigo' : 'cupomBemvindo'));
+  if (!dis.length) return `<div class="cupom">${ligado('cupomAmigo') ? '<button type="button" id="cupomShare">Convide amigos e ganhe até 20% OFF</button>' : ''}${camp}</div>`;
+  return `<div class="cupom"><label for="cupomSel">Cupom</label><select id="cupomSel"><option value="">Escolher cupom</option>${dis.map(x => `<option value="${esc(x.codigo)}">${esc(x.codigo)} · ${x.percent}% OFF</option>`).join('')}</select>${camp}</div>`;
 }
 function bindCupom() {
   const on = (id, f) => { const el = $(id); if (el) el.onclick = f; };
-  on('#cupomRm', () => { cupomAtivo = null; store.set('clouts.cupom', null); renderCart(); });
+  on('#cupomRm', () => { cupomAtivo = null; campAtiva = null; store.set('clouts.cupom', null); store.set('clouts.camp', null); renderCart(); });
   on('#cupomLogin', () => openLogin('Entre com o Google para usar seus cupons.'));
   on('#cupomShare', () => shareStore());
+  const cf = $('#campForm'); if (cf) cf.onsubmit = async e => {
+    e.preventDefault(); const m = $('#campMsg'); m.className = 'note'; m.textContent = 'Validando…';
+    const r = await aplicarCampanha($('#campIn').value); if (r.ok) { toast(`Código aplicado: ${r.percent}% OFF`); renderCart(); } else { m.className = 'note bad'; m.textContent = r.msg; }
+  };
   const sel = $('#cupomSel'); if (sel) sel.onchange = e => { cupomAtivo = e.target.value || null; store.set('clouts.cupom', cupomAtivo); renderCart(); };
 }
 const shipMsg = () => ship ? `Entrega em ${ship.cidade}${ship.bairro ? ' · ' + ship.bairro : ''}: ${freteValor() === 0 ? 'frete ' + (CONFIG.freteGratisAcima != null && cartTotal() >= CONFIG.freteGratisAcima ? 'grátis' : brl(0)) : brl(freteValor())}` : 'Entregamos em Contagem, Betim e Belo Horizonte.';
@@ -752,7 +795,11 @@ function sendOrder() {
   const u = me();
   const msg = `*Novo pedido — CLOUTS*\n\n${linhas.join('\n')}\n\n*Subtotal:* ${brl(cartTotal())}${cp ? `\n*Cupom ${cp.codigo} (${cp.percent}% OFF):* − ${brl(desc)}` : ''}\n*Frete (${ship.cidade}):* ${brl(frete)}\n*Total:* ${brl(total)}\n*Pagamento:* ${d.pag}\n\n*Cliente:* ${d.nome}${u?.email ? '\n*E-mail:* ' + u.email : ''}\n*WhatsApp:* ${d.tel}\n*Entrega:* ${d.rua}, ${d.num}${d.comp ? ' — ' + d.comp : ''} — ${d.bairro}, ${ship.cidade} — CEP ${d.cep}`;
   window.open(waLink(msg), '_blank', 'noopener');
-  if (cp && u) { CloutsDB.usarCupom(u.uid, cp.codigo).catch(() => {}); cupomAtivo = null; store.set('clouts.cupom', null); }
+  // Registra o pedido para o dono ver no painel (dashboard); a venda só conta depois que ele confirma o pagamento.
+  if (u) CloutsDB.registrarPedido({ uid: u.uid, email: u.email || '', cliente: { nome: d.nome, tel: d.tel, rua: d.rua, num: d.num, bairro: d.bairro, comp: d.comp || '', cep: d.cep },
+    itens: cart.map(i => { const p = byId(i.id); return { id: p.id, cod: String(p.cod), nome: String(p.nome).slice(0, 140), tam: String(i.tam), q: i.q, preco: p.preco }; }),
+    subtotal: cartTotal(), desconto: desc, frete, total, cupom: cp ? cp.codigo : null, percent: cp ? cp.percent : 0, cidade: ship.cidade }).catch(e => console.warn('Pedido não registrado', e));
+  if (cp && u) { if (!cp.camp) CloutsDB.usarCupom(u.uid, cp.codigo).catch(() => {}); cupomAtivo = null; campAtiva = null; store.set('clouts.cupom', null); store.set('clouts.camp', null); }
 }
 
 /* ---------- Init ---------- */
@@ -771,12 +818,14 @@ try {
   setHH(); updateBadges(); renderCart(); route();
   setTimeout(showPromo, 10000);
 } catch (e) { console.error(e); fatal(); }
+aplicarConfig(loja);
 hideSplash();
 voltaDoPagamento();
 if (auth()) auth().onChange(onUser);
 setTimeout(() => window.CloutsAuth?.start(), 300);
 idle(() => {
   if (window.CloutsDB) CloutsDB.avisos(onAvisos, () => {});
+  if (window.CloutsDB) CloutsDB.config(aplicarConfig, () => {});
   if (window.CloutsDB) CloutsDB.watch(docs => {
     if (!applyCatalog(docs)) return;
     try { localStorage.setItem('clouts.catalogo', JSON.stringify(docs)); } catch {}

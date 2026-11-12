@@ -1,6 +1,6 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
 import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut, setPersistence, browserSessionPersistence } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
-import { getFirestore, collection, onSnapshot, doc, setDoc, updateDoc, deleteDoc, writeBatch, addDoc, serverTimestamp, query, orderBy, limit, Timestamp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+import { getFirestore, collection, onSnapshot, doc, setDoc, updateDoc, deleteDoc, writeBatch, addDoc, serverTimestamp, query, orderBy, limit, Timestamp, getDocs, getDoc } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
 const app = initializeApp({
   apiKey: 'AIzaSyBP1WSRJqAM552UQU5rBRubeVkz7IRc2Ao', authDomain: 'clouts-409b7.firebaseapp.com', projectId: 'clouts-409b7',
@@ -11,6 +11,7 @@ if (APPCHECK_SITE_KEY) {
   try { const ac = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-app-check.js'); ac.initializeAppCheck(app, { provider: new ac.ReCaptchaV3Provider(APPCHECK_SITE_KEY), isTokenAutoRefreshEnabled: true }); } catch (e) { console.warn('App Check:', e); }
 }
 import { ouvirPedidos, renderDashboard, renderPedidos } from './dashboard.js';
+import { ouvirConfig, ouvirCampanhas, renderCupons, renderSite } from './config.js';
 const auth = getAuth(app), db = getFirestore(app), col = collection(db, 'produtos');
 
 /* ---------- Segurança ---------- */
@@ -33,7 +34,8 @@ const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const brl = v => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const img = p => /^(data:|https?:)/.test(p.img || '') ? p.img : '/' + (p.img || '');
-const SIZES = { feminino: ['36', '38', '40', '42', '44', '46'], masculino: ['38', '40', '42', '44', '46', '48'] };
+const TAMS = ['34', '36', '38', '40', '42', '44', '46', '48', '50', '52', '54'];   // numeração disponível no cadastro (feminino e masculino)
+const SIZES = { feminino: TAMS, masculino: TAMS };
 const main = $('#main');
 let items = [], unsub = null, unsubAv = null, avisosEnv = [], filtro = { q: '', secao: '', status: '' };
 
@@ -43,7 +45,7 @@ const fail = e => toast(e?.code === 'permission-denied' ? 'Sua conta não tem pe
 
 /* ---------- Login ---------- */
 function viewLogin(aviso) {
-  $('#topActs').hidden = true; unsub?.(); unsub = null; unsubAv?.(); unsubAv = null; unsubPed?.(); unsubPed = null; pedidos = [];
+  $('#topActs').hidden = true; unsub?.(); unsub = null; unsubAv?.(); unsubAv = null; unsubPed?.(); unsubPed = null; pedidos = []; unsubCfg?.(); unsubCfg = null; unsubCamp?.(); unsubCamp = null;
   // Entrada só com a conta Google do dono (com verificação em duas etapas ligada na conta Google). Sem senha própria do painel.
   main.innerHTML = `<form class="login" id="lf"><img src="/img/logo.png" alt=""><h2>Entrar no painel</h2>
     <p class="msg" style="margin:0 0 4px">Entre com a conta Google do administrador.</p>
@@ -74,19 +76,21 @@ onAuthStateChanged(auth, u => {
   viewPanel();
   unsubPed?.(); pedErr = false; unsubPed = ouvirPedidos(db, list => { pedidos = list; pedErr = false; if (abaAtual === 'dash') drawDash(); if (abaAtual === 'pedidos' && document.activeElement?.tagName !== 'SELECT') drawPedidos(true); }, () => { pedErr = true; drawDash(); });
   abaAtual = 'dash'; drawDash();
+  unsubCfg?.(); unsubCfg = ouvirConfig(db, c => { cfg = c; if (abaAtual === 'cupons') drawCupons(); if (abaAtual === 'site') drawSite(); }, () => {});
+  unsubCamp?.(); unsubCamp = ouvirCampanhas(db, l => { camps = l; if (abaAtual === 'cupons') drawCupons(); }, () => {});
   unsub?.(); unsub = onSnapshot(col, snap => { items = snap.docs.map(d => ({ id: d.id, ...d.data() })); renderList(); if (abaAtual === 'dash') drawDash(); },
     e => toast(e.code === 'permission-denied' ? 'Sem permissão para ler o catálogo.' : 'Falha ao carregar o catálogo.', true));
 });
 
 /* ---------- Painel ---------- */
 function viewPanel() {
-  main.innerHTML = `<div class="tabs" role="tablist"><button class="tab on" role="tab" data-tab="dash">Dashboard</button><button class="tab" role="tab" data-tab="pedidos">Pedidos</button><button class="tab" role="tab" data-tab="pecas">Peças</button><button class="tab" role="tab" data-tab="avisos">Avisos e promoções</button></div>
+  main.innerHTML = `<div class="tabs" role="tablist"><button class="tab on" role="tab" data-tab="dash">Dashboard</button><button class="tab" role="tab" data-tab="pedidos">Pedidos</button><button class="tab" role="tab" data-tab="pecas">Peças</button><button class="tab" role="tab" data-tab="cupons">Cupons</button><button class="tab" role="tab" data-tab="avisos">Avisos e promoções</button><button class="tab" role="tab" data-tab="site">Site</button></div>
     <section id="tabDash"></section><section id="tabPedidos" hidden></section>
     <section id="tabPecas" hidden><div class="bar"><input id="q" type="text" placeholder="Buscar por código, referência ou nome" aria-label="Buscar">
       <select id="fs" aria-label="Seção"><option value="">Todas as seções</option><option value="feminino">Feminino</option><option value="masculino">Masculino</option></select>
       <select id="ft" aria-label="Status"><option value="">Todos os status</option><option value="vis">Visíveis</option><option value="oculta">Ocultas</option><option value="esg">Esgotadas</option></select></div>
     <div style="display:flex;justify-content:space-between;gap:10px;margin-bottom:14px;flex-wrap:wrap"><div class="stats" id="stats" style="margin:0"></div><button class="btn gold" id="novo">+ Nova peça</button></div>
-    <div id="seed"></div><div class="list" id="list"></div></section><section id="tabAvisos" hidden></section>`;
+    <div id="seed"></div><div class="list" id="list"></div></section><section id="tabCupons" hidden></section><section id="tabAvisos" hidden></section><section id="tabSite" hidden></section>`;
   $$('.tab').forEach(t => t.onclick = () => showTab(t.dataset.tab));
   $('#q').oninput = e => { filtro.q = e.target.value; renderList(); };
   $('#fs').onchange = e => { filtro.secao = e.target.value; renderList(); };
@@ -96,9 +100,21 @@ function viewPanel() {
 
 function showTab(t) {
   $$('.tab').forEach(b => { const on = b.dataset.tab === t; b.classList.toggle('on', on); b.setAttribute('aria-selected', on); });
-  $('#tabDash').hidden = t !== 'dash'; $('#tabPedidos').hidden = t !== 'pedidos'; $('#tabPecas').hidden = t !== 'pecas'; $('#tabAvisos').hidden = t !== 'avisos';
+  $('#tabDash').hidden = t !== 'dash'; $('#tabPedidos').hidden = t !== 'pedidos'; $('#tabPecas').hidden = t !== 'pecas'; $('#tabAvisos').hidden = t !== 'avisos'; $('#tabCupons').hidden = t !== 'cupons'; $('#tabSite').hidden = t !== 'site';
   if (t === 'avisos' && !$('#tabAvisos').firstChild) viewAvisos();
-  abaAtual = t; if (t === 'dash') drawDash(); if (t === 'pedidos') drawPedidos();
+  abaAtual = t; if (t === 'cupons') drawCupons(); if (t === 'site') drawSite(); if (t === 'dash') drawDash(); if (t === 'pedidos') drawPedidos();
+}
+
+/* ---------- Cupons e configurações do site ---------- */
+let cfg = {}, camps = [], unsubCfg = null, unsubCamp = null;
+const drawCupons = () => { const b = $('#tabCupons'); if (!b || b.contains(document.activeElement) && document.activeElement.tagName === 'INPUT' && document.activeElement.type !== 'checkbox') return; renderCupons(b, cfg, camps, db, toast, divulgarCampanha); };
+const drawSite = () => { const b = $('#tabSite'); if (!b || b.contains(document.activeElement) && document.activeElement.tagName === 'INPUT') return; renderSite(b, cfg, db, toast); };
+async function divulgarCampanha(c) {
+  const ex = c.expiraEm?.toMillis?.();
+  try {
+    await addDoc(collection(db, 'avisos'), { titulo: `Código ${c.id}: ${c.percent}% OFF`, mensagem: `Use o código ${c.id} no carrinho e ganhe ${c.percent}% de desconto no pedido.${ex ? ' Válido por tempo limitado.' : ''}`, tipo: 'promocao', link: '', criadoEm: serverTimestamp(), expiraEm: ex ? Timestamp.fromMillis(ex) : null });
+    toast('Divulgado no sininho de todos os clientes.');
+  } catch (er) { fail(er); }
 }
 
 /* ---------- Dashboard e pedidos ---------- */
@@ -242,7 +258,7 @@ function shrink(file, max = 900) {
 
 function openEditor(p) {
   const novo = !p, d = p || { secao: 'feminino', tam: [], visivel: true, esgotado: false, preco: 0, modelo: '' };
-  let foto = d.img || '', tam = [...(d.tam || [])], secao = d.secao;
+  let fotos = d.img ? [d.img, ...(d.extras || [])] : [], tam = [...(d.tam || [])], secao = d.secao, antigas = Number(d.nFotos || 0);
   const m = document.createElement('div'); m.className = 'modal';
   m.innerHTML = `<form class="card" id="ef"><h2>${novo ? 'Nova peça' : 'Editar peça'}</h2>
     <div class="two"><label class="f" for="e-cod">Código<input id="e-cod" type="text" required value="${esc(d.cod || '')}" maxlength="40"></label>
@@ -261,8 +277,10 @@ function openEditor(p) {
       <label class="sw warn"><input type="checkbox" id="e-esg" ${d.esgotado ? 'checked' : ''}><i></i>Esgotado</label>
       <label class="sw"><input type="checkbox" id="e-pre2" ${d.premium ? 'checked' : ''}><i></i>Premium</label>
       <label class="sw"><input type="checkbox" id="e-dia" ${d.diamond ? 'checked' : ''}><i></i>Diamond</label></div>
-    <div class="photo"><img id="e-img" alt="" src="${foto ? esc(img({ img: foto })) : ''}"><div class="f" style="display:grid;gap:6px"><span style="font-size:12px;font-weight:600">Foto da peça</span>
-      <input id="e-file" type="file" accept="image/*"><span class="msg">A foto é ajustada automaticamente. Use foto vertical (3:4).</span></div></div>
+    <div class="gal-ed"><div class="f" style="font-size:12px;font-weight:600">Fotos da peça <span class="cnt" id="g-cnt"></span></div>
+      <p class="msg">A 1ª foto é a principal (capa na loja). Adicione de 1 a 10 fotos, por exemplo uma por cor. Use fotos verticais (3:4). Elas são ajustadas automaticamente.</p>
+      <div class="gal-grid" id="g-grid"></div>
+      <label class="btn line sm" for="e-file" id="g-add" style="cursor:pointer">+ Adicionar fotos</label><input id="e-file" type="file" accept="image/*" multiple hidden></div>
     <p class="msg" id="e-msg"></p>
     <div class="acts"><div>${novo ? '' : '<button class="btn danger sm" type="button" id="e-del">Excluir peça</button>'}</div>
       <div style="display:flex;gap:10px"><button class="btn line" type="button" id="e-can">Cancelar</button><button class="btn gold" type="submit" id="e-ok">Salvar</button></div></div></form>`;
@@ -273,11 +291,28 @@ function openEditor(p) {
     $('#e-sz', m).innerHTML = SIZES[secao].map(t => `<button type="button" class="sz ${tam.includes(t) ? 'on' : ''}" data-t="${t}" aria-pressed="${tam.includes(t)}">${t}</button>`).join('');
   };
   drawSizes();
-  $('#e-sec', m).onchange = e => { secao = e.target.value; tam = []; drawSizes(); };
+  $('#e-sec', m).onchange = e => { secao = e.target.value; drawSizes(); };
   $('#e-sz', m).onclick = e => { const b = e.target.closest('.sz'); if (!b) return; const t = b.dataset.t; tam = tam.includes(t) ? tam.filter(x => x !== t) : [...tam, t]; drawSizes(); };
+  const src = u => /^(data:|https?:)/.test(u) ? u : '/' + u;
+  const drawFotos = () => {
+    $('#g-grid', m).innerHTML = fotos.map((f, i) => `<div class="g-it ${i ? '' : 'main'}" data-i="${i}"><img src="${esc(src(f))}" alt="">${i ? '' : '<span class="g-tag">Principal</span>'}
+      <div class="g-bt"><button type="button" data-a="l" ${i ? '' : 'disabled'} aria-label="Mover para antes">←</button><button type="button" data-a="r" ${i < fotos.length - 1 ? '' : 'disabled'} aria-label="Mover para depois">→</button><button type="button" data-a="x" aria-label="Remover foto">✕</button></div></div>`).join('');
+    $('#g-cnt', m).textContent = `(${fotos.length}/10)`; $('#g-add', m).style.display = fotos.length >= 10 ? 'none' : '';
+  };
+  drawFotos();
+  if (!novo && antigas) getDocs(collection(db, 'produtos', p.id, 'fotos')).then(sn => {
+    const ex = sn.docs.map(x => x.data()).sort((a, b) => (a.ordem ?? 0) - (b.ordem ?? 0)).map(x => x.img);
+    if (ex.length && fotos.length <= 1 + (d.extras || []).length) { fotos = [d.img, ...ex]; drawFotos(); }
+  }).catch(() => {});
+  $('#g-grid', m).onclick = e => {
+    const b = e.target.closest('button[data-a]'); if (!b) return; const i = +b.closest('.g-it').dataset.i, a = b.dataset.a;
+    if (a === 'x') fotos.splice(i, 1); else { const j = a === 'l' ? i - 1 : i + 1; [fotos[i], fotos[j]] = [fotos[j], fotos[i]]; }
+    drawFotos();
+  };
   $('#e-file', m).onchange = async e => {
-    const f = e.target.files[0]; if (!f) return; msg('Ajustando foto…');
-    try { foto = await shrink(f); $('#e-img', m).src = foto; msg('Foto pronta.'); } catch { msg('Não foi possível usar essa foto. Tente outra.', true); }
+    const fs = [...e.target.files].slice(0, 10 - fotos.length); e.target.value = ''; if (!fs.length) return; msg('Ajustando fotos…');
+    let falhou = 0; for (const f of fs) { try { fotos.push(await shrink(f)); drawFotos(); } catch { falhou++; } }
+    msg(falhou ? `${falhou} foto(s) não puderam ser usadas. Tente outras.` : 'Fotos prontas.', !!falhou);
   };
   $('#e-can', m).onclick = close;
   m.addEventListener('mousedown', e => { if (e.target === m) close(); });
@@ -292,7 +327,7 @@ function openEditor(p) {
     e.preventDefault();
     const cod = $('#e-cod', m).value.trim(), nome = $('#e-nome', m).value.trim();
     if (!cod || !nome) return msg('Preencha código e nome.', true);
-    if (!foto) return msg('Envie a foto da peça.', true);
+    if (!fotos.length) return msg('Envie pelo menos uma foto da peça.', true);
     const id = novo ? (secao[0] + '-' + cod.replace(/[^A-Za-z0-9-]/g, '')) : p.id;
     if (novo && items.some(x => x.id === id)) return msg('Já existe uma peça com esse código.', true);
     // Código igual ao de outra peça confunde a busca e os pedidos (o código pode ser editado; o endereço interno da peça não muda).
@@ -301,7 +336,7 @@ function openEditor(p) {
     const data = {
       cod, nome, ref: $('#e-ref', m).value.trim(), secao, modelo: $('#e-mod', m).value.trim(), preco: Math.max(0, parseFloat($('#e-pre', m).value) || 0),
       cor: $('#e-cor', m).value.trim() || null, tecido: $('#e-tec', m).value.trim() || null, lycra: lyc === '' ? null : +lyc,
-      tam, visivel: $('#e-vis', m).checked, esgotado: $('#e-esg', m).checked, premium: $('#e-pre2', m).checked, diamond: $('#e-dia', m).checked, img: foto
+      tam, visivel: $('#e-vis', m).checked, esgotado: $('#e-esg', m).checked, premium: $('#e-pre2', m).checked, diamond: $('#e-dia', m).checked, img: fotos[0], extras: [], nFotos: fotos.length - 1
     };
     // Só grava a descrição quando há texto (ou quando já existia e foi apagada), para não exigir campo vazio nas regras.
     const desc = $('#e-desc', m).value.trim(); if (desc || p?.descricao) data.descricao = desc;
@@ -310,7 +345,13 @@ function openEditor(p) {
     if (pant || p?.precoAntigo) data.precoAntigo = pant;
     if (novo) Object.assign(data, { ordem: Math.min(0, ...items.map(x => x.ordem ?? 0)) - 10, maisVendido: false, rankMV: null, extras: [] });
     const b = $('#e-ok', m); b.disabled = true; msg('Salvando…');
-    try { await setDoc(doc(db, 'produtos', id), data, { merge: true }); toast('Salvo. Já está na loja.'); close(); }
+    try {
+      await setDoc(doc(db, 'produtos', id), data, { merge: true });
+      const wb = writeBatch(db);
+      fotos.slice(1).forEach((f, i) => wb.set(doc(db, 'produtos', id, 'fotos', String(i + 1)), { img: f, ordem: i + 1 }));
+      for (let i = fotos.length; i <= Math.max(antigas, 9); i++) wb.delete(doc(db, 'produtos', id, 'fotos', String(i)));
+      await wb.commit(); toast('Salvo. Já está na loja.'); close();
+    }
     catch (er) { b.disabled = false; msg(er?.code === 'permission-denied' ? 'Sua conta não tem permissão para alterar o catálogo.' : 'Não foi possível salvar. Se a foto for muito grande, use uma menor.', true); }
   };
 }

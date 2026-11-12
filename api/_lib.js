@@ -58,13 +58,25 @@ async function calcular({ itens, cupom, cep }, uid) {
   if (FRETE_GRATIS_ACIMA != null && sub >= cents(FRETE_GRATIS_ACIMA)) frete = 0;
   let percent = 0;
   if (cupom) {
-    const c = await fs.collection('users').doc(uid).collection('cupons').doc(String(cupom)).get();
-    if (!c.exists || c.data().usado || !DEGRAUS.includes(c.data().percent)) throw erro(409, 'Cupom indisponível.');
-    percent = c.data().percent;
-    // BEMVINDO (código de amigo) vale só na primeira compra: quem já tem pedido pago não usa.
-    if (String(cupom) === 'BEMVINDO') {
-      const ja = await fs.collection('pedidos').where('uid', '==', uid).where('status', '==', 'pago').limit(1).get();
-      if (!ja.empty) throw erro(409, 'O cupom BEMVINDO vale apenas na primeira compra.');
+    const code = String(cupom), cfg = (await fs.collection('config').doc('loja').get()).data() || {};
+    if (code === 'AMIGO' || code === 'BEMVINDO') {
+      // O dono pode ligar e desligar estes cupons no painel.
+      if (cfg[code === 'AMIGO' ? 'cupomAmigo' : 'cupomBemvindo'] === false) throw erro(409, 'Este cupom está desativado no momento.');
+      const c = await fs.collection('users').doc(uid).collection('cupons').doc(code).get();
+      if (!c.exists || c.data().usado || !DEGRAUS.includes(c.data().percent)) throw erro(409, 'Cupom indisponível.');
+      percent = c.data().percent;
+      // BEMVINDO (código de amigo) vale só na primeira compra: quem já tem pedido pago não usa.
+      if (code === 'BEMVINDO') {
+        const ja = await fs.collection('pedidos').where('uid', '==', uid).where('status', '==', 'pago').limit(1).get();
+        if (!ja.empty) throw erro(409, 'O cupom BEMVINDO vale apenas na primeira compra.');
+      }
+    } else {
+      // Código promocional criado pelo dono no painel (campanhas/{CÓDIGO}): ativo, dentro da validade, uma vez por cliente.
+      const c = await fs.collection('campanhas').doc(code).get(), d = c.data();
+      if (cfg.campanhas === false || !c.exists || d.ativo !== true || (d.expiraEm && d.expiraEm.toMillis() < Date.now()) || !(d.percent >= 1 && d.percent <= 90)) throw erro(409, 'Código promocional indisponível.');
+      const ja = await fs.collection('pedidos').where('uid', '==', uid).where('cupom', '==', code).where('status', '==', 'pago').limit(1).get();
+      if (!ja.empty) throw erro(409, 'Você já usou este código promocional.');
+      percent = d.percent;
     }
   }
   const desc = Math.round(sub * percent / 100);

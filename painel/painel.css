@@ -1,4 +1,4 @@
-:root{--gold:#cea147;--gold-d:#b0842d;--cream:#fdf2df;--paper:#faf6ee;--ink:#12100c;--ink2:#5f584c;--line:#e8dfcd;--dark:#0e0d0b;--red:#b3372b;--ok:#2f7d4f;--serif:'Cormorant Garamond',Georgia,serif;--sans:'Montserrat',system-ui,sans-serif}
+:root{--gold:#cea147;--gold-d:#b0842d;--cream:#fdf2df;--paper:#faf6ee;--ink:#12100c;--ink2:#5f584c;--line:#e8dfcd;--dark:#0e0d0b;--red:#b3372b;--ok:#2f7d4f;--serif:'Inter',system-ui,sans-serif;--sans:'Inter',system-ui,-apple-system,'Segoe UI',sans-serif}
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:var(--sans);background:var(--paper);color:var(--ink);font-size:14px;line-height:1.45;min-height:100vh}
 button{font:inherit;cursor:pointer;border:0;background:none;color:inherit}
@@ -126,3 +126,18 @@ textarea{width:100%;border:1px solid #d3c8b0;border-radius:10px;padding:10px 12p
 .ord-ft{display:flex;justify-content:space-between;gap:10px;padding:8px 0;font-size:12px;color:var(--ink2);align-items:center}.ord-ft b{font-family:var(--serif);font-size:24px;color:var(--ink)}
 .ord-act{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap}.ord-act .f{min-width:190px}
 @media(max-width:560px){.hb li{grid-template-columns:78px 1fr auto}.kpi b{font-size:26px}}
+
+/* Tipografia do painel: Inter, títulos firmes. */
+.top h1{font-weight:700;letter-spacing:.2em;font-size:19px}.login h2,.card h2,.av-form h2,.av-h2,.dsh-head h2{font-weight:700;letter-spacing:-.015em}.kpi b{font-weight:800;letter-spacing:-.02em}.top em,.ord-ft b{font-weight:800}
+
+/* Galeria de fotos no editor */
+.gal-ed{display:grid;gap:8px}.gal-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:8px}
+.g-it{position:relative;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#fff}.g-it.main{border:2px solid var(--gold)}
+.g-it img{width:100%;aspect-ratio:3/4;object-fit:cover}.g-tag{position:absolute;left:4px;top:4px;background:var(--gold);color:#12100c;font-size:10px;font-weight:700;padding:2px 6px;border-radius:5px}
+.g-bt{display:flex}.g-bt button{flex:1;padding:6px 0;font-size:13px;background:#f4eee0;border-left:1px solid var(--line)}.g-bt button:first-child{border-left:0}.g-bt button:disabled{opacity:.3;cursor:default}.g-bt button[data-a=x]{color:var(--red)}
+
+/* Cupons e site */
+.cfg-card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:18px;margin-bottom:16px;display:grid;gap:12px}
+.cfg-card h2{font-size:20px;font-weight:700}
+.cfg-sw{display:flex;align-items:flex-start;gap:12px;padding:10px 0;border-top:1px solid var(--line)}.cfg-sw span{display:grid;gap:2px}.cfg-sw small{color:var(--ink2);font-size:12px;font-weight:400}
+.ord-act .btn{margin-right:8px}

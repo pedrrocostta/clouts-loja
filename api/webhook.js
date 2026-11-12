@@ -40,7 +40,7 @@ module.exports = async (req, res) => {
       if (novo !== 'pago') return;
 
       // Cupom usado
-      if (o.cupom) t.set(fs.collection('users').doc(o.uid).collection('cupons').doc(o.cupom), { usado: true }, { merge: true });
+      if (o.cupom === 'AMIGO' || o.cupom === 'BEMVINDO') t.set(fs.collection('users').doc(o.uid).collection('cupons').doc(o.cupom), { usado: true }, { merge: true });
       // Indicação: o amigo só conta depois da primeira compra paga dele
       if (conv && !jaContou.exists) {
         t.set(conv, { criadoEm: admin.firestore.FieldValue.serverTimestamp(), pedido: pedidoId });

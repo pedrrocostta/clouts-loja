@@ -14,7 +14,8 @@ service cloud.firestore {
     function produtoValido() {
       let d = request.resource.data;
       return d.keys().hasOnly(['id','cod','nome','secao','modelo','preco','cor','tecido','lycra','tam',
-                               'visivel','esgotado','premium','diamond','img','extras','ordem','maisVendido','rankMV','ref','descricao','precoAntigo'])
+                               'visivel','esgotado','premium','diamond','img','extras','ordem','maisVendido','rankMV','ref','descricao','precoAntigo','nFotos'])
+        && d.get('nFotos', 0) is number && d.get('nFotos', 0) >= 0 && d.get('nFotos', 0) <= 9
         && d.get('precoAntigo', 0) is number && d.get('precoAntigo', 0) >= 0 && d.get('precoAntigo', 0) <= 100000
         && d.get('ref', '') is string && d.get('ref', '').size() <= 60
         && d.get('descricao', '') is string && d.get('descricao', '').size() <= 600
@@ -25,13 +26,51 @@ service cloud.firestore {
         && d.preco is number && d.preco >= 0 && d.preco <= 100000
         && d.tam is list && d.tam.size() <= 12
         && d.img is string && d.img.size() > 0 && d.img.size() < 950000
-        && (!('extras' in d) || (d.extras is list && d.extras.size() <= 6));
+        && (!('extras' in d) || (d.extras is list && d.extras.size() <= 9));
     }
 
     // Catálogo: qualquer visitante lê; só o administrador cria, altera ou exclui.
     match /produtos/{id} {
       allow read: if true;
       allow create, update: if isAdmin() && produtoValido();
+      allow delete: if isAdmin();
+    }
+
+    // Fotos extras da peça (galeria de até 10 fotos: a principal fica na peça, as outras aqui). Leitura pública; só o administrador grava.
+    match /produtos/{id}/fotos/{fid} {
+      allow read: if true;
+      allow create, update: if isAdmin() && fid.matches('^[1-9]$')
+        && request.resource.data.keys().hasOnly(['img', 'ordem'])
+        && request.resource.data.img is string && request.resource.data.img.size() > 0 && request.resource.data.img.size() < 950000
+        && request.resource.data.ordem is number;
+      allow delete: if isAdmin();
+    }
+
+    // Configurações da loja editáveis no painel (liga/desliga cupons, frase da barra, WhatsApp). Leitura pública; só o administrador grava.
+    match /config/{doc} {
+      allow read: if true;
+      allow write: if isAdmin() && doc == 'loja'
+        && request.resource.data.keys().hasOnly(['cupomAmigo', 'cupomBemvindo', 'campanhas', 'popupConvite', 'barra', 'whatsapp'])
+        && request.resource.data.get('cupomAmigo', true) is bool && request.resource.data.get('cupomBemvindo', true) is bool
+        && request.resource.data.get('campanhas', true) is bool && request.resource.data.get('popupConvite', true) is bool
+        && request.resource.data.get('barra', '') is string && request.resource.data.get('barra', '').size() <= 140
+        && request.resource.data.get('whatsapp', '') is string && request.resource.data.get('whatsapp', '').matches('^[0-9]{0,15}$');
+    }
+    function cfgLigado(k) {
+      return !exists(/databases/$(database)/documents/config/loja)
+        || get(/databases/$(database)/documents/config/loja).data.get(k, true) != false;
+    }
+
+    // Códigos promocionais criados pelo dono (campanhas/{CÓDIGO}). O cliente consulta um código que conhece (get); só o administrador lista e edita.
+    match /campanhas/{codigo} {
+      allow get: if request.auth != null;
+      allow list: if isAdmin();
+      allow create, update: if isAdmin() && codigo.matches('^[A-Z0-9]{3,20}$')
+        && request.resource.data.keys().hasOnly(['percent', 'ativo', 'expiraEm', 'descricao', 'criadoEm'])
+        && request.resource.data.percent is number && request.resource.data.percent >= 1 && request.resource.data.percent <= 90
+        && request.resource.data.ativo is bool
+        && request.resource.data.get('descricao', '') is string && request.resource.data.get('descricao', '').size() <= 120
+        && (request.resource.data.get('expiraEm', null) == null || request.resource.data.expiraEm is timestamp);
       allow delete: if isAdmin();
     }
 
@@ -73,7 +112,7 @@ service cloud.firestore {
         && request.resource.data.criadoEm == request.time
         && (
           // Cupom de quem convida (AMIGO): 5/10/20% conforme os amigos.
-          (cid == 'AMIGO'
+          (cid == 'AMIGO' && cfgLigado('cupomAmigo')
             && exists(/databases/$(database)/documents/referrals/$(uid))
             && nConvites(uid) >= 1
             && request.resource.data.codigo == 'AMIGO'
@@ -81,7 +120,7 @@ service cloud.firestore {
             && request.resource.data.origem == 'indicacao')
           ||
           // Cupom de quem foi convidado e usou o código de um amigo (BEMVINDO): 10% na primeira compra, uma vez.
-          (cid == 'BEMVINDO'
+          (cid == 'BEMVINDO' && cfgLigado('cupomBemvindo')
             && exists(/databases/$(database)/documents/users/$(uid)/meta/indicacao)
             && request.resource.data.codigo == 'BEMVINDO'
             && request.resource.data.percent == 10
@@ -166,11 +205,25 @@ service cloud.firestore {
     // Pedidos pagos online: criados e atualizados só pelo servidor (api/checkout e api/webhook). O cliente lê os próprios; o administrador lê todos.
     match /pedidos/{id} {
       allow read: if request.auth != null && (resource.data.uid == request.auth.uid || isAdmin());
-      allow create, delete: if false;
-      // O administrador só pode mudar o andamento da entrega (valores, itens e status do pagamento ficam com o servidor).
-      allow update: if isAdmin()
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['andamento'])
-        && request.resource.data.andamento in ['novo', 'preparando', 'enviado', 'entregue'];
+      // Pedido feito pelo WhatsApp: o cliente logado registra o pedido (fica "aguardando"); o administrador confirma a venda no painel.
+      allow create: if request.auth != null && request.resource.data.uid == request.auth.uid
+        && request.resource.data.keys().hasOnly(['uid', 'email', 'cliente', 'itens', 'subtotal', 'desconto', 'frete', 'total', 'cupom', 'percent', 'cidade', 'origem', 'status', 'criadoEm'])
+        && request.resource.data.origem == 'whatsapp' && request.resource.data.status == 'aguardando'
+        && request.resource.data.criadoEm == request.time
+        && request.resource.data.itens is list && request.resource.data.itens.size() > 0 && request.resource.data.itens.size() <= 40
+        && request.resource.data.total is number && request.resource.data.total >= 0 && request.resource.data.total < 100000
+        && request.resource.data.cliente is map;
+      allow delete: if false;
+      // O administrador muda o andamento da entrega e, nos pedidos do WhatsApp, confirma ou cancela a venda (nos pagos online só o servidor mexe no pagamento).
+      allow update: if isAdmin() && (
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['andamento'])
+          && request.resource.data.andamento in ['novo', 'preparando', 'enviado', 'entregue'])
+        ||
+        (resource.data.get('origem', '') == 'whatsapp' && resource.data.status == 'aguardando'
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'andamento'])
+          && request.resource.data.status in ['pago', 'cancelado']
+          && request.resource.data.get('andamento', 'novo') in ['novo', 'preparando', 'enviado', 'entregue'])
+      );
     }
 
     // Todo o resto fica fechado.

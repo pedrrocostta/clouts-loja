@@ -8,7 +8,7 @@ const num = v => Number(v || 0).toLocaleString('pt-BR');
 const ms = t => t?.toMillis?.() ?? (typeof t === 'number' ? t : null);
 const DIA = 86400000;
 const startOfDay = t => { const d = new Date(t); d.setHours(0, 0, 0, 0); return d.getTime(); };
-const STATUS = { aguardando: ['Aguardando pagamento', 'g'], pago: ['Pago', 'ok'], recusado: ['Recusado', 'r'], divergente: ['Valor divergente', 'r'] };
+const STATUS = { aguardando: ['Aguardando', 'g'], pago: ['Pago', 'ok'], cancelado: ['Cancelado', 'r'], recusado: ['Recusado', 'r'], divergente: ['Valor divergente', 'r'] };
 const ANDAMENTO = { novo: 'Novo', preparando: 'Preparando', enviado: 'Saiu para entrega', entregue: 'Entregue' };
 const PERIODOS = { hoje: 'Hoje', '7': '7 dias', '30': '30 dias', '90': '90 dias', tudo: 'Tudo' };
 
@@ -66,15 +66,15 @@ export function renderDashboard(box, orders, items, periodo = '30', setPeriodo) 
   const semPreco = items.filter(p => !(p.preco > 0)).length, semDesc = items.filter(p => !p.descricao).length, promo = items.filter(p => p.precoAntigo > p.preco && p.preco > 0).length;
 
   box.innerHTML = `
-  <div class="dsh-head"><div><h2>Visão geral</h2><p class="msg">Vendas online confirmadas pelo Mercado Pago. Pedidos feitos só pelo WhatsApp não entram aqui.</p></div>
+  <div class="dsh-head"><div><h2>Visão geral</h2><p class="msg">Vendas confirmadas: pagas pelo Mercado Pago ou confirmadas por você nos pedidos do WhatsApp (aba Pedidos → Confirmar venda).</p></div>
     <div class="seg" role="group" aria-label="Período">${Object.entries(PERIODOS).map(([k, v]) => `<button type="button" data-per="${k}" class="${k === periodo ? 'on' : ''}">${v}</button>`).join('')}</div></div>
-  ${orders.length ? '' : `<div class="dsh-hero"><b>Ainda não há vendas online.</b><span>Assim que o pagamento do Mercado Pago estiver ligado, cada venda aparece aqui em tempo real: faturamento, peças vendidas, mais pedidas e muito mais.</span></div>`}
+  ${orders.length ? '' : `<div class="dsh-hero"><b>Ainda não há pedidos.</b><span>Cada pedido que um cliente logado enviar pelo WhatsApp aparece na aba Pedidos. Ao confirmar a venda, ela entra aqui: faturamento, peças vendidas, mais pedidas e muito mais.</span></div>`}
   <div class="kpis">
     <div class="kpi gold"><small>Faturamento</small><b>${brl(fat)}</b><span>${n} ${n === 1 ? 'pedido pago' : 'pedidos pagos'}</span></div>
     <div class="kpi"><small>Peças vendidas</small><b>${num(pecas)}</b><span>${n ? (pecas / n).toFixed(1).replace('.', ',') + ' por pedido' : '—'}</span></div>
     <div class="kpi"><small>Ticket médio</small><b>${brl(n ? fat / n : 0)}</b><span>por pedido</span></div>
     <div class="kpi"><small>Para entregar</small><b>${novosEntregar}</b><span>pagos, ainda não entregues</span></div>
-    <div class="kpi"><small>Aguardando pagamento</small><b>${aguard.length}</b><span>${brl(aguard.reduce((s, o) => s + (o.total || 0), 0))} em aberto</span></div>
+    <div class="kpi"><small>Aguardando confirmação</small><b>${aguard.length}</b><span>${brl(aguard.reduce((s, o) => s + (o.total || 0), 0))} em aberto</span></div>
     <div class="kpi"><small>Conversão</small><b>${conv}%</b><span>${n} pagos de ${inP.length} criados</span></div>
     <div class="kpi"><small>Clientes</small><b>${clientes.size}</b><span>${recorrentes} ${recorrentes === 1 ? 'voltou' : 'voltaram'} a comprar</span></div>
     <div class="kpi"><small>Descontos dados</small><b>${brl(desc)}</b><span>frete cobrado: ${brl(fret)}</span></div>
@@ -114,19 +114,31 @@ export function renderPedidos(box, orders, db, toast, filtro, setFiltro) {
     <p class="msg">${list.length} pedido${list.length === 1 ? '' : 's'}${orders.length >= 500 ? ' (mostrando os 500 mais recentes)' : ''}</p>
     <div class="list ord">${list.length ? list.map(o => { const st = STATUS[o.status] || [o.status, 'g'], c = o.cliente || {}; return `
     <article class="item ordc" data-id="${esc(o.id)}"><div style="grid-column:1/-1">
-      <div class="cod">#${esc(o.id.slice(0, 6).toUpperCase())} · ${new Date(o._t).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}<span class="tags"><span class="tag ${st[1]}">${st[0]}</span>${o.cupom ? `<span class="tag">Cupom ${esc(o.cupom)} ${o.percent}%</span>` : ''}${o.ref ? '<span class="tag">Código de amigo</span>' : ''}</span></div>
+      <div class="cod">#${esc(o.id.slice(0, 6).toUpperCase())} · ${new Date(o._t).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}<span class="tags"><span class="tag ${st[1]}">${st[0]}</span>${o.cupom ? `<span class="tag">Cupom ${esc(o.cupom)} ${o.percent}%</span>` : ''}${o.ref ? '<span class="tag">Código de amigo</span>' : ''}<span class="tag g">${o.origem === 'whatsapp' ? 'WhatsApp' : 'Mercado Pago'}</span></span></div>
       <p class="ord-cli"><b>${esc(c.nome || '—')}</b> · ${esc(c.tel || '')} · ${esc(o.email || '')}</p>
       <p class="ord-end">${esc(c.rua || '')}, ${esc(c.num || '')}${c.comp ? ' — ' + esc(c.comp) : ''} — ${esc(c.bairro || '')}, ${esc(o.cidade || '')} · CEP ${esc(c.cep || '')}</p>
       <ul class="ord-it">${(o.itens || []).map(i => `<li>${i.q}× ${esc(i.nome)} <small>Cód. ${esc(i.cod)} · Tam. ${esc(i.tam)}</small><b>${brl(i.q * i.preco)}</b></li>`).join('')}</ul>
       <div class="ord-ft"><span>Subtotal ${brl(o.subtotal)}${o.desconto ? ` · desconto −${brl(o.desconto)}` : ''} · frete ${brl(o.frete)}</span><b>${brl(o.total)}</b></div>
-      <div class="ord-act">${o.status === 'pago' ? `<label class="f">Andamento<select data-and>${Object.entries(ANDAMENTO).map(([k, v]) => `<option value="${k}" ${(o.andamento || 'novo') === k ? 'selected' : ''}>${v}</option>`).join('')}</select></label>` : ''}
-        ${wa(o) ? `<a class="btn line sm" href="${wa(o)}" target="_blank" rel="noopener">WhatsApp do cliente</a>` : ''}</div></div></article>`; }).join('') : `<p class="dsh-empty">${orders.length ? 'Nenhum pedido com esse filtro.' : 'Nenhum pedido ainda. Eles aparecem aqui assim que o pagamento online estiver ligado.'}</p>`}</div>`;
+      <div class="ord-act">${o.origem === 'whatsapp' && o.status === 'aguardando' ? '<button class="btn gold sm" data-conf type="button">Confirmar venda</button><button class="btn danger sm" data-canc type="button">Cancelar pedido</button>' : ''}${o.status === 'pago' ? `<label class="f">Andamento<select data-and>${Object.entries(ANDAMENTO).map(([k, v]) => `<option value="${k}" ${(o.andamento || 'novo') === k ? 'selected' : ''}>${v}</option>`).join('')}</select></label>` : ''}
+        ${wa(o) ? `<a class="btn line sm" href="${wa(o)}" target="_blank" rel="noopener">WhatsApp do cliente</a>` : ''}</div></div></article>`; }).join('') : `<p class="dsh-empty">${orders.length ? 'Nenhum pedido com esse filtro.' : 'Nenhum pedido ainda. Eles aparecem aqui quando um cliente logado envia o pedido pelo WhatsApp ou paga online.'}</p>`}</div>`;
   let tm; $('#pq', box).oninput = e => { clearTimeout(tm); tm = setTimeout(() => setFiltro({ ...filtro, q: e.target.value }, true), 250); };
   $('#pst', box).onchange = e => setFiltro({ ...filtro, st: e.target.value });
   box.querySelectorAll('[data-and]').forEach(s => s.onchange = async () => {
     const id = s.closest('.ordc').dataset.id;
     try { await updateDoc(doc(db, 'pedidos', id), { andamento: s.value }); toast('Andamento atualizado.'); }
     catch (e) { toast(e?.code === 'permission-denied' ? 'Sem permissão. Publique as regras mais recentes do Firestore.' : 'Não foi possível atualizar.', true); }
+  });
+  const mudar = async (id, status) => {
+    try { await updateDoc(doc(db, 'pedidos', id), { status, andamento: 'novo' }); toast(status === 'pago' ? 'Venda confirmada. Já está no dashboard.' : 'Pedido cancelado.'); }
+    catch (e) { toast(e?.code === 'permission-denied' ? 'Sem permissão. Publique as regras mais recentes do Firestore.' : 'Não foi possível atualizar.', true); }
+  };
+  box.querySelectorAll('[data-conf]').forEach(b => b.onclick = () => {
+    if (!b.dataset.armed) { b.dataset.armed = '1'; b.textContent = 'Toque de novo: o cliente já pagou?'; setTimeout(() => { if (b.isConnected) { delete b.dataset.armed; b.textContent = 'Confirmar venda'; } }, 4000); return; }
+    mudar(b.closest('.ordc').dataset.id, 'pago');
+  });
+  box.querySelectorAll('[data-canc]').forEach(b => b.onclick = () => {
+    if (!b.dataset.armed) { b.dataset.armed = '1'; b.textContent = 'Toque de novo para cancelar'; setTimeout(() => { if (b.isConnected) { delete b.dataset.armed; b.textContent = 'Cancelar pedido'; } }, 4000); return; }
+    mudar(b.closest('.ordc').dataset.id, 'cancelado');
   });
   $('#csv', box).onclick = () => {
     const cel = v => `"${String(v ?? '').replace(/"/g, '""')}"`;

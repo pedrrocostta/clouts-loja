@@ -139,6 +139,26 @@ Object.assign(CloutsDB, {
     await fs.setDoc(fs.doc(db, 'users', uid, 'meta', 'indicacao'), { ref: refUid, codigo, criadoEm: fs.serverTimestamp() });
     await fs.setDoc(fs.doc(db, 'users', uid, 'cupons', 'BEMVINDO'), { codigo: 'BEMVINDO', percent: 10, usado: false, origem: 'codigo', criadoEm: fs.serverTimestamp() });
   },
+  // Configurações editáveis no painel (config/loja): liga/desliga cupons, frase da barra, WhatsApp.
+  async config(onCfg, onErr) {
+    const { fs, db } = await this._fs();
+    return fs.onSnapshot(fs.doc(db, 'config', 'loja'), s => onCfg(s.exists() ? s.data() : {}), e => onErr && onErr(e));
+  },
+  // Fotos extras da peça (galeria), em produtos/{id}/fotos.
+  async fotos(id) {
+    const { fs, db } = await this._fs(), sn = await fs.getDocs(fs.collection(db, 'produtos', id, 'fotos'));
+    return sn.docs.map(d => d.data()).sort((a, b) => (a.ordem ?? 0) - (b.ordem ?? 0)).map(x => x.img).filter(Boolean);
+  },
+  // Código promocional criado pelo dono (campanhas/{CÓDIGO}).
+  async campanha(codigo) {
+    const { fs, db } = await this._fs(), s = await fs.getDoc(fs.doc(db, 'campanhas', codigo));
+    return s.exists() ? s.data() : null;
+  },
+  // Registra o pedido enviado pelo WhatsApp (fica aguardando; o dono confirma a venda no painel e ela entra no dashboard).
+  async registrarPedido(dados) {
+    const { fs, db } = await this._fs();
+    await fs.addDoc(fs.collection(db, 'pedidos'), { ...dados, origem: 'whatsapp', status: 'aguardando', criadoEm: fs.serverTimestamp() });
+  },
   async usarCupom(uid, codigo) {
     const { fs, db } = await this._fs();
     await fs.updateDoc(fs.doc(db, 'users', uid, 'cupons', codigo), { usado: true });
