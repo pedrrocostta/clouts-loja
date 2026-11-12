@@ -26,7 +26,12 @@ const store = {
 /* ---------- Catálogo em tempo real (Firestore) ---------- */
 const pick = (id, sec) => byId(id) || PRODUTOS.find(p => p.secao === sec) || PRODUTOS[0] || { img: '' };
 const TAM_ORDEM = ['34', '36', '38', '40', '42', '44', '46', '48', '50', '52', '54', 'PP', 'P', 'M', 'G', 'GG', 'GGG'];
-const sizesAll = p => [...new Set([...(p.secao === 'feminino' ? ['36', '38', '40', '42', '44', '46'] : ['38', '40', '42', '44', '46', '48']), ...(p.tam || [])])].sort((a, b) => TAM_ORDEM.indexOf(a) - TAM_ORDEM.indexOf(b));
+const tipoTam = p => p.tipoTam || (/cal[cç]a|bermuda|short/i.test(`${p.nome || ''} ${p.modelo || ''}`) ? 'numero' : /jaqueta|colete|camisa|camiseta|blusa|vestido|cropped|casaco|body|saia|macac|regata|moletom/i.test(`${p.nome || ''} ${p.modelo || ''}`) ? 'letra' : 'numero');
+const sizesAll = p => tipoTam(p) === 'letra' ? ['PP', 'P', 'M', 'G', 'GG', 'GGG']
+  : [...new Set([...(p.secao === 'feminino' ? ['36', '38', '40', '42', '44', '46'] : ['38', '40', '42', '44', '46', '48']), ...(p.tam || []).filter(t => /^\d+$/.test(t))])].sort((a, b) => a - b);
+/* Agrupa os modelos longos nos filtros da loja (ex.: "Jaqueta Jeans Feminina Tradicional" entra em "Jaqueta"). */
+const GRUPOS = ['Jaqueta', 'Cigarrete', 'Wide Leg', 'Boot Cut', 'Flare', 'Skinny', 'Slim', 'Reta', 'Pantalona', 'Jogger', 'Cargo', 'Mom', 'Baggy', 'Bermuda', 'Short', 'Saia', 'Vestido', 'Colete', 'Camisa', 'Blusa'];
+const grupo = p => GRUPOS.find(g => norm(p.modelo || p.nome).includes(norm(g))) || p.modelo || '';
 const soldOut = p => !!p.esgotado || !(p.tam || []).length;
 const topList = () => MAIS_VENDIDOS.map(byId).filter(Boolean);
 function applyCatalog(docs) {
@@ -226,9 +231,9 @@ function viewHome() {
 
 function viewList(secao, q) {
   const base = PRODUTOS.filter(p => p.secao === secao);
-  const modelos = [...new Set(base.map(p => p.modelo))];
+  const modelos = [...new Set(base.map(grupo))].filter(Boolean);
   const m = q.get('m') || '', ord = q.get('o') || '';
-  let list = base.filter(p => !m || p.modelo === m);
+  let list = base.filter(p => !m || grupo(p) === m || p.modelo === m);
   if (ord === 'cod') list = [...list].sort((a, b) => a.cod.localeCompare(b.cod));
   if (ord === 'nome') list = [...list].sort((a, b) => a.nome.localeCompare(b.nome));
   const fem = secao === 'feminino';

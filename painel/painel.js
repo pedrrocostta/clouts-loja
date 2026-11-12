@@ -35,7 +35,10 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const brl = v => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const img = p => /^(data:|https?:)/.test(p.img || '') ? p.img : '/' + (p.img || '');
 const TAMS = ['34', '36', '38', '40', '42', '44', '46', '48', '50', '52', '54', 'PP', 'P', 'M', 'G', 'GG', 'GGG'];   // numeração disponível no cadastro (números e letras, feminino e masculino)
-const SIZES = { feminino: TAMS, masculino: TAMS };
+const NUMS = TAMS.slice(0, 11), LETRAS = TAMS.slice(11);
+// Calças e bermudas usam números; jaquetas, blusas e outras roupas usam letras. Dá para trocar em cada peça.
+const tipoDe = p => p.tipoTam || (/cal[cç]a|bermuda|short|jeans masc/i.test(`${p.nome || ''} ${p.modelo || ''}`) ? 'numero' : /jaqueta|colete|camisa|camiseta|blusa|vestido|cropped|casaco|body|saia|macac|regata|moletom/i.test(`${p.nome || ''} ${p.modelo || ''}`) ? 'letra' : 'numero');
+const sizesDe = p => tipoDe(p) === 'letra' ? LETRAS : NUMS;
 const main = $('#main');
 let items = [], unsub = null, unsubAv = null, avisosEnv = [], filtro = { q: '', secao: '', status: '' };
 
@@ -205,7 +208,7 @@ function itemHTML(p) {
     <div><div class="cod">${esc(p.cod)}${p.ref ? ` <small style="font-weight:500;opacity:.75">· Ref. ${esc(p.ref)}</small>` : ''}<span class="tags">${off ? '<span class="tag g">Oculta</span>' : ''}${out ? '<span class="tag r">Esgotada</span>' : ''}${p.maisVendido ? '<span class="tag">Mais vendido</span>' : ''}</span></div>
       <h3>${esc(p.nome)}</h3><div class="meta">${p.secao === 'feminino' ? 'Feminino' : 'Masculino'} · ${esc(p.modelo || '')} · ${brl(p.preco)}</div>
       <div class="ctl">${sw('visivel', !off, 'Visível na loja')}${sw('esgotado', !!p.esgotado, 'Esgotado', 'warn')}${sw('maisVendido', !!p.maisVendido, 'Mais vendido')}</div>
-      <div class="sizes" role="group" aria-label="Tamanhos disponíveis">${(SIZES[p.secao] || SIZES.feminino).map(t => `<button class="sz ${tam.includes(t) ? 'on' : ''}" data-t="${t}" aria-pressed="${tam.includes(t)}">${t}</button>`).join('')}</div>
+      <div class="sizes" role="group" aria-label="Tamanhos disponíveis">${sizesDe(p).map(t => `<button class="sz ${tam.includes(t) ? 'on' : ''}" data-t="${t}" aria-pressed="${tam.includes(t)}">${t}</button>`).join('')}</div>
       <button class="btn line sm" data-edit>Editar detalhes</button></div></article>`;
 }
 
@@ -221,7 +224,7 @@ $('#main').addEventListener('click', async e => {
   if (e.target.closest('[data-edit]')) return openEditor(p);
   const sz = e.target.closest('.sz'); if (!sz) return;
   const t = sz.dataset.t, cur = p.tam || [], tam = cur.includes(t) ? cur.filter(x => x !== t) : [...cur, t];
-  const order = SIZES[p.secao] || SIZES.feminino; tam.sort((a, b) => order.indexOf(a) - order.indexOf(b));
+  const order = TAMS; tam.sort((a, b) => order.indexOf(a) - order.indexOf(b));
   try { await updateDoc(doc(db, 'produtos', p.id), { tam }); toast(tam.length ? 'Tamanhos salvos.' : 'Sem tamanhos: a peça aparece como esgotada.'); } catch (er) { fail(er); }
 });
 
@@ -258,7 +261,7 @@ function shrink(file, max = 900) {
 
 function openEditor(p) {
   const novo = !p, d = p || { secao: 'feminino', tam: [], visivel: true, esgotado: false, preco: 0, modelo: '' };
-  let fotos = d.img ? [d.img, ...(d.extras || [])] : [], tam = [...(d.tam || [])], secao = d.secao, antigas = Number(d.nFotos || 0);
+  let fotos = d.img ? [d.img, ...(d.extras || [])] : [], tam = [...(d.tam || [])], secao = d.secao, tt = tipoDe(d), antigas = Number(d.nFotos || 0);
   const m = document.createElement('div'); m.className = 'modal';
   m.innerHTML = `<form class="card" id="ef"><h2>${novo ? 'Nova peça' : 'Editar peça'}</h2>
     <div class="two"><label class="f" for="e-cod">Código<input id="e-cod" type="text" required value="${esc(d.cod || '')}" maxlength="40"></label>
@@ -272,6 +275,7 @@ function openEditor(p) {
       <label class="f" for="e-lyc">Lycra % (opcional)<input id="e-lyc" type="number" min="0" max="20" value="${d.lycra ?? ''}"></label></div>
     <label class="f" for="e-tec">Tecido (opcional)<input id="e-tec" type="text" value="${esc(d.tecido || '')}"></label>
     <label class="f" for="e-desc">Descrição (opcional)<textarea id="e-desc" rows="4" maxlength="600" placeholder="Ex.: Calça wide leg de cintura alta, com elastano para mais conforto." style="width:100%;resize:vertical;font:inherit;padding:10px 12px;border-radius:10px;border:1px solid #d9cfb8">${esc(d.descricao || '')}</textarea></label>
+    <label class="f" for="e-tt">Tipo de numeração<select id="e-tt"><option value="numero">Números (calças: 34, 36, 38…)</option><option value="letra">Letras (roupas: PP, P, M, G, GG, GGG)</option></select></label>
     <div><div class="f" style="font-size:12px;font-weight:600;margin-bottom:6px">Tamanhos disponíveis</div><div class="sizes" id="e-sz"></div></div>
     <div class="ctl"><label class="sw"><input type="checkbox" id="e-vis" ${d.visivel !== false ? 'checked' : ''}><i></i>Visível na loja</label>
       <label class="sw warn"><input type="checkbox" id="e-esg" ${d.esgotado ? 'checked' : ''}><i></i>Esgotado</label>
@@ -288,8 +292,9 @@ function openEditor(p) {
   const close = () => m.remove(), msg = (t, bad) => { const e = $('#e-msg', m); e.textContent = t; e.className = 'msg' + (bad ? ' bad' : ''); };
   $('#e-sec', m).value = secao;
   const drawSizes = () => {
-    $('#e-sz', m).innerHTML = SIZES[secao].map(t => `<button type="button" class="sz ${tam.includes(t) ? 'on' : ''}" data-t="${t}" aria-pressed="${tam.includes(t)}">${t}</button>`).join('');
+    $('#e-sz', m).innerHTML = (tt === 'letra' ? LETRAS : NUMS).map(t => `<button type="button" class="sz ${tam.includes(t) ? 'on' : ''}" data-t="${t}" aria-pressed="${tam.includes(t)}">${t}</button>`).join('');
   };
+  $('#e-tt', m).value = tt; $('#e-tt', m).onchange = e => { tt = e.target.value; tam = tam.filter(t => (tt === 'letra' ? LETRAS : NUMS).includes(t)); drawSizes(); };
   drawSizes();
   $('#e-sec', m).onchange = e => { secao = e.target.value; drawSizes(); };
   $('#e-sz', m).onclick = e => { const b = e.target.closest('.sz'); if (!b) return; const t = b.dataset.t; tam = tam.includes(t) ? tam.filter(x => x !== t) : [...tam, t]; drawSizes(); };
@@ -336,7 +341,7 @@ function openEditor(p) {
     const data = {
       cod, nome, ref: $('#e-ref', m).value.trim(), secao, modelo: $('#e-mod', m).value.trim(), preco: Math.max(0, parseFloat($('#e-pre', m).value) || 0),
       cor: $('#e-cor', m).value.trim() || null, tecido: $('#e-tec', m).value.trim() || null, lycra: lyc === '' ? null : +lyc,
-      tam, visivel: $('#e-vis', m).checked, esgotado: $('#e-esg', m).checked, premium: $('#e-pre2', m).checked, diamond: $('#e-dia', m).checked, img: fotos[0], extras: [], nFotos: fotos.length - 1
+      tam, visivel: $('#e-vis', m).checked, esgotado: $('#e-esg', m).checked, premium: $('#e-pre2', m).checked, diamond: $('#e-dia', m).checked, img: fotos[0], extras: [], nFotos: fotos.length - 1, tipoTam: tt
     };
     // Só grava a descrição quando há texto (ou quando já existia e foi apagada), para não exigir campo vazio nas regras.
     const desc = $('#e-desc', m).value.trim(); if (desc || p?.descricao) data.descricao = desc;
