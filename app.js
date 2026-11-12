@@ -578,12 +578,16 @@ function openSheet(id) {
       <div class="specs"><span>${p.secao === 'feminino' ? 'Feminino' : 'Masculino'}</span><span>${esc(p.modelo)}</span>
         ${p.lycra ? `<span>Lycra ${p.lycra}%</span>` : ''}${p.cor ? `<span>Cor: ${esc(p.cor)}</span>` : ''}${p.tecido ? `<span>${esc(p.tecido)}</span>` : ''}
         ${p.premium ? '<span>Premium</span>' : ''}${p.diamond ? '<span>Diamond</span>' : ''}</div>
-      ${p.descricao ? `<p class="pdesc">${esc(p.descricao)}</p>` : ''}
       ${cores.length > 1 ? `<div><div class="lbl">Cor: <b>${esc(p.cor || 'Escolha')}</b></div><div class="swatches">${cores.map(c => `<button class="swc ${c.id === p.id ? 'on' : ''}" data-c="${esc(c.id)}" aria-label="Cor ${esc(c.cor || c.cod)}" title="${esc(c.cor || c.cod)}"><img src="${esc(c.img)}" alt=""></button>`).join('')}</div></div>` : ''}
       <div><div class="lbl">Tamanho</div><div class="sizes">${sizesAll(p).map(t => `<button class="sz" data-t="${t}" ${p.tam.includes(t) && !p.esgotado ? '' : 'disabled'}>${t}</button>`).join('')}</div></div>
-      ${soldOut(p) ? '<button class="btn btn-dark block" disabled>Esgotado</button>' : `<button class="btn btn-gold block" id="addBtn">${ICON.bag} Adicionar ao carrinho</button>`}
+      <div class="buy"><span class="buy-pr">${brl(p.preco)}</span>${soldOut(p) ? '<button class="btn btn-dark block" disabled>Esgotado</button>' : `<button class="btn btn-gold block" id="addBtn">${ICON.bag} Adicionar ao carrinho</button>`}</div>
       <button class="btn btn-line block" id="favSheet">${ICON.heart} <span>${favs.includes(p.id) ? 'Remover dos favoritos' : 'Favoritar'}</span></button>
-      <p class="note">Entrega em Contagem, Betim e Belo Horizonte · Pix e cartão.</p>
+      <div class="fr"><span>${ICON.truck || ''} <b>Entrega</b> em Contagem, Betim e Belo Horizonte</span><span>${ICON.chat || ''} Dúvida de tamanho? <a href="${waLink('Olá! Tenho uma dúvida de tamanho na peça ' + p.cod + ' (' + p.nome + ').')}" target="_blank" rel="noopener"><b>Chame no WhatsApp</b></a></span></div>
+      <div class="acc">
+        ${p.descricao ? `<details open><summary>Descrição</summary><p class="pdesc">${esc(p.descricao)}</p></details>` : ''}
+        <details><summary>Tamanho e ajuste</summary><p>Em dúvida entre dois tamanhos? Mande sua altura e medidas no WhatsApp que a gente indica o melhor para você.</p></details>
+        <details><summary>Entrega e pagamento</summary><p>Entregamos em Contagem, Betim e Belo Horizonte. Pagamento por Pix e cartão.</p></details>
+      </div>
     </div>`);
   // Galeria (até 10 fotos): a principal está na peça; as outras ficam em produtos/{id}/fotos e carregam ao abrir.
   let gal = [p.img, ...(p.extras || [])], gi = 0;
