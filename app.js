@@ -130,6 +130,7 @@ const saveFavs = () => { store.set(favKey(), favs); updateBadges(); };
 
 const svg = d => `<svg viewBox="0 0 24 24">${d}</svg>`;
 const ICON = {
+  swap: '<svg viewBox="0 0 24 24"><path d="M17 3l4 4-4 4M3 11V9a2 2 0 0 1 2-2h16M7 21l-4-4 4-4M21 13v2a2 2 0 0 1-2 2H3"/></svg>',
   heart: svg('<path d="M12 20s-7-4.4-9-9.2C1.6 7.4 3.7 4.5 6.8 4.5c1.9 0 3.6 1 5.2 3 1.6-2 3.3-3 5.2-3 3.1 0 5.2 2.9 3.8 6.3C19 15.6 12 20 12 20Z"/>'),
   plus: svg('<path d="M12 5v14M5 12h14"/>'),
   bag: svg('<path d="M5 8h14l-1.2 11.5H6.2L5 8Z"/><path d="M9 8V6.5a3 3 0 0 1 6 0V8"/>'),
@@ -149,6 +150,7 @@ function toast(msg) {
 }
 
 /* ---------- Cards ---------- */
+const nCores = p => p.ref ? PRODUTOS.filter(x => x.ref === p.ref && x.secao === p.secao).length : 1;
 function cardHTML(p, rank) {
   const on = favs.includes(p.id);
   return `<article class="card" data-id="${p.id}" tabindex="0" aria-label="${esc(p.nome)}">
@@ -158,7 +160,7 @@ function cardHTML(p, rank) {
       <button class="fav ${on ? 'on' : ''}" data-fav="${p.id}" aria-label="Favoritar" aria-pressed="${on}">${ICON.heart}</button>
       ${soldOut(p) ? '<span class="soldout">Esgotado</span>' : `<button class="qadd" data-quick="${p.id}" aria-label="Adicionar ao carrinho">${ICON.plus}</button>`}
     </div>
-    <div class="card-b"><div class="cod">Cód. ${esc(p.cod)}</div><h3 class="nm">${esc(p.nome)}</h3>${priceHTML(p)}</div>
+    <div class="card-b"><div class="cod">Cód. ${esc(p.cod)}</div><h3 class="nm">${esc(p.nome)}</h3>${priceHTML(p)}${nCores(p) > 1 ? `<div class="ncor">${nCores(p)} cores</div>` : ''}</div>
   </article>`;
 }
 
@@ -202,9 +204,13 @@ function viewHome() {
     <div class="hero-dots">${BANNERS.map((_, i) => `<button type="button" class="${i ? '' : 'on'}" aria-label="Banner ${i + 1}"></button>`).join('')}</div>
   </section>
 
+  <div class="cta-row"><a class="btn btn-gold" href="#/feminino">Comprar feminino</a><a class="btn btn-dark" href="#/masculino">Comprar masculino</a></div>
+
   <section class="strip">
-    <div>${ICON.truck}<span><b>Frete pelo CEP</b>Contagem, Betim e BH</span></div>
-    <div>${ICON.pix}<span><b>Pix e cartão</b>Pague do jeito que preferir</span></div>
+    <a href="#/entrega">${ICON.truck}<span><b>Entrega local</b>Contagem, Betim e BH</span></a>
+    <div>${ICON.pix}<span><b>Pix e cartão</b>Pague como preferir</span></div>
+    <a href="trocas.html">${ICON.swap}<span><b>Troca em 7 dias</b>Direito do consumidor</span></a>
+    <a href="${waLink('Olá! Vim pelo site da CLOUTS.')}" target="_blank" rel="noopener">${ICON.chat}<span><b>Atendimento</b>Chame no WhatsApp</span></a>
   </section>
 
   <section class="cats-grid">${CATS().map(catHTML).join('')}<a class="cat" href="#/entrega"><span class="ic">${ICON.truck}</span>Entrega</a></section>
@@ -335,6 +341,7 @@ function route() {
   routeKey = cur.r;
   renderView();
   $$('[data-isl]').forEach(a => a.classList.toggle('on', a.dataset.isl === routeKey));
+  document.body.classList.toggle('on-home', routeKey === 'home');
   const b = { home: 'home', 'mais-vendidos': 'mais-vendidos', perfil: 'perfil' }[routeKey];
   $$('#bnav [data-b]').forEach(x => x.classList.toggle('on', x.dataset.b === b));
   window.scrollTo({ top: 0 });
