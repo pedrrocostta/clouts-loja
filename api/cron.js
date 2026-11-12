@@ -1,7 +1,7 @@
 /* GET /api/cron — rodada diária (Vercel Cron): lembra quem deixou o carrinho parado.
  * 1º lembrete depois de 3 horas parado; 2º (última chamada) depois de 3 dias. Quem pediu para parar de receber não recebe. */
 const { db } = require('./_lib');
-const { emailConfigurado, enviar, carrinho } = require('./_mail');
+const { emailConfigurado, enviar, carrinho, lembreteCupom } = require('./_mail');
 
 const H = 3600000;
 module.exports = async (req, res) => {
@@ -23,6 +23,23 @@ module.exports = async (req, res) => {
       if (ped.docs.some(p => (p.data().criadoEm?.toMillis?.() || 0) >= (c.atualizadoEm?.toMillis?.() || 0) - 60000)) { await d.ref.delete(); continue; }
       try { await enviar({ para: c.email, ...carrinho({ nome: c.nome, itens: c.itens, n: vez, uid: c.uid }) }); await d.ref.update({ enviados: vez }); enviados++; }
       catch (e) { console.error('cron carrinho', e.message); }
+    }
+    // Lembrete do cupom de primeira compra: 3 dias depois do cadastro, só para quem ainda não comprou e ainda está no prazo.
+    const cfg = (await fs.collection('config').doc('loja').get()).data() || {};
+    if (cfg.cupomPrimeira !== false) {
+      const pct = Math.min(50, Number(cfg.primeiraPct) > 0 ? Number(cfg.primeiraPct) : 10), dias = Math.min(30, Number(cfg.primeiraDias) > 0 ? Number(cfg.primeiraDias) : 7);
+      const ps = await fs.collection('primeira').where('lembrete', '==', false).get();
+      for (const d of ps.docs) {
+        const c = d.data(), idade = agora - (c.criadoEm?.toMillis?.() || agora);
+        if (idade >= dias * 86400000) { await d.ref.delete(); continue; }
+        if (idade < 3 * 86400000 || !c.email) continue;
+        const pref = await fs.collection('emailPrefs').doc(c.uid).get();
+        const ped = await fs.collection('pedidos').where('uid', '==', c.uid).get();
+        if ((pref.exists && pref.data().naoReceber) || ped.docs.some(p => !['cancelado', 'recusado'].includes(p.data().status))) { await d.ref.delete(); continue; }
+        const restam = Math.max(1, Math.ceil((dias * 86400000 - idade) / 86400000));
+        try { await enviar({ para: c.email, ...lembreteCupom({ nome: c.nome, percent: pct, restam, uid: c.uid }) }); await d.ref.update({ lembrete: true }); enviados++; }
+        catch (e) { console.error('cron lembrete cupom', e.message); }
+      }
     }
     res.status(200).json({ ok: true, enviados });
   } catch (e) { console.error('cron:', e); res.status(500).end(); }

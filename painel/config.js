@@ -18,6 +18,10 @@ export function renderCupons(box, cfg, camps, db, toast, divulgar) {
   box.innerHTML = `
   <div class="cfg-card"><h2>Cupons da loja</h2>
     <p class="msg">Ligue ou desligue cada cupom. Desligado, ele some para o cliente e deixa de valer no pagamento, na hora.</p>
+    ${sw('cupomPrimeira', on('cupomPrimeira'), 'Cupom de primeira compra (Primeira compra)', 'Quem cria a conta com o Google ganha o cupom e a tela de boas-vindas aparece para quem ainda não entrou. Vale só para quem nunca comprou.')}
+    <div class="two cfg-prim"><label class="f" for="p-pct">Desconto (%)<input id="p-pct" type="number" min="1" max="50" value="${Number(cfg.primeiraPct) > 0 ? cfg.primeiraPct : 10}"></label>
+      <label class="f" for="p-dias">Validade (dias após criar a conta)<input id="p-dias" type="number" min="1" max="30" value="${Number(cfg.primeiraDias) > 0 ? cfg.primeiraDias : 7}"></label></div>
+    <p class="msg" id="p-msg"></p><button class="btn gold" type="button" id="p-save">Salvar desconto da primeira compra</button>
     ${sw('cupomBemvindo', on('cupomBemvindo'), 'Cupom de primeira compra (BEMVINDO · 10%)', 'Quem recebe o código de um amigo ganha 10% na primeira compra. Desligado, o campo "Recebeu um código de amigo?" some.')}
     ${sw('cupomAmigo', on('cupomAmigo'), 'Cupom de indicação (AMIGO · 5% a 20%)', 'Quem convida amigos ganha 5%, 10% ou 20%. Desligado, o convite e o cupom somem da loja.')}
     ${sw('popupConvite', on('popupConvite'), 'Janela "Convide amigos" ao navegar', 'O aviso que aparece depois de alguns segundos na loja.')}
@@ -45,6 +49,12 @@ export function renderCupons(box, cfg, camps, db, toast, divulgar) {
     try { await salvarCfg(db, cfg, { [i.dataset.cfg]: i.checked }); toast(i.checked ? 'Ligado. Já vale na loja.' : 'Desligado. Já saiu da loja.'); }
     catch (e) { i.checked = !i.checked; toast(msgErro(e), true); }
   });
+  $('#p-save', box).onclick = async () => {
+    const m = $('#p-msg', box), pct = Math.round(+$('#p-pct', box).value), dias = Math.round(+$('#p-dias', box).value);
+    if (!(pct >= 1 && pct <= 50)) { m.className = 'msg bad'; m.textContent = 'O desconto vai de 1% a 50%.'; return; }
+    if (!(dias >= 1 && dias <= 30)) { m.className = 'msg bad'; m.textContent = 'A validade vai de 1 a 30 dias.'; return; }
+    try { await salvarCfg(db, cfg, { primeiraPct: pct, primeiraDias: dias }); m.className = 'msg'; m.textContent = ''; toast('Salvo. Já vale na loja.'); } catch (e) { m.className = 'msg bad'; m.textContent = msgErro(e); }
+  };
   $('#campForm', box).onsubmit = async e => {
     e.preventDefault(); const m = $('#c-msg', box), id = $('#c-cod', box).value.toUpperCase().replace(/[^A-Z0-9]/g, ''), pct = Math.round(+$('#c-pct', box).value), dias = +$('#c-val', box).value;
     if (id.length < 3) { m.className = 'msg bad'; m.textContent = 'O código precisa de 3 a 20 letras ou números.'; return; }

@@ -51,7 +51,10 @@ service cloud.firestore {
     match /config/{doc} {
       allow read: if true;
       allow write: if isAdmin() && doc == 'loja'
-        && request.resource.data.keys().hasOnly(['cupomAmigo', 'cupomBemvindo', 'campanhas', 'popupConvite', 'barra', 'whatsapp'])
+        && request.resource.data.keys().hasOnly(['cupomAmigo', 'cupomBemvindo', 'cupomPrimeira', 'primeiraPct', 'primeiraDias', 'campanhas', 'popupConvite', 'barra', 'whatsapp'])
+        && request.resource.data.get('cupomPrimeira', true) is bool
+        && request.resource.data.get('primeiraPct', 10) is number && request.resource.data.get('primeiraPct', 10) >= 1 && request.resource.data.get('primeiraPct', 10) <= 50
+        && request.resource.data.get('primeiraDias', 7) is number && request.resource.data.get('primeiraDias', 7) >= 1 && request.resource.data.get('primeiraDias', 7) <= 30
         && request.resource.data.get('cupomAmigo', true) is bool && request.resource.data.get('cupomBemvindo', true) is bool
         && request.resource.data.get('campanhas', true) is bool && request.resource.data.get('popupConvite', true) is bool
         && request.resource.data.get('barra', '') is string && request.resource.data.get('barra', '').size() <= 140

@@ -74,6 +74,46 @@ function aplicarConfig(c) {
   if (!ligado('cupomBemvindo')) $('#codeForm')?.remove();
 }
 const temBemVindo = () => cupons.some(c => c.codigo === 'BEMVINDO');
+/* ---------- Cupom de primeira compra (virtual: vale para conta nova, sem pedidos, dentro do prazo) e convite liberado após a 1ª compra ---------- */
+let cuponsRaw = [], pedidosMeus = null, primeira = null, stopPed = null, barOk = false;
+const cfgNum = (k, d) => (Number.isFinite(+loja[k]) && +loja[k] > 0 ? +loja[k] : d);
+const primPct = () => Math.min(50, cfgNum('primeiraPct', 10)), primDias = () => Math.min(30, cfgNum('primeiraDias', 7));
+const jaComprou = () => !!pedidosMeus?.some(o => o.status === 'pago');
+const cupNome = c => (c === 'PRIMEIRA' ? 'Primeira compra' : c);
+const cupomLigado = c => ligado(c.codigo === 'AMIGO' ? 'cupomAmigo' : c.codigo === 'PRIMEIRA' ? 'cupomPrimeira' : 'cupomBemvindo');
+function restoTxt(exp) {
+  const ms = exp - Date.now(); if (ms <= 0) return 'expirado';
+  const h = Math.ceil(ms / 3600000); if (h <= 24) return h <= 1 ? 'expira em menos de 1 hora' : `expira em ${h} horas`;
+  const d = Math.ceil(ms / 86400000); return `expira em ${d} dias`;
+}
+function calcPrimeira() {
+  primeira = null; const u = me();
+  if (u && pedidosMeus && ligado('cupomPrimeira') && !pedidosMeus.some(o => !['cancelado', 'recusado'].includes(o.status))) {
+    const exp = (u.criadoEm || 0) + primDias() * 86400000;
+    if (u.criadoEm && exp > Date.now()) primeira = { codigo: 'PRIMEIRA', percent: primPct(), usado: false, origem: 'primeira', expira: exp, criado: u.criadoEm };
+  }
+  rebuildCupons();
+}
+function renderPcBar() {
+  const el = $('#pcBar'); if (!el) return;
+  const u = me(); let h = '';
+  if (auth()?.configured && ligado('cupomPrimeira')) {
+    if (!u && barOk) h = `<span><b>${primPct()}% OFF</b> na sua primeira compra</span><button type="button" id="pcGo">Entrar com Google</button>`;
+    else if (u && primeira) {
+      const lembrete = Date.now() - primeira.criado >= 3 * 86400000;
+      h = `<span>${lembrete ? 'Seu cupom está esperando por você! ' : ''}Cupom <b>Primeira compra</b> · ${primeira.percent}% OFF · ${restoTxt(primeira.expira)}</span><button type="button" id="pcGo">Usar agora</button>`;
+    }
+  }
+  el.hidden = !h; el.innerHTML = h;
+  const b = $('#pcGo'); if (b) b.onclick = () => { if (me()) { if (!cupomAtivo) { cupomAtivo = 'PRIMEIRA'; store.set('clouts.cupom', cupomAtivo); } openCart(); } else openLogin('', true); };
+}
+function onCompra() {
+  const u = me(); document.body.classList.toggle('sem-conv', !(u && jaComprou()));
+  if (!u || !jaComprou()) return;
+  const k = 'clouts.conv.' + u.uid;
+  if (!localStorage.getItem(k) && ligado('cupomAmigo')) { try { localStorage.setItem(k, '1'); } catch {} setTimeout(() => { toast('Novo cupom desbloqueado: convide amigos!'); openInvite(true); }, 1500); }
+}
+let rebuildPending = false;
 /* Quem recebe um código de amigo cola aqui: ganha o cupom BEMVINDO (10% na primeira compra); quem convidou sobe de degrau depois da 1ª compra paga. */
 async function aplicarCodigo(raw) {
   const u = me(); if (!u) return { ok: false, msg: 'Entre com o Google para usar um código.' };
@@ -108,7 +148,7 @@ function bindCodigoForm() {
 }
 let campAtiva = store.get('clouts.camp', null);   // código promocional do dono aplicado no carrinho {codigo, percent}
 const cupomObj = () => (campAtiva && cupomAtivo === campAtiva.codigo && ligado('campanhas') ? { ...campAtiva, camp: true } : null)
-  || cupons.find(c => c.codigo === cupomAtivo && !c.usado && ligado(c.codigo === 'AMIGO' ? 'cupomAmigo' : 'cupomBemvindo')) || null;
+  || cupons.find(c => c.codigo === cupomAtivo && !c.usado && cupomLigado(c)) || null;
 async function aplicarCampanha(raw) {
   const code = String(raw || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
   if (code.length < 3) return { ok: false, msg: 'Digite o código promocional.' };
@@ -297,12 +337,12 @@ function viewCupons() {
     app.innerHTML = `<div class="page-h"><h1>Meus cupons</h1></div><div class="empty">Entre com o Google para ver e usar seus cupons.<br><br><button class="btn btn-dark" id="pLogin">Entrar</button></div>`;
     $('#pLogin').onclick = () => openLogin('Entre com o Google para ver seus cupons.'); return;
   }
-  app.innerHTML = `<div class="page-h"><h1>Meus cupons</h1><p>Convide amigos com o seu código: seu amigo ganha 10% OFF e o seu cupom sobe de 5% a 20%.</p></div>
+  app.innerHTML = `<div class="page-h"><h1>Meus cupons</h1><p>${jaComprou() ? 'Convide amigos com o seu código: seu amigo ganha 10% OFF e o seu cupom sobe de 5% a 20%.' : 'Seus cupons de desconto.'}</p></div>
   ${codigoFormHTML()}
   ${cupons.length ? `<div class="cupons">${cupons.map(c => `<article class="ticket ${c.usado ? 'used' : ''}"><div class="tk-pct"><b>${c.percent}%</b><span>OFF</span></div>
-      <div class="tk-in"><div class="tk-code">${esc(c.codigo)}</div><p>${c.usado ? 'Cupom já utilizado' : 'Disponível. Vale para todo o pedido, sem incluir o frete.'}</p>
+      <div class="tk-in"><div class="tk-code">${esc(cupNome(c.codigo))}</div><p>${c.usado ? 'Cupom já utilizado' : c.expira ? `Disponível, ${restoTxt(c.expira)}. Vale para todo o pedido, sem incluir o frete.` : 'Disponível. Vale para todo o pedido, sem incluir o frete.'}</p>
       ${c.usado ? '' : `<div class="tk-act"><button class="btn btn-gold sm" data-usar="${esc(c.codigo)}">Usar no carrinho</button><button class="btn btn-line sm" data-copy="${esc(c.codigo)}">Copiar código</button></div>`}</div></article>`).join('')}</div>`
-    : `<div class="empty">${progressHTML()}</div>`}`;
+    : `<div class="empty">${jaComprou() ? progressHTML() : 'Você ainda não tem cupons.'}</div>`}`;
   bindCodigoForm();
   $$('[data-usar]').forEach(b => b.onclick = () => { cupomAtivo = b.dataset.usar; store.set('clouts.cupom', cupomAtivo); openCart(); toast('Cupom aplicado'); });
   $$('[data-copy]').forEach(b => b.onclick = async () => { try { await navigator.clipboard.writeText(b.dataset.copy); toast('Código copiado'); } catch { toast(b.dataset.copy); } });
@@ -413,14 +453,17 @@ $('#bCat').onclick = () => {
 $('#bPerfil').onclick = () => { location.hash = '#/perfil'; if (!me()) openLogin(); };
 
 /* ---------- Login com Google ---------- */
-function openLogin(motivo) {
+function openLogin(motivo, oferta) {
   const s = showSheet(`<div class="login">
     <img src="img/logo.png" alt="" class="login-logo">
     <div class="brand-word on-light">CLOUTS</div>
-    <h2>Entre na sua conta</h2>
-    <p class="note">${motivo || 'Crie sua conta em segundos com o Google para salvar favoritos e finalizar pedidos.'}</p>
+    ${oferta ? `<div class="pr-big dk"><b>${primPct()}%</b><span>OFF</span></div>` : ''}
+    <h2>${oferta ? `Ganhe ${primPct()}% OFF na primeira compra` : 'Entre na sua conta'}</h2>
+    <p class="note">${motivo || (oferta ? `Crie sua conta em segundos com o Google. O cupom Primeira compra fica salvo e já vai para o seu carrinho. Vale por ${primDias()} dias.` : 'Crie sua conta em segundos com o Google para salvar favoritos e finalizar pedidos.')}</p>
     <button class="btn gbtn block" id="gBtn">${ICON.google} Continuar com Google</button>
+    ${oferta ? '<button class="btn btn-line block" id="gLater" type="button">Agora não</button>' : ''}
     <p class="note" id="gMsg"></p></div>`, 'one narrow');
+  if (oferta && $('#gLater', s)) $('#gLater', s).onclick = () => closeSheet();
   $('#gBtn', s).onclick = async () => {
     if (!auth()?.configured) { $('#gMsg', s).textContent = 'O login com Google será ativado assim que a configuração do Firebase for concluída (veja o LEIA-ME).'; return; }
     try { const u = await auth().signIn(); closeSheet(); toast('Bem-vindo(a) à CLOUTS!'); if (u.isNew && !CONFIG.pagamentoOnline) registrarConvite(u.uid); if (u.isNew) CloutsDB.meuCodigo(u.uid).catch(() => {}).finally(() => CloutsDB.email({ acao: 'boasvindas' })); else syncCarrinho(); }
@@ -434,6 +477,18 @@ function limparDadosDaConta() {
   ['clouts.cart', 'clouts.ship', 'clouts.cliente', 'clouts.cupom'].forEach(k => { try { localStorage.removeItem(k); } catch {} });
   renderCart(); updateBadges();
 }
+function rebuildCupons() {
+  cupons = [...cuponsRaw, ...(primeira ? [primeira] : [])];
+  maybeGrant();
+  // Entrou por um link com código de amigo: aplica sozinho na primeira vez.
+  try { const sv = localStorage.getItem('clouts.codigo'); if (sv && !temBemVindo() && me()) aplicarCodigo(sv).then(r => { if (r.ok) toast('Código de amigo aplicado! Você ganhou 10% OFF na primeira compra.'); else if (r.msg?.startsWith('Código não') || r.msg?.startsWith('Você não') || r.msg?.startsWith('Não foi possível usar')) localStorage.removeItem('clouts.codigo'); }); } catch {}
+  if (!cupomAtivo && primeira) { cupomAtivo = 'PRIMEIRA'; store.set('clouts.cupom', cupomAtivo); }
+  if (cupomAtivo && !cupomObj()) { cupomAtivo = null; store.set('clouts.cupom', null); }
+  if (routeKey === 'cupons') viewCupons(); if (routeKey === 'perfil') viewPerfil();
+  if ($('#cartDrawer').classList.contains('open')) renderCart();
+  if (cuponsRaw.length) hidePromo();
+  renderPcBar();
+}
 function onUser(u) {
   if (u) lastUid = u.uid; else if (lastUid) { lastUid = null; limparDadosDaConta(); }
   favs =store.get(favKey(), []).filter(byId);
@@ -442,16 +497,10 @@ function onUser(u) {
   if (routeKey === 'perfil') viewPerfil();
   if (routeKey === 'favoritos') viewFavs();
   if (u && $('#sheet').querySelector('.login')) closeSheet();
-  stopCupons?.(); stopCupons = null; stopConv?.(); stopConv = null; cupons = []; cuponsLoaded = false; refN = 0; meuCod = null;
+  stopCupons?.(); stopCupons = null; stopConv?.(); stopConv = null; stopPed?.(); stopPed = null; cupons = []; cuponsRaw = []; pedidosMeus = null; primeira = null; cuponsLoaded = false; refN = 0; meuCod = null; onCompra(); renderPcBar();
+  if (u && window.CloutsDB) CloutsDB.pedidos(u.uid, l => { pedidosMeus = l; calcPrimeira(); onCompra(); }, () => {}).then(f => { stopPed = f; });
   if (u && window.CloutsDB) CloutsDB.meuCodigo(u.uid).then(c => { meuCod = c; updateInvite(); if (routeKey === 'cupons') viewCupons(); }).catch(() => {});
-  if (u && window.CloutsDB) CloutsDB.cupons(u.uid, list => {
-    cupons = list; cuponsLoaded = true; maybeGrant();
-    // Entrou por um link com código de amigo: aplica sozinho na primeira vez.
-    try { const sv = localStorage.getItem('clouts.codigo'); if (sv && !temBemVindo()) aplicarCodigo(sv).then(r => { if (r.ok) toast('Código de amigo aplicado! Você ganhou 10% OFF na primeira compra.'); else if (r.msg?.startsWith('Código não') || r.msg?.startsWith('Você não') || r.msg?.startsWith('Não foi possível usar')) localStorage.removeItem('clouts.codigo'); }); } catch {} if (cupomAtivo && !cupomObj()) { cupomAtivo = null; store.set('clouts.cupom', null); }
-    if (routeKey === 'cupons') viewCupons(); if (routeKey === 'perfil') viewPerfil();
-    if ($('#cartDrawer').classList.contains('open')) renderCart();
-    if (list.length) hidePromo();
-  }, () => {}).then(f => { stopCupons = f; });
+  if (u && window.CloutsDB) CloutsDB.cupons(u.uid, list => { cuponsRaw = list; cuponsLoaded = true; rebuildCupons(); }, () => {}).then(f => { stopCupons = f; });
   if (u && window.CloutsDB) CloutsDB.convites(u.uid, n => { refN = n; maybeGrant(); updateInvite(); if (routeKey === 'cupons') viewCupons(); }, () => {}).then(f => { stopConv = f; });
   if (u && pendingShare) { pendingShare = false; hidePromo(); openInvite(); }
   if (u && checkout) renderCart();
@@ -461,7 +510,8 @@ function onUser(u) {
 const SHARE = { title: 'CLOUTS', text: 'Conheça a CLOUTS: calças femininas e masculinas. Vista seu melhor.', url: location.origin + '/' };
 function promoWanted() {
   if (!auth()?.configured) return false;
-  if (cupons.length) return false;
+  if (!jaComprou()) return false;
+  if (cupons.some(c => c.origem !== 'primeira')) return false;
   const h = store.get('clouts.promoHide', 0); return !h || Date.now() - h > 24 * 3600 * 1000;
 }
 function showPromo(force) {
@@ -515,10 +565,10 @@ function updateInvite() {
   $('.prog-w', s).innerHTML = progInner();
   $('.iv-act', s).hidden = !!meuCupom()?.usado;
 }
-function openInvite() {
+function openInvite(novo) {
   const u = me(); if (!u) return;
   const link = inviteLink(), texto = `${SHARE.text} Use meu código ${meuCod || ''} e ganhe 10% OFF na primeira compra: ${link}`;
-  const s = showSheet(`<div class="invite"><div class="pr-big dk"><b>20%</b><span>OFF</span></div>
+  const s = showSheet(`<div class="invite">${novo ? '<p class="unlock">Novo cupom desbloqueado!</p>' : ''}<div class="pr-big dk"><b>20%</b><span>OFF</span></div>
     <h2>Convide amigos e ganhe desconto</h2>
     <p class="note">${CONFIG.pagamentoOnline ? 'Cada amigo que entrar pelo seu link e fizer a primeira compra conta 1.' : 'Cada amigo que criar a conta com o Google pelo seu link conta 1.'} Seu desconto sobe sozinho e vale uma vez, no seu primeiro pedido com cupom.</p>
     <div class="prog"><div class="prog-w"></div></div>
@@ -537,6 +587,7 @@ function openInvite() {
 function shareStore() {
   if (!auth()?.configured) return;
   if (!me()) { pendingShare = true; hidePromo(); openLogin('Entre com o Google para gerar seu link e ganhar de 5% a 20% OFF ao convidar amigos.'); return; }
+  if (!jaComprou()) { toast('O convite de amigos é liberado depois da sua primeira compra.'); return; }
   hidePromo(); openInvite();
 }
 document.addEventListener('click', e => { if (e.target.closest('[data-invite]')) openInvite(); });
@@ -737,7 +788,7 @@ function renderCart() {
       <p class="note" id="cepMsg">${shipMsg()}</p></form>
     ${cupomBox()}
     <div class="tot"><span>Subtotal</span><span>${brl(cartTotal())}</span></div>
-    ${descontoValor() ? `<div class="tot disc"><span>Cupom ${esc(cupomAtivo)}</span><span>− ${brl(descontoValor())}</span></div>` : ''}
+    ${descontoValor() ? `<div class="tot disc"><span>Cupom ${esc(cupNome(cupomAtivo))}</span><span>− ${brl(descontoValor())}</span></div>` : ''}
     <div class="tot"><span>Frete</span><span id="fLbl">${ship ? brl(freteValor()) : '—'}</span></div>
     <div class="tot big"><span>Total</span><b id="tLbl">${brl(totalPedido())}</b></div>
     <button class="btn btn-gold block" id="goCheckout">Finalizar pedido</button>`;
@@ -760,13 +811,13 @@ function renderCart() {
 function cupomBox() {
   if (!auth()?.configured) return '';
   const c = cupomObj();
-  if (c) return `<div class="cupom on"><span><b>${esc(c.codigo)}</b> · ${c.percent}% OFF aplicado</span><button type="button" id="cupomRm">Remover</button></div>`;
+  if (c) return `<div class="cupom on"><span><b>${esc(cupNome(c.codigo))}</b> · ${c.percent}% OFF aplicado</span><button type="button" id="cupomRm">Remover</button></div>`;
   if (!me()) return `<div class="cupom"><button type="button" id="cupomLogin">Tem cupom? Entre para usar</button></div>`;
   const av = cupons.filter(x => !x.usado);
   const camp = ligado('campanhas') ? `<form class="cupom-camp" id="campForm"><input id="campIn" maxlength="20" autocomplete="off" autocapitalize="characters" placeholder="Código promocional"><button class="btn btn-dark sm" type="submit">Aplicar</button><p class="note" id="campMsg"></p></form>` : '';
-  const dis = av.filter(x => ligado(x.codigo === 'AMIGO' ? 'cupomAmigo' : 'cupomBemvindo'));
+  const dis = av.filter(x => cupomLigado(x));
   if (!dis.length) return `<div class="cupom">${ligado('cupomAmigo') ? '<button type="button" id="cupomShare">Convide amigos e ganhe até 20% OFF</button>' : ''}${camp}</div>`;
-  return `<div class="cupom"><label for="cupomSel">Cupom</label><select id="cupomSel"><option value="">Escolher cupom</option>${dis.map(x => `<option value="${esc(x.codigo)}">${esc(x.codigo)} · ${x.percent}% OFF</option>`).join('')}</select>${camp}</div>`;
+  return `<div class="cupom"><label for="cupomSel">Cupom</label><select id="cupomSel"><option value="">Escolher cupom</option>${dis.map(x => `<option value="${esc(x.codigo)}">${esc(cupNome(x.codigo))} · ${x.percent}% OFF</option>`).join('')}</select>${camp}</div>`;
 }
 function bindCupom() {
   const on = (id, f) => { const el = $(id); if (el) el.onclick = f; };
@@ -802,7 +853,7 @@ function renderCheckout() {
       <label class="opt"><input type="radio" name="pag" value="Cartão de crédito"><span>${ICON.card}<b>Cartão de crédito</b><small>Enviamos o link seguro de pagamento no WhatsApp.</small></span></label>
     </fieldset></form>`;
   $('#cartFoot').innerHTML = `<div class="tot"><span>Subtotal</span><span>${brl(cartTotal())}</span></div>
-    ${descontoValor() ? `<div class="tot disc"><span>Cupom ${esc(cupomAtivo)}</span><span>− ${brl(descontoValor())}</span></div>` : ''}
+    ${descontoValor() ? `<div class="tot disc"><span>Cupom ${esc(cupNome(cupomAtivo))}</span><span>− ${brl(descontoValor())}</span></div>` : ''}
     <div class="tot"><span>Frete (${esc(ship.cidade)})</span><span id="ckFrete">${brl(freteValor())}</span></div>
     <div class="tot big"><span>Total</span><b id="ckTotal">${brl(totalPedido())}</b></div>
     ${CONFIG.pagamentoOnline ? `<button class="btn btn-gold block" id="payMp">${ICON.card} Pagar com Pix ou cartão</button>
@@ -863,13 +914,13 @@ function sendOrder() {
   const frete = freteValor(), desc = descontoValor(), total = totalPedido(), cp = cupomObj();
   const linhas = cart.map(i => { const p = byId(i.id); return `• ${p.nome} — Cód. ${p.cod} — Tam. ${i.tam} — ${i.q}x ${brl(p.preco)}`; });
   const u = me();
-  const msg = `*Novo pedido — CLOUTS*\n\n${linhas.join('\n')}\n\n*Subtotal:* ${brl(cartTotal())}${cp ? `\n*Cupom ${cp.codigo} (${cp.percent}% OFF):* − ${brl(desc)}` : ''}\n*Frete (${ship.cidade}):* ${brl(frete)}\n*Total:* ${brl(total)}\n*Pagamento:* ${d.pag}\n\n*Cliente:* ${d.nome}${u?.email ? '\n*E-mail:* ' + u.email : ''}\n*WhatsApp:* ${d.tel}\n*Entrega:* ${d.rua}, ${d.num}${d.comp ? ' — ' + d.comp : ''} — ${d.bairro}, ${ship.cidade} — CEP ${d.cep}`;
+  const msg = `*Novo pedido — CLOUTS*\n\n${linhas.join('\n')}\n\n*Subtotal:* ${brl(cartTotal())}${cp ? `\n*Cupom ${cupNome(cp.codigo)} (${cp.percent}% OFF):* − ${brl(desc)}` : ''}\n*Frete (${ship.cidade}):* ${brl(frete)}\n*Total:* ${brl(total)}\n*Pagamento:* ${d.pag}\n\n*Cliente:* ${d.nome}${u?.email ? '\n*E-mail:* ' + u.email : ''}\n*WhatsApp:* ${d.tel}\n*Entrega:* ${d.rua}, ${d.num}${d.comp ? ' — ' + d.comp : ''} — ${d.bairro}, ${ship.cidade} — CEP ${d.cep}`;
   window.open(waLink(msg), '_blank', 'noopener');
   // Registra o pedido para o dono ver no painel (dashboard); a venda só conta depois que ele confirma o pagamento.
   if (u) CloutsDB.registrarPedido({ uid: u.uid, email: u.email || '', cliente: { nome: d.nome, tel: d.tel, rua: d.rua, num: d.num, bairro: d.bairro, comp: d.comp || '', cep: d.cep },
     itens: cart.map(i => { const p = byId(i.id); return { id: p.id, cod: String(p.cod), nome: String(p.nome).slice(0, 140), tam: String(i.tam), q: i.q, preco: p.preco }; }),
     subtotal: cartTotal(), desconto: desc, frete, total, cupom: cp ? cp.codigo : null, percent: cp ? cp.percent : 0, cidade: ship.cidade }).then(id => { clearTimeout(cartTm); CloutsDB.email({ acao: 'pedido', pedidoId: id }); CloutsDB.email({ acao: 'carrinho', itens: [] }); }).catch(e => console.warn('Pedido não registrado', e));
-  if (cp && u) { if (!cp.camp) CloutsDB.usarCupom(u.uid, cp.codigo).catch(() => {}); cupomAtivo = null; campAtiva = null; store.set('clouts.cupom', null); store.set('clouts.camp', null); }
+  if (cp && u) { if (!cp.camp && cp.codigo !== 'PRIMEIRA') CloutsDB.usarCupom(u.uid, cp.codigo).catch(() => {}); cupomAtivo = null; campAtiva = null; store.set('clouts.cupom', null); store.set('clouts.camp', null); }
 }
 
 /* ---------- Init ---------- */
@@ -887,6 +938,7 @@ const idle = f => ('requestIdleCallback' in window ? requestIdleCallback(f, { ti
 try {
   setHH(); updateBadges(); renderCart(); route();
   setTimeout(showPromo, 10000);
+  setTimeout(() => { barOk = true; renderPcBar(); if (!me() && auth()?.configured && ligado('cupomPrimeira') && !$('#sheet').classList.contains('open') && !$('#promo') && Date.now() - store.get('clouts.boasHide', 0) > 24 * 3600 * 1000) { store.set('clouts.boasHide', Date.now()); openLogin('', true); } }, 2600);
 } catch (e) { console.error(e); fatal(); }
 aplicarConfig(loja);
 hideSplash();

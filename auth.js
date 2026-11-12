@@ -33,7 +33,7 @@ const CloutsFB = (() => {
 const CloutsAuth = (() => {
   const subs = []; let user = null, mod = null, auth = null, ready = null;
   const notify = () => subs.forEach(f => f(user));
-  const pick = u => u && ({ uid: u.uid, nome: u.displayName || '', email: u.email || '', foto: u.photoURL || '' });
+  const pick = u => u && ({ uid: u.uid, nome: u.displayName || '', email: u.email || '', foto: u.photoURL || '', criadoEm: Date.parse(u.metadata?.creationTime) || 0 });
 
   function init() {
     if (!FIREBASE_CONFIG) return Promise.resolve(null);
@@ -166,6 +166,12 @@ Object.assign(CloutsDB, {
       const t = await CloutsAuth.token(); if (!t) return;
       await fetch('/api/email', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + t }, body: JSON.stringify(corpo), keepalive: true });
     } catch {}
+  },
+  // Pedidos do próprio cliente (para o cupom de primeira compra e para liberar o convite de amigos).
+  async pedidos(uid, onList, onErr) {
+    const { fs, db } = await this._fs();
+    return fs.onSnapshot(fs.query(fs.collection(db, 'pedidos'), fs.where('uid', '==', uid)),
+      snap => onList(snap.docs.map(d => ({ id: d.id, status: d.data().status, cupom: d.data().cupom || null }))), e => onErr && onErr(e));
   },
   async usarCupom(uid, codigo) {
     const { fs, db } = await this._fs();

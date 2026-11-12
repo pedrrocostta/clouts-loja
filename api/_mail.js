@@ -67,21 +67,38 @@ function linhasItens(itens) {
 }
 
 /* ---------- 1) Boas-vindas ---------- */
-function boasVindas({ nome, codigo }) {
+function cupomBloco(percent, dias, titulo) {
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:18px 0 6px;background:${CREME};border:1px dashed ${OURO};border-radius:14px"><tr><td align="center" style="padding:20px 18px">
+    <div style="font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:${OURO_ESC};font-weight:600">${esc(titulo)}</div>
+    <div style="font-size:44px;line-height:1.1;font-weight:800;color:${TINTA};margin:6px 0 2px">${esc(percent)}% OFF</div>
+    <div style="font-size:14px;color:${TINTA};font-weight:600">Cupom Primeira compra</div>
+    <div style="font-size:13px;color:${TINTA2};line-height:1.5;margin-top:6px">Já está salvo na sua conta e vai sozinho para o carrinho.<br>Válido por ${esc(dias)} dias a partir do seu cadastro.</div></td></tr></table>`;
+}
+function boasVindas({ nome, cupom }) {
   const url = site();
-  const convite = codigo ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:18px 0 6px;background:${CREME};border:1px dashed ${OURO};border-radius:14px"><tr><td align="center" style="padding:18px">
-    <div style="font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:${OURO_ESC};font-weight:600">Seu código de amigo</div>
-    <div style="font-size:28px;letter-spacing:.2em;font-weight:700;color:${TINTA};margin:6px 0 4px">${esc(codigo)}</div>
-    <div style="font-size:13px;color:${TINTA2};line-height:1.5">Passe para os amigos: eles ganham <b>10% OFF</b> na primeira compra<br>e você ganha de <b>5% a 20%</b> de desconto conforme eles compram.</div></td></tr></table>` : '';
+  const bloco = cupom ? cupomBloco(cupom.percent, cupom.dias, 'Seu presente de boas-vindas') : '';
   const corpo = `${titulo(`Que bom ter você aqui, ${primeiroNome(nome)}!`)}
     ${par('Sua conta está criada. A CLOUTS é feita de jeans com caimento de verdade, do feminino ao masculino, pensada para quem gosta de peça com identidade. Entregamos em <b>Contagem, Betim e Belo Horizonte</b>.')}
-    ${convite}
+    ${bloco}
     ${botao('Ver as novidades', url)}
     ${par('Qualquer dúvida sobre tamanho ou entrega, é só chamar a gente no WhatsApp pela loja.')}`;
   return {
     assunto: `Bem-vindo(a) à CLOUTS, ${String(nome || '').trim().split(/\s+/)[0] || 'cliente'}!`,
-    texto: `Bem-vindo(a) à CLOUTS! Sua conta está criada.${codigo ? ' Seu código de amigo: ' + codigo + '.' : ''} Veja as novidades: ${url}`,
-    html: layout({ preheader: 'Sua conta está pronta. Veja as novidades e o seu código de amigo.', capaImg: 'capa-boasvindas', corpo, rodape: 'Você recebeu este e-mail porque criou uma conta na loja CLOUTS.' })
+    texto: `Bem-vindo(a) à CLOUTS! Sua conta está criada.${cupom ? ' Você ganhou ' + cupom.percent + '% OFF na primeira compra, válido por ' + cupom.dias + ' dias.' : ''} Veja as novidades: ${url}`,
+    html: layout({ preheader: cupom ? `Você ganhou ${cupom.percent}% OFF na primeira compra.` : 'Sua conta está pronta. Veja as novidades.', capaImg: 'capa-boasvindas', corpo, rodape: 'Você recebeu este e-mail porque criou uma conta na loja CLOUTS.' })
+  };
+}
+
+/* Lembrete do cupom (3 dias depois do cadastro, para quem ainda não comprou) */
+function lembreteCupom({ nome, percent, restam, uid }) {
+  const corpo = `${titulo(`${primeiroNome(nome)}, seu cupom está esperando!`)}
+    ${par(`Você ainda não usou o seu cupom de primeira compra. Ele vale por mais ${esc(restam)} ${restam === 1 ? 'dia' : 'dias'}.`)}
+    ${cupomBloco(percent, restam, 'Não deixe passar')}
+    ${botao('Escolher minhas peças', site())}`;
+  return {
+    assunto: `Seu cupom de ${percent}% OFF está esperando · CLOUTS`,
+    texto: `Seu cupom de primeira compra (${percent}% OFF) ainda vale por mais ${restam} dia(s): ${site()}`,
+    html: layout({ preheader: `${percent}% OFF na primeira compra, por tempo limitado.`, corpo, rodape: `Você recebeu este lembrete porque criou uma conta na CLOUTS.<br><a href="${linkSair(uid)}" style="color:${TINTA2}">Parar de receber lembretes</a>` })
   };
 }
 
@@ -122,4 +139,4 @@ function carrinho({ nome, itens, n, uid }) {
   };
 }
 
-module.exports = { emailConfigurado, enviar, boasVindas, pedido, carrinho, assinaturaOk, site };
+module.exports = { emailConfigurado, enviar, boasVindas, lembreteCupom, pedido, carrinho, assinaturaOk, site };

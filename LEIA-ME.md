@@ -62,3 +62,9 @@ Variáveis na Vercel (Settings → Environment Variables), depois **Redeploy**:
 - Envio, UMA das opções: Gmail (`GMAIL_USER` + `GMAIL_APP_PASSWORD`, senha de app de 16 letras) **ou** Resend (`RESEND_API_KEY` + `MAIL_FROM`, exige domínio verificado)
 - `CRON_SECRET` (texto aleatório longo)
 Sem essas variáveis os e-mails simplesmente não saem e a loja funciona normal.
+
+## Cupom de primeira compra e convite de amigos
+
+- Cupom **Primeira compra** (padrão 10%, 7 dias): criado para quem entra com o Google, vale só para quem nunca comprou. Liga/desliga e valor/validade no painel (aba Cupons). Exige as regras do Firestore mais recentes publicadas.
+- Tela de boas-vindas e faixa dourada no topo para quem ainda não entrou; lembrete de 3 dias na tela e por e-mail (rotina diária /api/cron).
+- **Convide amigos** só aparece depois da primeira compra paga (pedido com status "pago"). Ao detectar a compra, o cliente vê "Novo cupom desbloqueado".

@@ -6,6 +6,8 @@
 const { admin, db, usuario, erro, responder } = require('./_lib');
 const { emailConfigurado, enviar, boasVindas, pedido } = require('./_mail');
 
+const numCfg = (v, d, max) => Math.min(max, Number(v) > 0 ? Number(v) : d);
+
 const ADMIN = 'clouts.oficial2026@gmail.com';
 const ehAdmin = u => u && u.email === ADMIN && u.email_verified === true && u.firebase?.sign_in_provider === 'google.com';
 
@@ -24,8 +26,12 @@ module.exports = async (req, res) => {
       const ref = fs.collection('users').doc(u.uid).collection('meta').doc('email');
       const novo = await fs.runTransaction(async t => { const s = await t.get(ref); if (s.exists && s.data().boasVindasEm) return false; t.set(ref, { boasVindasEm: FV.serverTimestamp() }, { merge: true }); return true; });
       if (novo) {
-        const cod = await fs.collection('users').doc(u.uid).collection('meta').doc('codigo').get();
-        try { await enviar({ para: u.email, ...boasVindas({ nome: u.name, codigo: cod.exists ? cod.data().codigo : null }) }); }
+        const cfg = (await fs.collection('config').doc('loja').get()).data() || {};
+        const cupom = cfg.cupomPrimeira === false ? null : { percent: numCfg(cfg.primeiraPct, 10, 50), dias: numCfg(cfg.primeiraDias, 7, 30) };
+        try {
+          await enviar({ para: u.email, ...boasVindas({ nome: u.name, cupom }) });
+          if (cupom) await fs.collection('primeira').doc(u.uid).set({ uid: u.uid, email: u.email, nome: u.name || '', criadoEm: FV.serverTimestamp(), lembrete: false });   // para o lembrete de 3 dias
+        }
         catch (e) { await ref.set({ boasVindasEm: FV.delete() }, { merge: true }); throw e; }   // falhou: permite tentar de novo no próximo login
       }
       return res.status(200).json({ ok: true });

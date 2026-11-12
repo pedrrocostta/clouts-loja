@@ -70,6 +70,15 @@ async function calcular({ itens, cupom, cep }, uid) {
         const ja = await fs.collection('pedidos').where('uid', '==', uid).where('status', '==', 'pago').limit(1).get();
         if (!ja.empty) throw erro(409, 'O cupom BEMVINDO vale apenas na primeira compra.');
       }
+    } else if (code === 'PRIMEIRA') {
+      // Cupom de primeira compra: conta nova (dentro do prazo) e sem nenhum pedido anterior.
+      if (cfg.cupomPrimeira === false) throw erro(409, 'Este cupom está desativado no momento.');
+      const pct = Math.min(50, Number(cfg.primeiraPct) > 0 ? Number(cfg.primeiraPct) : 10), dias = Math.min(30, Number(cfg.primeiraDias) > 0 ? Number(cfg.primeiraDias) : 7);
+      const usr = await admin.auth().getUser(uid), criado = Date.parse(usr.metadata.creationTime);
+      if (!(criado + dias * 86400000 > Date.now())) throw erro(409, 'O cupom de primeira compra expirou.');
+      const ant = await fs.collection('pedidos').where('uid', '==', uid).get();
+      if (ant.docs.some(d => !['cancelado', 'recusado'].includes(d.data().status))) throw erro(409, 'O cupom de primeira compra vale apenas na primeira compra.');
+      percent = pct;
     } else {
       // Código promocional criado pelo dono no painel (campanhas/{CÓDIGO}): ativo, dentro da validade, uma vez por cliente.
       const c = await fs.collection('campanhas').doc(code).get(), d = c.data();

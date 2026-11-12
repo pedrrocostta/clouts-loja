@@ -522,3 +522,10 @@ body.sem-ind [data-invite]{display:none!important}
 .dnav a:hover,.dnav a.on{color:var(--gold);border-color:var(--gold)}
 .dnav a.hot{color:#ff9a7a}.dnav a.hot:hover,.dnav a.hot.on{color:#ffb59c;border-color:#ffb59c}
 @media(min-width:900px){.dnav{display:block}}
+
+/* Cupom de primeira compra: faixa fixa e convite liberado só depois da 1ª compra */
+.pc-bar{background:linear-gradient(90deg,#b0842d,#cea147 50%,#b0842d);color:#14110a;display:flex;gap:12px;align-items:center;justify-content:center;flex-wrap:wrap;padding:8px 14px;font-size:13px;text-align:center}
+.pc-bar[hidden]{display:none}
+.pc-bar button{background:#14110a;color:#f3d58a;border-radius:99px;padding:6px 16px;font-weight:700;font-size:12px;white-space:nowrap}
+body.sem-conv [data-invite],body.sem-conv #cupomShare,body.sem-conv [data-conv]{display:none!important}
+.unlock{text-align:center;background:var(--cream);border:1px dashed var(--gold);border-radius:12px;padding:8px 12px;font-weight:700;color:var(--gold-d);margin-bottom:6px}
