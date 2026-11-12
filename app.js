@@ -527,11 +527,50 @@ function shareStore() {
 document.addEventListener('click', e => { if (e.target.closest('[data-invite]')) openInvite(); });
 
 /* ---------- Detalhe do produto ---------- */
+/* Foto em tela cheia: beliscar (2 dedos) ou rolar o mouse para ampliar, toque duplo alterna zoom, arrastar move, deslizar troca de foto. */
+function abrirZoom(list, i0) {
+  let i = i0, sc = 1, tx = 0, ty = 0, d0 = 0, sc0 = 1, lastTap = 0, sx = 0, sy = 0, moved = false, px = 0, py = 0;
+  const pts = new Map(), el = document.createElement('div');
+  el.className = 'zoom'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', 'Foto ampliada');
+  el.innerHTML = '<img alt=""><button class="zm-x" aria-label="Fechar">×</button><button class="zm-n prev" aria-label="Foto anterior">‹</button><button class="zm-n next" aria-label="Próxima foto">›</button><span class="zm-c"></span><span class="zm-h">Toque duas vezes ou use dois dedos para ampliar</span>';
+  const im = el.querySelector('img');
+  const ap = () => { im.style.transform = `translate(${tx}px,${ty}px) scale(${sc})`; };
+  const fit = () => { if (sc <= 1) { sc = 1; tx = ty = 0; } else { const w = im.clientWidth * (sc - 1) / 2, h = im.clientHeight * (sc - 1) / 2; tx = Math.max(-w, Math.min(w, tx)); ty = Math.max(-h, Math.min(h, ty)); } ap(); };
+  const show = k => { i = (k + list.length) % list.length; im.src = list[i]; sc = 1; tx = ty = 0; ap(); el.querySelector('.zm-c').textContent = list.length > 1 ? `${i + 1}/${list.length}` : ''; el.querySelectorAll('.zm-n').forEach(b => b.hidden = list.length < 2); };
+  const key = e => { if (e.key === 'Escape') fechar(); else if (e.key === 'ArrowRight') show(i + 1); else if (e.key === 'ArrowLeft') show(i - 1); };
+  const fechar = () => { el.remove(); document.removeEventListener('keydown', key); };
+  el.querySelector('.zm-x').onclick = fechar; el.querySelector('.prev').onclick = () => show(i - 1); el.querySelector('.next').onclick = () => show(i + 1);
+  const dist = () => { const [a, b] = [...pts.values()]; return Math.hypot(a.x - b.x, a.y - b.y); };
+  el.addEventListener('pointerdown', e => {
+    if (e.target.closest('button')) return;
+    el.setPointerCapture(e.pointerId); pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pts.size === 2) { d0 = dist(); sc0 = sc; } else { sx = px = e.clientX; sy = py = e.clientY; moved = false; }
+  });
+  el.addEventListener('pointermove', e => {
+    if (!pts.has(e.pointerId)) return; pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pts.size === 2 && d0) { sc = Math.max(1, Math.min(5, sc0 * dist() / d0)); moved = true; fit(); }
+    else if (pts.size === 1) { if (Math.abs(e.clientX - sx) + Math.abs(e.clientY - sy) > 8) moved = true; if (sc > 1) { tx += e.clientX - px; ty += e.clientY - py; fit(); } px = e.clientX; py = e.clientY; }
+  });
+  const up = e => {
+    if (!pts.has(e.pointerId)) return; const was = pts.size; pts.delete(e.pointerId); if (was === 2) { d0 = 0; return; }
+    if (e.type === 'pointercancel') return;
+    const dx = e.clientX - sx;
+    if (!moved) { const now = Date.now(); if (now - lastTap < 320) { sc = sc > 1 ? 1 : 2.5; tx = ty = 0; fit(); lastTap = 0; } else lastTap = now; }
+    else if (sc === 1 && Math.abs(dx) > 60 && list.length > 1) show(i + (dx < 0 ? 1 : -1));
+  };
+  el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up);
+  el.addEventListener('wheel', e => { e.preventDefault(); sc = Math.max(1, Math.min(5, sc * Math.exp(-e.deltaY * 0.0022))); fit(); }, { passive: false });
+  document.addEventListener('keydown', key); document.body.appendChild(el); show(i);
+  setTimeout(() => el.querySelector('.zm-h')?.remove(), 3500);
+}
+
 function openSheet(id) {
   const p = byId(id); if (!p) return;
   let sel = null;
+  // Cores: peças com a mesma REF são a mesma peça em cores diferentes (ex.: 113216-1, 113216-2...).
+  const cores = p.ref ? PRODUTOS.filter(x => x.ref === p.ref && x.secao === p.secao) : [];
   const sheet = showSheet(`
-    <div class="gal"><div class="gal-vw"><img class="gal-main" src="${esc(p.img)}" alt="${esc(p.nome)}"><button class="gal-nv prev" hidden aria-label="Foto anterior">‹</button><button class="gal-nv next" hidden aria-label="Próxima foto">›</button><span class="gal-ct" hidden></span></div><div class="gal-th" hidden></div></div>
+    <div class="gal"><div class="gal-vw"><img class="gal-main" src="${esc(p.img)}" alt="${esc(p.nome)}"><button class="gal-nv prev" hidden aria-label="Foto anterior">‹</button><button class="gal-nv next" hidden aria-label="Próxima foto">›</button><span class="gal-ct" hidden></span><span class="gal-zm" aria-hidden="true">Toque para ampliar</span></div><div class="gal-th" hidden></div></div>
     <div class="pinfo">
       <div class="cod">CÓDIGO ${esc(p.cod)}${p.ref ? ` · REF. ${esc(p.ref)}` : ''}</div>
       <h2>${esc(p.nome)}</h2>
@@ -540,6 +579,7 @@ function openSheet(id) {
         ${p.lycra ? `<span>Lycra ${p.lycra}%</span>` : ''}${p.cor ? `<span>Cor: ${esc(p.cor)}</span>` : ''}${p.tecido ? `<span>${esc(p.tecido)}</span>` : ''}
         ${p.premium ? '<span>Premium</span>' : ''}${p.diamond ? '<span>Diamond</span>' : ''}</div>
       ${p.descricao ? `<p class="pdesc">${esc(p.descricao)}</p>` : ''}
+      ${cores.length > 1 ? `<div><div class="lbl">Cor: <b>${esc(p.cor || 'Escolha')}</b></div><div class="swatches">${cores.map(c => `<button class="swc ${c.id === p.id ? 'on' : ''}" data-c="${esc(c.id)}" aria-label="Cor ${esc(c.cor || c.cod)}" title="${esc(c.cor || c.cod)}"><img src="${esc(c.img)}" alt=""></button>`).join('')}</div></div>` : ''}
       <div><div class="lbl">Tamanho</div><div class="sizes">${sizesAll(p).map(t => `<button class="sz" data-t="${t}" ${p.tam.includes(t) && !p.esgotado ? '' : 'disabled'}>${t}</button>`).join('')}</div></div>
       ${soldOut(p) ? '<button class="btn btn-dark block" disabled>Esgotado</button>' : `<button class="btn btn-gold block" id="addBtn">${ICON.bag} Adicionar ao carrinho</button>`}
       <button class="btn btn-line block" id="favSheet">${ICON.heart} <span>${favs.includes(p.id) ? 'Remover dos favoritos' : 'Favoritar'}</span></button>
@@ -563,6 +603,8 @@ function openSheet(id) {
   gm.addEventListener('touchend', e => { if (x0 == null || gal.length < 2) return; const dx = e.changedTouches[0].clientX - x0; x0 = null; if (Math.abs(dx) > 40) gShow(gi + (dx < 0 ? 1 : -1)); });
   gDraw();
   if (p.nFotos > 0 && window.CloutsDB) CloutsDB.fotos(p.id).then(ex => { if (ex.length && sheet.isConnected) { gal = [p.img, ...ex]; gDraw(); } }).catch(() => {});
+  $$('.swc', sheet).forEach(b => b.onclick = () => { if (b.dataset.c !== p.id) openSheet(b.dataset.c); });
+  $('.gal-main', sheet).onclick = () => abrirZoom(gal, gi);
   $$('.sz', sheet).forEach(b => b.onclick = () => { sel = b.dataset.t; $$('.sz', sheet).forEach(x => x.classList.toggle('on', x === b)); });
   if ($('#addBtn', sheet)) $('#addBtn', sheet).onclick = () => {
     if (!sel) { $$('.sz', sheet).forEach(x => { x.classList.remove('err'); void x.offsetWidth; x.classList.add('err'); }); toast('Escolha um tamanho'); return; }

@@ -141,3 +141,15 @@ textarea{width:100%;border:1px solid #d3c8b0;border-radius:10px;padding:10px 12p
 .cfg-card h2{font-size:20px;font-weight:700}
 .cfg-sw{display:flex;align-items:flex-start;gap:12px;padding:10px 0;border-top:1px solid var(--line)}.cfg-sw span{display:grid;gap:2px}.cfg-sw small{color:var(--ink2);font-size:12px;font-weight:400}
 .ord-act .btn{margin-right:8px}
+
+/* Gráficos de pizza do dashboard */
+.dsh-grid.three{grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}
+.pz{display:flex;flex-direction:column;align-items:center;gap:16px}
+.pz-d{width:150px;height:150px;border-radius:50%;display:grid;place-items:center;flex:none}
+.pz-d>div{width:96px;height:96px;border-radius:50%;background:var(--paper);display:grid;place-content:center;text-align:center}
+.pz-d b{font-size:26px;line-height:1}
+.pz-d small{font-size:11px;color:#5f584c;margin-top:3px}
+.pz-l{list-style:none;width:100%;display:grid;gap:7px}
+.pz-l li{display:grid;grid-template-columns:12px 1fr auto 38px;gap:8px;align-items:center;font-size:13px}
+.pz-l i{width:12px;height:12px;border-radius:4px}
+.pz-l small{color:#5f584c;text-align:right}

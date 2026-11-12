@@ -26,6 +26,13 @@ const barras = (rows, fmt = num) => {
   return rows.length ? `<ul class="hb">${rows.map(([k, v, extra]) => `<li><span class="hb-k">${esc(k)}</span><span class="hb-b"><i style="width:${Math.max(3, v / max * 100)}%"></i></span><span class="hb-v">${fmt(v)}${extra ? `<small>${esc(extra)}</small>` : ''}</span></li>`).join('')}</ul>` : '<p class="dsh-empty">Sem dados no período.</p>';
 };
 
+const pizza = (fatias, centro, sub) => {
+  const tot = fatias.reduce((a, f) => a + f.v, 0);
+  let acc = 0; const grad = tot ? fatias.filter(f => f.v > 0).map(f => { const a = acc / tot * 360; acc += f.v; return `${f.c} ${a}deg ${acc / tot * 360}deg`; }).join(',') : '#e8dfcd 0deg 360deg';
+  return `<div class="pz"><div class="pz-d" style="background:conic-gradient(${grad})" role="img" aria-label="${esc(fatias.map(f => f.k + ': ' + f.v).join(', '))}"><div><b>${esc(centro)}</b><small>${esc(sub)}</small></div></div>
+    <ul class="pz-l">${fatias.map(f => `<li><i style="background:${f.c}"></i><span>${esc(f.k)}</span><b>${num(f.v)}</b><small>${tot ? Math.round(f.v / tot * 100) : 0}%</small></li>`).join('')}</ul></div>`;
+};
+
 export function renderDashboard(box, orders, items, periodo = '30', setPeriodo) {
   const t0 = desde(periodo), inP = orders.filter(o => o._t >= t0);
   const pagos = inP.filter(o => o.status === 'pago');
@@ -66,6 +73,16 @@ export function renderDashboard(box, orders, items, periodo = '30', setPeriodo) 
   const total = items.length, ocultas = items.filter(p => p.visivel === false).length, esg = items.filter(p => p.esgotado).length;
   const semPreco = items.filter(p => !(p.preco > 0)).length, semDesc = items.filter(p => !p.descricao).length, promo = items.filter(p => p.precoAntigo > p.preco && p.preco > 0).length;
 
+  const ativas = items.filter(p => p.visivel !== false && !p.esgotado && p.preco > 0).length;
+  const esgVis = items.filter(p => p.visivel !== false && p.esgotado).length;
+  const semPrecoVis = items.filter(p => p.visivel !== false && !p.esgotado && !(p.preco > 0)).length;
+  const gCatalogo = pizza([{ k: 'Ativas na loja', v: ativas, c: '#2f8f5b' }, { k: 'Ocultas', v: ocultas, c: '#8a8272' }, { k: 'Esgotadas', v: esgVis, c: '#cea147' }, { k: 'Sem preço', v: semPrecoVis, c: '#b3372b' }], String(total), total === 1 ? 'peça' : 'peças');
+  const fem = items.filter(p => p.secao === 'feminino').length, masc = items.filter(p => p.secao === 'masculino').length;
+  const gSecao = pizza([{ k: 'Feminino', v: fem, c: '#cea147' }, { k: 'Masculino', v: masc, c: '#12100c' }], String(total), 'no catálogo');
+  const cancel = inP.filter(o => ['cancelado', 'recusado', 'divergente'].includes(o.status)).length;
+  const gPedidos = pizza([{ k: 'Pagos', v: n, c: '#2f8f5b' }, { k: 'Aguardando', v: aguard.length, c: '#cea147' }, { k: 'Cancelados/recusados', v: cancel, c: '#b3372b' }], String(inP.length), inP.length === 1 ? 'pedido' : 'pedidos');
+  const fotos1 = items.filter(p => !p.nFotos).length;
+
   box.innerHTML = `
   <div class="dsh-head"><div><h2>Visão geral</h2><p class="msg">Vendas confirmadas: pagas pelo Mercado Pago ou confirmadas por você nos pedidos do WhatsApp (aba Pedidos → Confirmar venda).</p></div>
     <div class="seg" role="group" aria-label="Período">${Object.entries(PERIODOS).map(([k, v]) => `<button type="button" data-per="${k}" class="${k === periodo ? 'on' : ''}">${v}</button>`).join('')}</div></div>
@@ -81,6 +98,12 @@ export function renderDashboard(box, orders, items, periodo = '30', setPeriodo) 
     <div class="kpi"><small>Descontos dados</small><b>${brl(desc)}</b><span>frete cobrado: ${brl(fret)}</span></div>
   </div>
 
+  <div class="dsh-grid three">
+    <section class="dsh-card"><h3>Situação das peças</h3>${gCatalogo}</section>
+    <section class="dsh-card"><h3>Pedidos no período</h3>${gPedidos}</section>
+    <section class="dsh-card"><h3>Feminino × Masculino</h3>${gSecao}<p class="dsh-note">${fotos1} peça${fotos1 === 1 ? '' : 's'} com só 1 foto.</p></section>
+  </div>
+
   <section class="dsh-card"><h3>Vendas por dia</h3>
     <div class="vb" role="img" aria-label="Faturamento por dia">${serie.map(s => `<div class="vb-c" title="${new Date(s.d).toLocaleDateString('pt-BR')}: ${brl(s.v)} (${s.n} pedido${s.n === 1 ? '' : 's'})"><i style="height:${s.v ? Math.max(4, s.v / maxD * 100) : 1}%" class="${s.v ? '' : 'z'}"></i>${dias <= 14 ? `<span>${new Date(s.d).getDate()}</span>` : ''}</div>`).join('')}</div></section>
 
@@ -88,7 +111,7 @@ export function renderDashboard(box, orders, items, periodo = '30', setPeriodo) 
     <section class="dsh-card"><h3>Peças mais pedidas</h3>
       ${top.length ? `<ol class="rank">${top.map((p, i) => `<li><span class="rk">${i + 1}</span>${img(p.id) ? `<img src="${esc(img(p.id))}" alt="">` : '<span class="ph"></span>'}<div><b>${esc(p.nome)}</b><small>Cód. ${esc(p.cod)} · ${brl(p.v)}</small><span class="hb-b"><i style="width:${p.q / maxQ * 100}%"></i></span></div><em>${p.q}<small> un.</small></em></li>`).join('')}</ol>` : '<p class="dsh-empty">Nenhuma venda no período.</p>'}
       <p class="dsh-note">${semVenda} peça${semVenda === 1 ? '' : 's'} visível${semVenda === 1 ? '' : 'is'} sem nenhuma venda no período.</p></section>
-    <section class="dsh-card"><h3>Feminino × Masculino</h3>${barras(porSecao, brl)}
+    <section class="dsh-card"><h3>Faturamento: Feminino × Masculino</h3>${barras(porSecao, brl)}
       <h3 style="margin-top:18px">Tamanhos mais vendidos</h3>${barras(porTam.slice(0, 6))}</section>
     <section class="dsh-card"><h3>Faturamento por cidade</h3>${barras(porCidade, brl)}
       <h3 style="margin-top:18px">Dia da semana</h3>${barras(porDia, brl)}</section>
