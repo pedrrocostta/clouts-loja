@@ -66,6 +66,8 @@ const REF_MAX = 10;
 const tierPct = n => n >= 10 ? 20 : n >= 5 ? 10 : n >= 1 ? 5 : 0;
 const meuCupom = () => cupons.find(c => c.codigo === 'AMIGO') || null;
 try { const r = new URLSearchParams(location.search).get('ref'); if (r && /^[A-Za-z0-9]{20,40}$/.test(r)) localStorage.setItem('clouts.ref', r); } catch {}
+try { const tp = new URLSearchParams(location.search).get('testepag'); if (tp === '1') localStorage.setItem('clouts.testepag', '1'); else if (tp === '0') localStorage.removeItem('clouts.testepag'); } catch {}   // ?testepag=1 mostra o botão de pagamento só neste navegador (para testar antes de ligar para todos)
+const pagBotao = () => CONFIG.pagamentoOnline || store.get('clouts.testepag', null) === '1';
 try { const c = (new URLSearchParams(location.search).get('codigo') || '').toUpperCase(); if (/^[A-Z0-9]{8}$/.test(c)) localStorage.setItem('clouts.codigo', c); } catch {}
 let meuCod = null, aplicando = false;
 /* Configurações da loja feitas no painel (liga/desliga cupons, frase da barra, WhatsApp). */
@@ -902,7 +904,7 @@ function renderCheckout() {
     ${descontoValor() ? `<div class="tot disc"><span>Cupom ${esc(cupNome(cupomAtivo))}</span><span>− ${brl(descontoValor())}</span></div>` : ''}
     <div class="tot"><span>Frete (${esc(ship.cidade)})</span><span id="ckFrete">${brl(freteValor())}</span></div>
     <div class="tot big"><span>Total</span><b id="ckTotal">${brl(totalPedido())}</b></div>
-    ${CONFIG.pagamentoOnline ? `<button class="btn btn-gold block" id="payMp">${ICON.card} Pagar com Pix ou cartão</button>
+    ${pagBotao() ? `<button class="btn btn-gold block" id="payMp">${ICON.card} Pagar com Pix ou cartão</button>
     <button class="btn btn-line block" id="sendWa">${ICON.chat} Prefiro finalizar pelo WhatsApp</button>`
       : `<button class="btn btn-gold block" id="sendWa">${ICON.chat} Enviar pedido no WhatsApp</button>`}
     <button class="btn block link" id="backCart">← Voltar ao carrinho</button>`;

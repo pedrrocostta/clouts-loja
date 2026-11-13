@@ -2,6 +2,7 @@
  * 1º lembrete depois de 3 horas parado; 2º (última chamada) depois de 3 dias. Quem pediu para parar de receber não recebe. */
 const { db } = require('./_lib');
 const { emailConfigurado, enviar, carrinho, lembreteCupom } = require('./_mail');
+const { liberarPedido } = require('./_estoque');
 
 const H = 3600000;
 module.exports = async (req, res) => {
@@ -23,6 +24,13 @@ module.exports = async (req, res) => {
       if (ped.docs.some(p => (p.data().criadoEm?.toMillis?.() || 0) >= (c.atualizadoEm?.toMillis?.() || 0) - 60000)) { await d.ref.delete(); continue; }
       try { await enviar({ para: c.email, ...carrinho({ nome: c.nome, itens: c.itens, n: vez, uid: c.uid }) }); await d.ref.update({ enviados: vez }); enviados++; }
       catch (e) { console.error('cron carrinho', e.message); }
+    }
+    // Pagamento online que ninguém pagou: o link do Mercado Pago vence em 3 dias; depois disso a peça volta para o estoque.
+    const reservados = await fs.collection('pedidos').where('status', '==', 'aguardando').where('estoqueReservado', '==', true).get();
+    for (const d of reservados.docs) {
+      const o = d.data();
+      if (o.origem === 'whatsapp' || (o.criadoEm?.toMillis?.() || agora) > agora - 3 * 24 * H - 3600000) continue;
+      try { await liberarPedido(fs, d.ref, { status: 'cancelado' }); } catch (e) { console.error('cron estoque', e.message); }
     }
     // Lembrete do cupom de primeira compra: 3 dias depois do cadastro, só para quem ainda não comprou e ainda está no prazo.
     const cfg = (await fs.collection('config').doc('loja').get()).data() || {};

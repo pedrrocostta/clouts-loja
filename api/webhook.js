@@ -2,6 +2,7 @@
  * confere valor e pedido, marca como pago, queima o cupom e conta a indicação (só na primeira compra paga do amigo). */
 const crypto = require('crypto');
 const { admin, db, configurado, mp, cents } = require('./_lib');
+const { planejarLiberacao, aplicar } = require('./_estoque');
 const { emailConfigurado, enviar, pedido: emailPedido } = require('./_mail');
 
 function assinaturaOk(req, dataId) {
@@ -37,8 +38,10 @@ module.exports = async (req, res) => {
       const jaContou = conv ? await t.get(conv) : null;   // todas as leituras antes das escritas
       const novo = pg.status === 'approved' ? 'pago' : (['rejected', 'cancelled'].includes(pg.status) ? 'recusado' : o.status);
       if (o.status === 'pago' || novo === o.status) return;
+      const devolver = novo === 'recusado' && o.estoqueReservado === true ? await planejarLiberacao(t, fs, o.estoqueItens) : null;   // leitura antes das escritas
       if (novo === 'pago' && cents(pg.transaction_amount) !== cents(o.total)) { t.update(ref, { status: 'divergente', mpPagamento: String(id) }); return; }
       t.update(ref, { status: novo, mpPagamento: String(id), pagoEm: novo === 'pago' ? admin.firestore.FieldValue.serverTimestamp() : null });
+      if (devolver) { aplicar(t, devolver); t.update(ref, { estoqueReservado: false, estoqueDevolvido: true }); }   // pagamento recusado/cancelado: a peça volta para a loja
       if (novo !== 'pago') return;
       virouPago = o;
 
