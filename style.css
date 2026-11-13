@@ -534,3 +534,4 @@ body.sem-conv [data-invite],body.sem-conv #cupomShare,body.sem-conv [data-conv]{
 .ck div{display:flex;gap:8px}.ck button{border:1px solid #6b5d37;color:#f3ead4;border-radius:99px;padding:8px 16px;font-weight:600;font-size:12px}.ck button.y{background:var(--gold,#cea147);color:#14110a;border-color:var(--gold,#cea147)}
 .guia{overflow-x:auto;margin:6px 0 10px;border:1px solid var(--line,#e5dcc6);border-radius:10px}
 .guia table{border-collapse:collapse;width:100%;font-size:13px;text-align:center}.guia th{background:var(--cream,#f6efdc);font-weight:700}.guia th,.guia td{padding:8px 10px;border-bottom:1px solid var(--line,#e5dcc6);white-space:nowrap}.guia tr:last-child td{border-bottom:0}
+.stk{margin:6px 0 0;min-height:16px;font-size:12.5px;font-weight:700;color:#b3372b}

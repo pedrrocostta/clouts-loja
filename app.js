@@ -35,6 +35,9 @@ const sizesAll = p => tipoTam(p) === 'letra' ? ['PP', 'P', 'M', 'G', 'GG', 'GGG'
 const GRUPOS = ['Jaqueta', 'Cigarrete', 'Wide Leg', 'Boot Cut', 'Flare', 'Skinny', 'Slim', 'Reta', 'Pantalona', 'Jogger', 'Cargo', 'Mom', 'Baggy', 'Bermuda', 'Short', 'Saia', 'Vestido', 'Colete', 'Camisa', 'Blusa'];
 const grupo = p => GRUPOS.find(g => norm(p.modelo || p.nome).includes(norm(g))) || p.modelo || '';
 const soldOut = p => !!p.esgotado || !(p.tam || []).length;
+/* Estoque por tamanho (painel → Peças): quantas unidades existem do tamanho. Sem controle ativado = sem limite. */
+const estMax = (p, tam) => (p.estoque && Number.isFinite(Number(p.estoque[tam]))) ? Number(p.estoque[tam]) : Infinity;
+const unid = n => `${n} unidade${n === 1 ? '' : 's'}`;
 const topList = () => MAIS_VENDIDOS.map(byId).filter(Boolean);
 function applyCatalog(docs) {
   if (!docs || !docs.length) return false;
@@ -681,7 +684,7 @@ function openSheet(id) {
         ${p.lycra ? `<span>Lycra ${p.lycra}%</span>` : ''}${p.cor ? `<span>Cor: ${esc(p.cor)}</span>` : ''}${p.tecido ? `<span>${esc(p.tecido)}</span>` : ''}
         ${p.premium ? '<span>Premium</span>' : ''}${p.diamond ? '<span>Diamond</span>' : ''}</div>
       ${cores.length > 1 ? `<div><div class="lbl">Cor: <b>${esc(p.cor || 'Escolha')}</b></div><div class="swatches">${cores.map(c => `<button class="swc ${c.id === p.id ? 'on' : ''}" data-c="${esc(c.id)}" aria-label="Cor ${esc(c.cor || c.cod)}" title="${esc(c.cor || c.cod)}"><img src="${esc(foto(c.img, 140))}" alt=""></button>`).join('')}</div></div>` : ''}
-      <div><div class="lbl">Tamanho</div><div class="sizes">${sizesAll(p).map(t => `<button class="sz" data-t="${t}" ${p.tam.includes(t) && !p.esgotado ? '' : 'disabled'}>${t}</button>`).join('')}</div></div>
+      <div><div class="lbl">Tamanho</div><div class="sizes">${sizesAll(p).map(t => `<button class="sz" data-t="${t}" ${p.tam.includes(t) && !p.esgotado ? '' : 'disabled'}>${t}</button>`).join('')}</div><p class="stk" id="stkMsg" aria-live="polite"></p></div>
       <div class="buy"><span class="buy-pr">${brl(p.preco)}</span>${soldOut(p) ? '<button class="btn btn-dark block" disabled>Esgotado</button>' : `<button class="btn btn-gold block" id="addBtn">${ICON.bag} Adicionar ao carrinho</button>`}</div>
       <button class="btn btn-line block" id="favSheet">${ICON.heart} <span>${favs.includes(p.id) ? 'Remover dos favoritos' : 'Favoritar'}</span></button>
       <button class="btn btn-line block" id="shareSheet" type="button">Compartilhar esta peça</button>
@@ -712,10 +715,10 @@ function openSheet(id) {
   if (p.nFotos > 0 && window.CloutsDB) CloutsDB.fotos(p.id).then(ex => { if (ex.length && sheet.isConnected) { gal = [p.img, ...ex]; gDraw(); } }).catch(() => {});
   $$('.swc', sheet).forEach(b => b.onclick = () => { if (b.dataset.c !== p.id) openSheet(b.dataset.c); });
   $('.gal-main', sheet).onclick = () => abrirZoom(gal, gi);
-  $$('.sz', sheet).forEach(b => b.onclick = () => { sel = b.dataset.t; $$('.sz', sheet).forEach(x => x.classList.toggle('on', x === b)); });
+  $$('.sz', sheet).forEach(b => b.onclick = () => { sel = b.dataset.t; $$('.sz', sheet).forEach(x => x.classList.toggle('on', x === b)); const mx = estMax(p, sel); $('#stkMsg', sheet).textContent = mx === 1 ? 'Última unidade deste tamanho!' : mx <= 3 ? `Restam só ${unid(mx)} deste tamanho` : ''; });
   if ($('#addBtn', sheet)) $('#addBtn', sheet).onclick = () => {
     if (!sel) { $$('.sz', sheet).forEach(x => { x.classList.remove('err'); void x.offsetWidth; x.classList.add('err'); }); toast('Escolha um tamanho'); return; }
-    addToCart(p.id, sel); closeSheet(); openCart();
+    if (addToCart(p.id, sel) === false) return; closeSheet(); openCart();
   };
   $('#shareSheet', sheet).onclick = async () => {
     const url = location.origin + '/p/' + encodeURIComponent(p.id), data = { title: p.nome + ' — CLOUTS', text: 'Olha essa peça da CLOUTS:', url };
@@ -764,7 +767,8 @@ const maskCep = v => v.replace(/\D/g, '').slice(0, 8).replace(/(\d{5})(\d)/, '$1
 
 /* ---------- Carrinho ---------- */
 function addToCart(id, tam) {
-  const it = cart.find(i => i.id === id && i.tam === tam);
+  const it = cart.find(i => i.id === id && i.tam === tam), p0 = byId(id), mx = p0 ? estMax(p0, tam) : Infinity;
+  if ((it ? it.q : 0) + 1 > mx) { toast(mx <= 1 ? 'Essa é a última unidade e já está no seu carrinho' : `Só temos ${unid(mx)} desse tamanho`); return false; }
   if (it) it.q++; else cart.push({ id, tam, q: 1 });
   saveCart(); toast('Adicionado ao carrinho');
   const p = byId(id); if (p) track('add_to_cart', 'AddToCart', { ga: { currency: 'BRL', value: p.preco, items: [trkItem(p)] }, fb: { content_ids: [p.cod], content_type: 'product', value: p.preco, currency: 'BRL' } });
@@ -819,8 +823,8 @@ function renderCart() {
   }
   if (checkout) return renderCheckout();
   body.innerHTML = cart.map((i, idx) => {
-    const p = byId(i.id), off = !p.tam.includes(i.tam) || p.esgotado;
-    return `<div class="ci"><img src="${esc(foto(p.img, 160))}" alt=""><div>${off ? '<div class="warn">Tamanho indisponível no momento. Remova para continuar.</div>' : ''}
+    const p = byId(i.id), off = !p.tam.includes(i.tam) || p.esgotado, mx = estMax(p, i.tam), alem = !off && i.q > mx;
+    return `<div class="ci"><img src="${esc(foto(p.img, 160))}" alt=""><div>${off ? '<div class="warn">Tamanho indisponível no momento. Remova para continuar.</div>' : alem ? `<div class="warn">Só temos ${unid(mx)} desse tamanho. Diminua a quantidade.</div>` : ''}
       <div class="t">${esc(p.nome)}</div><div class="m">Cód. ${esc(p.cod)} · Tam. ${i.tam}</div>
       <div class="ci-r"><div class="qty"><button data-dec="${idx}" aria-label="Diminuir">−</button><span>${i.q}</span><button data-inc="${idx}" aria-label="Aumentar">+</button></div>
       <b>${brl(p.preco * i.q)}</b></div><button class="rm" data-rm="${idx}">Remover</button></div></div>`;
@@ -844,7 +848,7 @@ function renderCart() {
     m.classList.remove('bad'); m.textContent = shipMsg(); $('#fLbl').textContent = brl(freteValor()); $('#tLbl').textContent = brl(totalPedido());
   };
   $('#goCheckout').onclick = () => {
-    if (cart.some(i => { const p = byId(i.id); return !p.tam.includes(i.tam) || p.esgotado; })) { toast('Remova os itens indisponíveis'); return; }
+    if (cart.some(i => { const p = byId(i.id); return !p.tam.includes(i.tam) || p.esgotado || i.q > estMax(p, i.tam); })) { toast('Ajuste os itens indisponíveis do carrinho'); return; }
     if (auth()?.configured && !me()) { openLogin('Entre com sua conta Google para finalizar o pedido.'); return; }
     if (!ship) { $('#cepMsg').textContent = 'Informe seu CEP para calcular o frete.'; $('#cepMsg').classList.add('bad'); $('#cepIn').focus(); return; }
     checkout = true; renderCart();
@@ -875,7 +879,7 @@ function bindCupom() {
 const shipMsg = () => ship ? `Entrega em ${ship.cidade}${ship.bairro ? ' · ' + ship.bairro : ''}: ${freteValor() === 0 ? 'frete ' + (CONFIG.freteGratisAcima != null && cartTotal() >= CONFIG.freteGratisAcima ? 'grátis' : brl(0)) : brl(freteValor())}` : 'Entregamos em Contagem, Betim e Belo Horizonte.';
 $('#cartBody').addEventListener('click', e => {
   const t = e.target;
-  if (t.dataset.inc != null) cart[t.dataset.inc].q++;
+  if (t.dataset.inc != null) { const i = cart[t.dataset.inc], p = byId(i.id), mx = p ? estMax(p, i.tam) : Infinity; if (i.q + 1 > mx) { toast(mx <= 1 ? 'Só temos 1 unidade desse tamanho' : `Só temos ${unid(mx)} desse tamanho`); return; } i.q++; }
   else if (t.dataset.dec != null) { const i = cart[t.dataset.dec]; if (--i.q <= 0) cart.splice(t.dataset.dec, 1); }
   else if (t.dataset.rm != null) cart.splice(t.dataset.rm, 1);
   else return;
@@ -962,7 +966,7 @@ function sendOrder() {
   // Registra o pedido para o dono ver no painel (dashboard); a venda só conta depois que ele confirma o pagamento.
   if (u) CloutsDB.registrarPedido({ uid: u.uid, email: u.email || '', cliente: { nome: d.nome, tel: d.tel, rua: d.rua, num: d.num, bairro: d.bairro, comp: d.comp || '', cep: d.cep },
     itens: cart.map(i => { const p = byId(i.id); return { id: p.id, cod: String(p.cod), nome: String(p.nome).slice(0, 140), tam: String(i.tam), q: i.q, preco: p.preco }; }),
-    subtotal: cartTotal(), desconto: desc, frete, total, cupom: cp ? cp.codigo : null, percent: cp ? cp.percent : 0, cidade: ship.cidade }).then(id => { clearTimeout(cartTm); CloutsDB.email({ acao: 'pedido', pedidoId: id }); CloutsDB.email({ acao: 'carrinho', itens: [] }); }).catch(e => console.warn('Pedido não registrado', e));
+    subtotal: cartTotal(), desconto: desc, frete, total, cupom: cp ? cp.codigo : null, percent: cp ? cp.percent : 0, cidade: ship.cidade }).then(id => { clearTimeout(cartTm); CloutsDB.estoque({ acao: 'reservar', pedidoId: id }); CloutsDB.email({ acao: 'pedido', pedidoId: id }); CloutsDB.email({ acao: 'carrinho', itens: [] }); }).catch(e => console.warn('Pedido não registrado', e));
   if (cp && u) { if (!cp.camp && cp.codigo !== 'PRIMEIRA') CloutsDB.usarCupom(u.uid, cp.codigo).catch(() => {}); cupomAtivo = null; campAtiva = null; store.set('clouts.cupom', null); store.set('clouts.camp', null); }
 }
 

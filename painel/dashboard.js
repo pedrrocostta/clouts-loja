@@ -73,6 +73,8 @@ export function renderDashboard(box, orders, items, periodo = '30', setPeriodo) 
   const total = items.length, ocultas = items.filter(p => p.visivel === false).length, esg = items.filter(p => p.esgotado).length;
   const semPreco = items.filter(p => !(p.preco > 0)).length, semDesc = items.filter(p => !p.descricao).length, promo = items.filter(p => p.precoAntigo > p.preco && p.preco > 0).length;
 
+  const comEst = items.filter(p => p.estoque), unidades = comEst.reduce((s, p) => s + Object.values(p.estoque).reduce((a, b) => a + (Number(b) || 0), 0), 0);
+  const ultima = comEst.filter(p => p.visivel !== false && Object.values(p.estoque).reduce((a, b) => a + (Number(b) || 0), 0) === 1).length, semCtl = items.length - comEst.length;
   const ativas = items.filter(p => p.visivel !== false && !p.esgotado && p.preco > 0).length;
   const esgVis = items.filter(p => p.visivel !== false && p.esgotado).length;
   const semPrecoVis = items.filter(p => p.visivel !== false && !p.esgotado && !(p.preco > 0)).length;
@@ -122,9 +124,18 @@ export function renderDashboard(box, orders, items, periodo = '30', setPeriodo) 
 
   <section class="dsh-card"><h3>Saúde do catálogo</h3>
     <div class="kpis small"><div class="kpi"><small>Peças</small><b>${total}</b></div><div class="kpi ${ocultas ? 'warn' : ''}"><small>Ocultas</small><b>${ocultas}</b></div><div class="kpi ${esg ? 'warn' : ''}"><small>Esgotadas</small><b>${esg}</b></div>
-      <div class="kpi ${semPreco ? 'bad' : ''}"><small>Sem preço</small><b>${semPreco}</b></div><div class="kpi"><small>Sem descrição</small><b>${semDesc}</b></div><div class="kpi"><small>Em promoção (De/Por)</small><b>${promo}</b></div></div>
+      <div class="kpi ${semPreco ? 'bad' : ''}"><small>Sem preço</small><b>${semPreco}</b></div><div class="kpi"><small>Sem descrição</small><b>${semDesc}</b></div><div class="kpi"><small>Em promoção (De/Por)</small><b>${promo}</b></div>
+      <div class="kpi"><small>Unidades em estoque</small><b>${num(unidades)}</b></div><div class="kpi ${ultima ? 'warn' : ''}"><small>Peças na última unidade</small><b>${ultima}</b></div><div class="kpi ${semCtl ? 'warn' : ''}"><small>Sem controle de estoque</small><b>${semCtl}</b></div></div>
     ${semPreco ? '<p class="dsh-note bad">Peças sem preço não podem ser pagas online. Defina os preços na aba Peças.</p>' : ''}</section>`;
   box.querySelectorAll('[data-per]').forEach(b => b.onclick = () => setPeriodo(b.dataset.per));
+}
+
+/* Devolve ao estoque as peças de um pedido cancelado (só o administrador; se o pedido não tinha reserva, não faz nada). */
+async function devolverEstoque(pedidoId) {
+  try {
+    const u = getAuth().currentUser; if (!u) return;
+    await fetch('/api/estoque', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + await u.getIdToken() }, body: JSON.stringify({ acao: 'liberar', pedidoId }) });
+  } catch {}
 }
 
 /* Avisa o cliente por e-mail (confirmado / enviado / entregue) pelo servidor. Se o e-mail não estiver configurado, ignora em silêncio. */
@@ -147,8 +158,9 @@ export function renderPedidos(box, orders, db, toast, filtro, setFiltro) {
     <p class="msg">${list.length} pedido${list.length === 1 ? '' : 's'}${orders.length >= 500 ? ' (mostrando os 500 mais recentes)' : ''}</p>
     <div class="list ord">${list.length ? list.map(o => { const st = STATUS[o.status] || [o.status, 'g'], c = o.cliente || {}; return `
     <article class="item ordc" data-id="${esc(o.id)}"><div style="grid-column:1/-1">
-      <div class="cod">#${esc(o.id.slice(0, 6).toUpperCase())} · ${new Date(o._t).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}<span class="tags"><span class="tag ${st[1]}">${st[0]}</span>${o.cupom ? `<span class="tag">Cupom ${esc(o.cupom)} ${o.percent}%</span>` : ''}${o.ref ? '<span class="tag">Código de amigo</span>' : ''}<span class="tag g">${o.origem === 'whatsapp' ? 'WhatsApp' : 'Mercado Pago'}</span></span></div>
+      <div class="cod">#${esc(o.id.slice(0, 6).toUpperCase())} · ${new Date(o._t).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}<span class="tags"><span class="tag ${st[1]}">${st[0]}</span>${o.cupom ? `<span class="tag">Cupom ${esc(o.cupom)} ${o.percent}%</span>` : ''}${o.ref ? '<span class="tag">Código de amigo</span>' : ''}<span class="tag g">${o.origem === 'whatsapp' ? 'WhatsApp' : 'Mercado Pago'}</span>${o.estoqueReservado === true ? '<span class="tag">Estoque reservado</span>' : ''}${o.estoqueDevolvido ? '<span class="tag g">Estoque devolvido</span>' : ''}${(o.estoqueFalta || []).length ? '<span class="tag r">Estoque insuficiente</span>' : ''}</span></div>
       <p class="ord-cli"><b>${esc(c.nome || '—')}</b> · ${esc(c.tel || '')} · ${esc(o.email || '')}</p>
+      ${(o.estoqueFalta || []).length ? `<p class="ord-end" style="color:#b3372b;font-weight:600">Faltou estoque: ${o.estoqueFalta.map(f => `${esc(f.cod)} tam. ${esc(f.tam)} (pediu ${f.pedido}, tinha ${f.tem})`).join(' · ')}. Fale com o cliente antes de confirmar.</p>` : ''}
       <p class="ord-end">${esc(c.rua || '')}, ${esc(c.num || '')}${c.comp ? ' — ' + esc(c.comp) : ''} — ${esc(c.bairro || '')}, ${esc(o.cidade || '')} · CEP ${esc(c.cep || '')}</p>
       <ul class="ord-it">${(o.itens || []).map(i => `<li>${i.q}× ${esc(i.nome)} <small>Cód. ${esc(i.cod)} · Tam. ${esc(i.tam)}</small><b>${brl(i.q * i.preco)}</b></li>`).join('')}</ul>
       <div class="ord-ft"><span>Subtotal ${brl(o.subtotal)}${o.desconto ? ` · desconto −${brl(o.desconto)}` : ''} · frete ${brl(o.frete)}</span><b>${brl(o.total)}</b></div>
@@ -162,7 +174,7 @@ export function renderPedidos(box, orders, db, toast, filtro, setFiltro) {
     catch (e) { toast(e?.code === 'permission-denied' ? 'Sem permissão. Publique as regras mais recentes do Firestore.' : 'Não foi possível atualizar.', true); }
   });
   const mudar = async (id, status) => {
-    try { await updateDoc(doc(db, 'pedidos', id), { status, andamento: 'novo' }); toast(status === 'pago' ? 'Venda confirmada. Já está no dashboard.' : 'Pedido cancelado.'); if (status === 'pago') avisarCliente(id, 'confirmado'); }
+    try { await updateDoc(doc(db, 'pedidos', id), { status, andamento: 'novo' }); toast(status === 'pago' ? 'Venda confirmada. Já está no dashboard.' : 'Pedido cancelado.'); if (status === 'pago') avisarCliente(id, 'confirmado'); if (status === 'cancelado') devolverEstoque(id); }
     catch (e) { toast(e?.code === 'permission-denied' ? 'Sem permissão. Publique as regras mais recentes do Firestore.' : 'Não foi possível atualizar.', true); }
   };
   box.querySelectorAll('[data-conf]').forEach(b => b.onclick = () => {

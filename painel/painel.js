@@ -1,6 +1,6 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
 import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut, setPersistence, browserSessionPersistence } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
-import { getFirestore, collection, onSnapshot, doc, setDoc, updateDoc, deleteDoc, writeBatch, addDoc, serverTimestamp, query, orderBy, limit, Timestamp, getDocs, getDoc } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+import { getFirestore, collection, onSnapshot, doc, setDoc, updateDoc, deleteDoc, writeBatch, addDoc, serverTimestamp, query, orderBy, limit, Timestamp, getDocs, getDoc, arrayUnion, arrayRemove } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
 const app = initializeApp({
   apiKey: 'AIzaSyBP1WSRJqAM552UQU5rBRubeVkz7IRc2Ao', authDomain: 'clouts-409b7.firebaseapp.com', projectId: 'clouts-409b7',
@@ -40,6 +40,11 @@ const NUMS = TAMS.slice(0, 11), LETRAS = TAMS.slice(11);
 // Calças e bermudas usam números; jaquetas, blusas e outras roupas usam letras. Dá para trocar em cada peça.
 const tipoDe = p => p.tipoTam || (/cal[cç]a|bermuda|short|jeans masc/i.test(`${p.nome || ''} ${p.modelo || ''}`) ? 'numero' : /jaqueta|colete|camisa|camiseta|blusa|vestido|cropped|casaco|body|saia|macac|regata|moletom/i.test(`${p.nome || ''} ${p.modelo || ''}`) ? 'letra' : 'numero');
 const sizesDe = p => tipoDe(p) === 'letra' ? LETRAS : NUMS;
+/* Estoque por tamanho: p.estoque = { '38': 1, '40': 2 }. Peça sem controle ativado: cada tamanho disponível vale 1 até alguém mexer. */
+const qtd = (p, t) => p.estoque ? (Number(p.estoque[t]) || 0) : ((p.tam || []).includes(t) ? 1 : 0);
+const clampQ = v => Math.max(0, Math.min(99, parseInt(v, 10) || 0));
+const totalUn = p => p.estoque ? Object.values(p.estoque).reduce((a, b) => a + (Number(b) || 0), 0) : (p.tam || []).length;
+const chipQ = (t, q) => `<label class="szq ${q > 0 ? 'on' : ''}" title="Unidades do tamanho ${t}"><b>${t}</b><input type="number" min="0" max="99" inputmode="numeric" data-t="${t}" value="${q}" aria-label="Unidades do tamanho ${t}"></label>`;
 const main = $('#main');
 let items = [], unsub = null, unsubAv = null, avisosEnv = [], filtro = { q: '', secao: '', status: '' };
 
@@ -197,11 +202,13 @@ function renderList() {
   if (!$('#list')) return;
   const n = x => items.filter(x).length;
   $('#stats').innerHTML = `<span class="pill"><b>${items.length}</b> peças</span><span class="pill"><b>${n(p => p.visivel !== false)}</b> visíveis</span><span class="pill"><b>${n(p => p.visivel === false)}</b> ocultas</span><span class="pill"><b>${n(p => p.esgotado || !(p.tam || []).length)}</b> esgotadas</span>`;
+  const semCtl = items.filter(p => !p.estoque).length;
   const pesadas = items.filter(p => String(p.img || '').startsWith('data:')).length;
-  $('#seed').innerHTML = (nuvemOk() && pesadas ? `<div class="seed"><b>${pesadas} peça${pesadas === 1 ? '' : 's'} com foto dentro do banco.</b><span>Mova para o Cloudinary para a loja carregar bem mais rápido. Pode levar alguns minutos; deixe esta página aberta.</span><button class="btn gold" id="migBtn" type="button" ${migrando ? 'disabled' : ''}>Mover fotos para o Cloudinary</button><span id="migMsg" class="msg">${esc(migTxt)}</span></div>` : !nuvemOk() && pesadas ? `<div class="seed"><b>Fotos dentro do banco.</b><span>Configure o Cloudinary na aba Site → Fotos para deixar a loja mais rápida.</span></div>` : '')
+  $('#seed').innerHTML = (semCtl && items.length ? `<div class="seed"><b>Controle de estoque desligado em ${semCtl} peça${semCtl === 1 ? '' : 's'}.</b><span>Ao ativar, cada tamanho disponível passa a ter <b>1 unidade</b> (ajuste depois o que tiver mais). A loja passa a baixar o estoque sozinha a cada pedido e mostra "última unidade" ao cliente.</span><button class="btn gold" id="estBtn" type="button">Ativar controle de estoque</button></div>` : '') + (nuvemOk() && pesadas ? `<div class="seed"><b>${pesadas} peça${pesadas === 1 ? '' : 's'} com foto dentro do banco.</b><span>Mova para o Cloudinary para a loja carregar bem mais rápido. Pode levar alguns minutos; deixe esta página aberta.</span><button class="btn gold" id="migBtn" type="button" ${migrando ? 'disabled' : ''}>Mover fotos para o Cloudinary</button><span id="migMsg" class="msg">${esc(migTxt)}</span></div>` : !nuvemOk() && pesadas ? `<div class="seed"><b>Fotos dentro do banco.</b><span>Configure o Cloudinary na aba Site → Fotos para deixar a loja mais rápida.</span></div>` : '')
     + (items.length || typeof PRODUTOS === 'undefined' ? '' : `<div class="seed"><b>O catálogo online está vazio.</b><span>Importe as ${PRODUTOS.length} peças que já estão na loja para começar a gerenciá-las por aqui.</span><button class="btn gold" id="seedBtn">Importar catálogo inicial</button></div>`);
   if ($('#seedBtn')) $('#seedBtn').onclick = seed;
   if ($('#migBtn')) $('#migBtn').onclick = migrarFotos;
+  if ($('#estBtn')) $('#estBtn').onclick = ativarEstoque;
   const q = filtro.q.toLowerCase();
   const list = [...items].filter(p => (!q || (p.cod + ' ' + (p.ref || '') + ' ' + p.nome).toLowerCase().includes(q)) && (!filtro.secao || p.secao === filtro.secao)
     && (!filtro.status || (filtro.status === 'vis' ? p.visivel !== false : filtro.status === 'oculta' ? p.visivel === false : (p.esgotado || !(p.tam || []).length))))
@@ -217,7 +224,7 @@ function itemHTML(p) {
     <div><div class="cod">${esc(p.cod)}${p.ref ? ` <small style="font-weight:500;opacity:.75">· Ref. ${esc(p.ref)}</small>` : ''}<span class="tags">${off ? '<span class="tag g">Oculta</span>' : ''}${out ? '<span class="tag r">Esgotada</span>' : ''}${p.maisVendido ? '<span class="tag">Mais vendido</span>' : ''}</span></div>
       <h3>${esc(p.nome)}</h3><div class="meta">${p.secao === 'feminino' ? 'Feminino' : 'Masculino'} · ${esc(p.modelo || '')} · ${brl(p.preco)}</div>
       <div class="ctl">${sw('visivel', !off, 'Visível na loja')}${sw('esgotado', !!p.esgotado, 'Esgotado', 'warn')}${sw('maisVendido', !!p.maisVendido, 'Mais vendido')}</div>
-      <div class="sizes" role="group" aria-label="Tamanhos disponíveis">${sizesDe(p).map(t => `<button class="sz ${tam.includes(t) ? 'on' : ''}" data-t="${t}" aria-pressed="${tam.includes(t)}">${t}</button>`).join('')}</div>
+      <div class="sizes" role="group" aria-label="Unidades por tamanho">${sizesDe(p).map(t => chipQ(t, qtd(p, t))).join('')}</div><div class="meta">${totalUn(p)} unidade${totalUn(p) === 1 ? '' : 's'} em estoque${p.estoque ? '' : ' · controle ainda não ativado'}</div>
       <button class="btn line sm" data-edit>Editar detalhes</button></div></article>`;
 }
 
@@ -231,10 +238,16 @@ $('#main').addEventListener('click', async e => {
   const it = e.target.closest('.item'); if (!it) return;
   const p = items.find(x => x.id === it.dataset.id);
   if (e.target.closest('[data-edit]')) return openEditor(p);
-  const sz = e.target.closest('.sz'); if (!sz) return;
-  const t = sz.dataset.t, cur = p.tam || [], tam = cur.includes(t) ? cur.filter(x => x !== t) : [...cur, t];
-  const order = TAMS; tam.sort((a, b) => order.indexOf(a) - order.indexOf(b));
-  try { await updateDoc(doc(db, 'produtos', p.id), { tam }); toast(tam.length ? 'Tamanhos salvos.' : 'Sem tamanhos: a peça aparece como esgotada.'); } catch (er) { fail(er); }
+});
+$('#main').addEventListener('change', async e => {
+  const inp = e.target.closest('.item input[data-t]'); if (!inp) return;
+  const p = items.find(x => x.id === inp.closest('.item').dataset.id); if (!p) return;
+  const t = inp.dataset.t, n = clampQ(inp.value); inp.value = n; inp.closest('.szq').classList.toggle('on', n > 0);
+  try {
+    if (p.estoque) await updateDoc(doc(db, 'produtos', p.id), { ['estoque.' + t]: n, tam: n > 0 ? arrayUnion(t) : arrayRemove(t) });   // só este tamanho: não atropela uma venda que acabou de acontecer
+    else { const est = Object.fromEntries((p.tam || []).map(x => [x, 1])); est[t] = n; await updateDoc(doc(db, 'produtos', p.id), { estoque: est, tam: TAMS.filter(x => (est[x] || 0) > 0) }); }
+    toast(n > 0 ? `Estoque salvo: ${n} un. no tamanho ${t}.` : `Tamanho ${t} zerado.`);
+  } catch (er) { fail(er); }
 });
 
 /* ---------- Importar catálogo inicial ---------- */
@@ -278,6 +291,14 @@ async function nuvem(dataUrl) {
 }
 const prepararFoto = async f => nuvemOk() ? nuvem(await shrink(f, 1600, 2500000)) : shrink(f);
 /* Move as fotos que ainda estão dentro do banco (base64) para o Cloudinary, uma peça por vez. */
+async function ativarEstoque() {
+  const b = $('#estBtn'); b.disabled = true; b.textContent = 'Ativando…';
+  try {
+    const alvo = items.filter(p => !p.estoque);
+    for (let i = 0; i < alvo.length; i += 400) { const wb = writeBatch(db); alvo.slice(i, i + 400).forEach(p => wb.update(doc(db, 'produtos', p.id), { estoque: Object.fromEntries((p.tam || []).map(t => [t, 1])) })); await wb.commit(); }
+    toast('Controle de estoque ativado. Ajuste as quantidades nas peças que têm mais de 1 unidade.');
+  } catch (er) { fail(er); b.disabled = false; b.textContent = 'Ativar controle de estoque'; }
+}
 let migrando = false, migTxt = '';
 async function migrarFotos() {
   if (migrando) return; migrando = true;
@@ -298,7 +319,7 @@ async function migrarFotos() {
 
 function openEditor(p) {
   const novo = !p, d = p || { secao: 'feminino', tam: [], visivel: true, esgotado: false, preco: 0, modelo: '' };
-  let fotos = d.img ? [d.img, ...(d.extras || [])] : [], tam = [...(d.tam || [])], secao = d.secao, tt = tipoDe(d), antigas = Number(d.nFotos || 0);
+  let fotos = d.img ? [d.img, ...(d.extras || [])] : [], est = d.estoque ? { ...d.estoque } : Object.fromEntries((d.tam || []).map(t => [t, 1])), secao = d.secao, tt = tipoDe(d), antigas = Number(d.nFotos || 0);
   const m = document.createElement('div'); m.className = 'modal';
   m.innerHTML = `<form class="card" id="ef"><h2>${novo ? 'Nova peça' : 'Editar peça'}</h2>
     <div class="two"><label class="f" for="e-cod">Código<input id="e-cod" type="text" required value="${esc(d.cod || '')}" maxlength="40"></label>
@@ -313,7 +334,7 @@ function openEditor(p) {
     <label class="f" for="e-tec">Tecido (opcional)<input id="e-tec" type="text" value="${esc(d.tecido || '')}"></label>
     <label class="f" for="e-desc">Descrição (opcional)<textarea id="e-desc" rows="4" maxlength="600" placeholder="Ex.: Calça wide leg de cintura alta, com elastano para mais conforto." style="width:100%;resize:vertical;font:inherit;padding:10px 12px;border-radius:10px;border:1px solid #d9cfb8">${esc(d.descricao || '')}</textarea></label>
     <label class="f" for="e-tt">Tipo de numeração<select id="e-tt"><option value="numero">Números (calças: 34, 36, 38…)</option><option value="letra">Letras (roupas: PP, P, M, G, GG, GGG)</option></select></label>
-    <div><div class="f" style="font-size:12px;font-weight:600;margin-bottom:6px">Tamanhos disponíveis</div><div class="sizes" id="e-sz"></div></div>
+    <div><div class="f" style="font-size:12px;font-weight:600;margin-bottom:6px">Unidades em estoque por tamanho <span class="cnt">(0 = indisponível)</span></div><div class="sizes" id="e-sz"></div></div>
     <div class="ctl"><label class="sw"><input type="checkbox" id="e-vis" ${d.visivel !== false ? 'checked' : ''}><i></i>Visível na loja</label>
       <label class="sw warn"><input type="checkbox" id="e-esg" ${d.esgotado ? 'checked' : ''}><i></i>Esgotado</label>
       <label class="sw"><input type="checkbox" id="e-pre2" ${d.premium ? 'checked' : ''}><i></i>Premium</label>
@@ -329,12 +350,12 @@ function openEditor(p) {
   const close = () => m.remove(), msg = (t, bad) => { const e = $('#e-msg', m); e.textContent = t; e.className = 'msg' + (bad ? ' bad' : ''); };
   $('#e-sec', m).value = secao;
   const drawSizes = () => {
-    $('#e-sz', m).innerHTML = (tt === 'letra' ? LETRAS : NUMS).map(t => `<button type="button" class="sz ${tam.includes(t) ? 'on' : ''}" data-t="${t}" aria-pressed="${tam.includes(t)}">${t}</button>`).join('');
+    $('#e-sz', m).innerHTML = (tt === 'letra' ? LETRAS : NUMS).map(t => chipQ(t, clampQ(est[t]))).join('');
   };
-  $('#e-tt', m).value = tt; $('#e-tt', m).onchange = e => { tt = e.target.value; tam = tam.filter(t => (tt === 'letra' ? LETRAS : NUMS).includes(t)); drawSizes(); };
+  $('#e-tt', m).value = tt; $('#e-tt', m).onchange = e => { tt = e.target.value; drawSizes(); };
   drawSizes();
   $('#e-sec', m).onchange = e => { secao = e.target.value; drawSizes(); };
-  $('#e-sz', m).onclick = e => { const b = e.target.closest('.sz'); if (!b) return; const t = b.dataset.t; tam = tam.includes(t) ? tam.filter(x => x !== t) : [...tam, t]; drawSizes(); };
+  $('#e-sz', m).oninput = e => { const i = e.target.closest('input[data-t]'); if (!i) return; est[i.dataset.t] = clampQ(i.value); i.closest('.szq').classList.toggle('on', est[i.dataset.t] > 0); };
   const src = u => /^(data:|https?:)/.test(u) ? u : '/' + u;
   const drawFotos = () => {
     $('#g-grid', m).innerHTML = fotos.map((f, i) => `<div class="g-it ${i ? '' : 'main'}" data-i="${i}"><img src="${esc(src(f))}" alt="">${i ? '' : '<span class="g-tag">Principal</span>'}
@@ -374,11 +395,11 @@ function openEditor(p) {
     if (novo && items.some(x => x.id === id)) return msg('Já existe uma peça com esse código.', true);
     // Código igual ao de outra peça confunde a busca e os pedidos (o código pode ser editado; o endereço interno da peça não muda).
     if (items.some(x => x.id !== id && String(x.cod).trim().toLowerCase() === cod.toLowerCase())) return msg('Já existe outra peça com esse código.', true);
-    const lyc = $('#e-lyc', m).value;
+    const lyc = $('#e-lyc', m).value, lista = tt === 'letra' ? LETRAS : NUMS;
     const data = {
       cod, nome, ref: $('#e-ref', m).value.trim(), secao, modelo: $('#e-mod', m).value.trim(), preco: Math.max(0, parseFloat($('#e-pre', m).value) || 0),
       cor: $('#e-cor', m).value.trim() || null, tecido: $('#e-tec', m).value.trim() || null, lycra: lyc === '' ? null : +lyc,
-      tam, visivel: $('#e-vis', m).checked, esgotado: $('#e-esg', m).checked, premium: $('#e-pre2', m).checked, diamond: $('#e-dia', m).checked, img: fotos[0], extras: [], nFotos: fotos.length - 1, tipoTam: tt
+      tam: lista.filter(t => clampQ(est[t]) > 0), estoque: Object.fromEntries(lista.map(t => [t, clampQ(est[t])])), visivel: $('#e-vis', m).checked, esgotado: $('#e-esg', m).checked, premium: $('#e-pre2', m).checked, diamond: $('#e-dia', m).checked, img: fotos[0], extras: [], nFotos: fotos.length - 1, tipoTam: tt
     };
     // Só grava a descrição quando há texto (ou quando já existia e foi apagada), para não exigir campo vazio nas regras.
     const desc = $('#e-desc', m).value.trim(); if (desc || p?.descricao) data.descricao = desc;

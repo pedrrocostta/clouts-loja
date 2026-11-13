@@ -78,3 +78,9 @@ Sem essas variáveis os e-mails simplesmente não saem e a loja funciona normal.
 - **SEO**: cada peça tem endereço próprio `/p/ID` (com título, descrição, foto de compartilhamento e dados de produto). `/sitemap.xml` e `/robots.txt` são gerados sozinhos e acompanham o domínio. O domínio próprio (https://www.cloutsoficial.com.br) já está ligado e aplicado no `index.html`. Falta cadastrar o domínio no Google Search Console e enviar o sitemap.
 - **App Check**: Firebase → App Check → Apps → registrar o app web com reCAPTCHA v3, colar a *chave do site* em `APPCHECK_SITE_KEY` (auth.js e painel/painel.js), publicar e só então ativar "Impor".
 - Regras do Firestore novas (campos `estoque`, `custo` e as chaves de configuração): **republique o `firestore.rules`**.
+
+## Estoque em tempo real
+- Cada peça guarda `estoque` por tamanho (ex.: `{ "38": 1, "40": 2 }`). No painel (aba **Peças**) cada tamanho tem um campo de unidades; 0 = indisponível. Para peças antigas, o botão **Ativar controle de estoque** cria 1 unidade por tamanho disponível.
+- Ao enviar o pedido (cliente logado), o site chama `/api/estoque` (`reservar`): o servidor baixa as peças numa transação, tudo ou nada. Se duas pessoas pedem a última unidade, só a primeira reserva; o pedido da outra fica com a marca **Estoque insuficiente** na aba Pedidos.
+- Pedido **cancelado** no painel devolve as peças ao estoque (`liberar`, só administrador). Cada cliente pode ter até 3 pedidos "aguardando" com peças reservadas ao mesmo tempo.
+- Quando o pagamento online (Mercado Pago) for ligado, falta reservar/devolver estoque também em `api/checkout.js` e `api/webhook.js` (pedido recusado/expirado).

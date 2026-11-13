@@ -165,3 +165,7 @@ textarea{width:100%;border:1px solid #d3c8b0;border-radius:10px;padding:10px 12p
 .pr-t .mg{font-weight:700;color:#2f8f5b;white-space:nowrap}
 .pr-save{position:sticky;bottom:0;display:flex;gap:10px;align-items:center;justify-content:flex-end;padding:12px 4px;background:linear-gradient(0deg,#f4efe3 70%,transparent);margin-top:-6px}
 .pr-save span{margin-right:auto;font-weight:600;color:#6b5d37;font-size:13px}
+
+.szq{display:inline-flex;flex-direction:column;align-items:center;gap:3px;padding:6px 6px 5px;border:1px solid #d9cfb8;border-radius:10px;background:#fffdf8;min-width:52px}
+.szq b{font-size:12px;color:#8a8272}.szq.on{border-color:#cea147;background:#fff7de}.szq.on b{color:#14110a}
+.szq input{width:42px;text-align:center;border:1px solid #d9cfb8;border-radius:7px;padding:4px 2px;font:inherit;font-weight:700;background:#fff}
