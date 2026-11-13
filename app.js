@@ -8,7 +8,7 @@ const CONFIG = {
   freteGratisAcima: 300,                     // frete grátis em pedidos a partir de R$ 300 (subtotal das peças). Mantenha igual a FRETE_GRATIS_ACIMA em api/_lib.js
   // Pagamento online (Mercado Pago, Pix e cartão). Mude para true SÓ depois de configurar as chaves na Vercel (veja LEIA-ME.md → Pagamento)
   // e de definir os preços. Ligado, o amigo indicado só conta depois da primeira compra paga.
-  pagamentoOnline: false
+  pagamentoOnline: true
 };
 
 const $ = (s, r = document) => r.querySelector(s);
