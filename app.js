@@ -67,7 +67,7 @@ const tierPct = n => n >= 10 ? 20 : n >= 5 ? 10 : n >= 1 ? 5 : 0;
 const meuCupom = () => cupons.find(c => c.codigo === 'AMIGO') || null;
 try { const r = new URLSearchParams(location.search).get('ref'); if (r && /^[A-Za-z0-9]{20,40}$/.test(r)) localStorage.setItem('clouts.ref', r); } catch {}
 try { const tp = new URLSearchParams(location.search).get('testepag'); if (tp === '1') localStorage.setItem('clouts.testepag', '1'); else if (tp === '0') localStorage.removeItem('clouts.testepag'); } catch {}   // ?testepag=1 mostra o botão de pagamento só neste navegador (para testar antes de ligar para todos)
-const pagBotao = () => CONFIG.pagamentoOnline || store.get('clouts.testepag', null) === '1';
+const pagBotao = () => CONFIG.pagamentoOnline || String(store.get('clouts.testepag', '')) === '1';
 try { const c = (new URLSearchParams(location.search).get('codigo') || '').toUpperCase(); if (/^[A-Z0-9]{8}$/.test(c)) localStorage.setItem('clouts.codigo', c); } catch {}
 let meuCod = null, aplicando = false;
 /* Configurações da loja feitas no painel (liga/desliga cupons, frase da barra, WhatsApp). */
