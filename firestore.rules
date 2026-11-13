@@ -231,7 +231,8 @@ service cloud.firestore {
           && request.resource.data.andamento in ['novo', 'preparando', 'enviado', 'entregue'])
         ||
         (resource.data.get('origem', '') == 'whatsapp' && resource.data.status == 'aguardando'
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'andamento'])
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'andamento', 'pagoEm'])
+          && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['pagoEm']) || request.resource.data.pagoEm == request.time)
           && request.resource.data.status in ['pago', 'cancelado']
           && request.resource.data.get('andamento', 'novo') in ['novo', 'preparando', 'enviado', 'entregue'])
       );

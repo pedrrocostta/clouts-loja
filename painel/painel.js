@@ -108,7 +108,7 @@ function viewPanel() {
 }
 
 function showTab(t) {
-  $$('.tab').forEach(b => { const on = b.dataset.tab === t; b.classList.toggle('on', on); b.setAttribute('aria-selected', on); });
+  $$('.tab').forEach(b => { const on = b.dataset.tab === t; b.classList.toggle('on', on); b.setAttribute('aria-selected', on); if (on) b.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' }); });
   $('#tabDash').hidden = t !== 'dash'; $('#tabPedidos').hidden = t !== 'pedidos'; $('#tabPecas').hidden = t !== 'pecas'; $('#tabAvisos').hidden = t !== 'avisos'; $('#tabCupons').hidden = t !== 'cupons'; $('#tabSite').hidden = t !== 'site'; $('#tabPrecos').hidden = t !== 'precos';
   if (t === 'avisos' && !$('#tabAvisos').firstChild) viewAvisos();
   abaAtual = t; if (t === 'cupons') drawCupons(); if (t === 'site') drawSite(); if (t === 'dash') drawDash(); if (t === 'pedidos') drawPedidos(); if (t === 'precos') drawPrecos();
