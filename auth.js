@@ -9,7 +9,7 @@ const FIREBASE_CONFIG = {
   appId: '1:153191899322:web:8ba2688766cc96ff326283'
 };
 
-/* App Check (reCAPTCHA v3): cole aqui a "chave do site" criada no Firebase → App Check → Apps → reCAPTCHA. Vazia = desligado.
+/* App Check (reCAPTCHA Enterprise / Fraud Defense): cole aqui a "chave do site" criada no Firebase → App Check → Apps → reCAPTCHA. Vazia = desligado.
  * Só ative a opção "Impor/Enforce" no console depois de colocar a chave aqui e publicar, senão a loja para de ler o catálogo. */
 const APPCHECK_SITE_KEY = '';
 
@@ -22,7 +22,7 @@ const CloutsFB = (() => {
       return appP ??= import(base + 'firebase-app.js').then(async m => {
         const app = m.initializeApp(FIREBASE_CONFIG);
         if (APPCHECK_SITE_KEY) {
-          try { const ac = await import(base + 'firebase-app-check.js'); ac.initializeAppCheck(app, { provider: new ac.ReCaptchaV3Provider(APPCHECK_SITE_KEY), isTokenAutoRefreshEnabled: true }); } catch (e) { console.warn('App Check:', e); }
+          try { const ac = await import(base + 'firebase-app-check.js'); ac.initializeAppCheck(app, { provider: new ac.ReCaptchaEnterpriseProvider(APPCHECK_SITE_KEY), isTokenAutoRefreshEnabled: true }); } catch (e) { console.warn('App Check:', e); }
         }
         return app;
       });

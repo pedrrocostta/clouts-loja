@@ -51,7 +51,7 @@ Depois de entrar pelo Google com sucesso, desligue o login por e-mail/senha: Fir
 - **Cabeçalhos** (`vercel.json`): loja e painel têm Content-Security-Policy (só scripts do próprio site, Firebase/Google e ViaCEP), HSTS, sem iframe e sem sniffing; o painel ainda não usa cache nem é indexado. Se um dia adicionar um serviço externo (ex.: Mercado Pago no navegador), libere o endereço dele na CSP.
 - **Sair da conta:** apaga do aparelho o carrinho, o endereço e os dados do cliente.
 - **Cupom de indicação:** as regras limitam a um cupom por conta, com degrau 5/10/20% conforme os amigos contados. Contas Google falsas ainda podem inflar a contagem; o fechamento definitivo é contar o amigo só depois da primeira compra paga (exige o pagamento integrado, veja `api/` e a seção Pagamento).
-- **App Check (recomendado):** Firebase → App Check → Apps → registrar o app web com reCAPTCHA v3 → copiar a chave do site para `APPCHECK_SITE_KEY` em `auth.js` e `painel/painel.js` → publicar → só então clicar em "Impor" (Enforce) para Firestore e Authentication.
+- **App Check (recomendado):** Firebase → App Check → Apps → registrar o app web com reCAPTCHA Enterprise (Fraud Defense) → copiar a chave do site para `APPCHECK_SITE_KEY` em `auth.js` e `painel/painel.js` → publicar → só então clicar em "Impor" (Enforce) para Firestore e Authentication.
 - **Chave da API (recomendado):** no Google Cloud Console (projeto clouts-409b7) → APIs e serviços → Credenciais → chave "Browser key" → Restrições de aplicativo → Sites (referenciadores HTTP): `https://clouts-loja.vercel.app/*`, `https://clouts-409b7.firebaseapp.com/*` e, se usar, `http://localhost:5173/*` e o domínio próprio. Em "Restrições de API", deixe só as APIs do Firebase usadas (Identity Toolkit, Token Service, Cloud Firestore, Firebase App Check).
 
 ## E-mails automáticos (boas-vindas, pedido, carrinho abandonado)
@@ -76,7 +76,7 @@ Sem essas variáveis os e-mails simplesmente não saem e a loja funciona normal.
 - **Guia de medidas**: em **Site → Guia de medidas** (uma linha por tamanho, colunas separadas por vírgula). Some da loja se ficar vazio.
 - **Preços em massa**: aba **Preços** (reajuste em %, preço fixo, "De/Por", custo e margem, localizar/substituir nos nomes).
 - **SEO**: cada peça tem endereço próprio `/p/ID` (com título, descrição, foto de compartilhamento e dados de produto). `/sitemap.xml` e `/robots.txt` são gerados sozinhos e acompanham o domínio. O domínio próprio (https://www.cloutsoficial.com.br) já está ligado e aplicado no `index.html`. Falta cadastrar o domínio no Google Search Console e enviar o sitemap.
-- **App Check**: Firebase → App Check → Apps → registrar o app web com reCAPTCHA v3, colar a *chave do site* em `APPCHECK_SITE_KEY` (auth.js e painel/painel.js), publicar e só então ativar "Impor".
+- **App Check**: Firebase → App Check → Apps → registrar o app web com reCAPTCHA Enterprise (Fraud Defense), colar a *chave do site* em `APPCHECK_SITE_KEY` (auth.js e painel/painel.js), publicar e só então ativar "Impor".
 - Regras do Firestore novas (campos `estoque`, `custo` e as chaves de configuração): **republique o `firestore.rules`**.
 
 ## Estoque em tempo real
