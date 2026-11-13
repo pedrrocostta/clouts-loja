@@ -88,3 +88,12 @@ Sem essas variáveis os e-mails simplesmente não saem e a loja funciona normal.
 - **Pedidos parados:** o link de pagamento do Mercado Pago vale 24 h (só Pix e cartão, sem boleto); a rotina diária cancela pedidos online ainda aguardando depois de 26 h. Pedidos do WhatsApp aguardando há mais de 2 dias ganham a marca **Parado há N dias** para você decidir (confirmar ou cancelar).
 - **Frete:** Contagem R$ 12, Betim R$ 15, Belo Horizonte R$ 20, grátis a partir de R$ 300. Valores em `CONFIG.frete`/`freteGratisAcima` (`app.js`) e `FRETE`/`FRETE_GRATIS_ACIMA` (`api/_lib.js`): mantenha os dois iguais.
 - **Testar o pagamento sem ligar para todos:** abra a loja com `?testepag=1` (só aquele navegador vê o botão "Pagar com Pix ou cartão"); `?testepag=0` desliga. Para ligar de vez, mude `pagamentoOnline` para `true` em `app.js`.
+
+## Segurança (o que já está protegendo a loja)
+- **Segredos só na Vercel** (tokens do Mercado Pago, chave do Firebase, senha do Gmail). Nada disso está no código nem no GitHub (varredura do código e do histórico limpa). `.gitignore` bloqueia dumps, chaves e `cacador-vps/`.
+- **Arquivos internos não vão ao site** (`.vercelignore`: LEIA-ME, regras do banco, scripts locais).
+- **Banco (Firestore)**: tudo fechado por padrão; só o administrador (conta Google verificada) grava catálogo/cupons/avisos; pedido do WhatsApp só aceita o e-mail da própria conta.
+- **Servidor**: toda rota exige login (token do Firebase) ou segredo (cron); preço, frete, cupom e estoque são sempre calculados no servidor; o aviso do Mercado Pago nunca é confiado (o pagamento é consultado direto no Mercado Pago); e-mails só saem para o e-mail da conta Google do dono do pedido; freios contra pedidos em massa e gravações repetidas.
+- **Navegador**: Content-Security-Policy (só scripts do próprio site, Firebase/Google, Analytics e Meta), HSTS, sem iframe, sem sniffing, política de permissões fechada.
+- **Dependências**: `npm audit` sem falha alta. Restam avisos moderados em bibliotecas internas do `firebase-admin` (não exploráveis no nosso uso); atualizar o `firebase-admin` numa próxima manutenção.
+- **Faça você** (não dá para o código fazer): verificação em duas etapas em Google (conta da loja), Vercel, GitHub, Mercado Pago e Cloudinary; App Check (chave reCAPTCHA); e rodar a limpeza de pedidos de teste.

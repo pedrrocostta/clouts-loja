@@ -39,6 +39,8 @@ module.exports = async (req, res) => {
 
     if (b.acao === 'carrinho') {
       const ref = fs.collection('carrinhos').doc(u.uid);
+      const ult = await ref.get();
+      if (ult.exists && Date.now() - (ult.data().atualizadoEm?.toMillis?.() || 0) < 8000) return res.status(200).json({ ok: true });   // freio: evita enxurrada de gravações
       const itens = Array.isArray(b.itens) ? b.itens.slice(0, 40) : [];
       if (!itens.length || !u.email) { await ref.delete(); return res.status(200).json({ ok: true }); }
       const linhas = [];
@@ -50,7 +52,7 @@ module.exports = async (req, res) => {
         const p = s.data(); linhas.push({ id, cod: p.cod, nome: p.nome, tam: String(it.tam || '').slice(0, 6), q, preco: Number(p.preco) || 0 });
       }
       if (!linhas.length) { await ref.delete(); return res.status(200).json({ ok: true }); }
-      const ant = await ref.get();
+      const ant = ult;
       if (ant.exists && JSON.stringify(ant.data().itens) === JSON.stringify(linhas)) return res.status(200).json({ ok: true });   // igual: não reinicia a contagem de horas
       await ref.set({ uid: u.uid, email: u.email, nome: u.name || '', itens: linhas, atualizadoEm: FV.serverTimestamp(), enviados: 0 });
       return res.status(200).json({ ok: true });
@@ -70,11 +72,15 @@ module.exports = async (req, res) => {
         if (!['confirmado', 'enviado', 'entregue'].includes(evento)) throw erro(400, 'Evento inválido.');
         if (evento === 'confirmado' && o.status !== 'pago') throw erro(409, 'O pedido ainda não está pago.');
       }
-      if (!o.email) return res.status(200).json({ ok: true });
+      // Destinatário confiável: o e-mail da conta Google (token) do dono do pedido, nunca o texto gravado no pedido (que o cliente poderia ter digitado).
+      let para = null;
+      if (b.acao === 'pedido') para = u.email || null;
+      else { try { para = (await admin.auth().getUser(o.uid)).email || null; } catch { para = null; } }
+      if (!para) return res.status(200).json({ ok: true });
       const marca = `emails.${evento}`;
       const ok = await fs.runTransaction(async t => { const x = await t.get(ref); if (x.get(marca)) return false; t.update(ref, { [marca]: FV.serverTimestamp() }); return true; });
       if (ok) {
-        try { await enviar({ para: o.email, ...pedido({ evento, nome: o.cliente?.nome, pedidoId: id, itens: o.itens, subtotal: o.subtotal, desconto: o.desconto, frete: o.frete, total: o.total, cidade: o.cidade }) }); }
+        try { await enviar({ para, ...pedido({ evento, nome: o.cliente?.nome, pedidoId: id, itens: o.itens, subtotal: o.subtotal, desconto: o.desconto, frete: o.frete, total: o.total, cidade: o.cidade }) }); }
         catch (e) { await ref.update({ [marca]: FV.delete() }); throw e; }
       }
       return res.status(200).json({ ok: true });

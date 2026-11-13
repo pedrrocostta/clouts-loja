@@ -535,3 +535,12 @@ body.sem-conv [data-invite],body.sem-conv #cupomShare,body.sem-conv [data-conv]{
 .guia{overflow-x:auto;margin:6px 0 10px;border:1px solid var(--line,#e5dcc6);border-radius:10px}
 .guia table{border-collapse:collapse;width:100%;font-size:13px;text-align:center}.guia th{background:var(--cream,#f6efdc);font-weight:700}.guia th,.guia td{padding:8px 10px;border-bottom:1px solid var(--line,#e5dcc6);white-space:nowrap}.guia tr:last-child td{border-bottom:0}
 .stk{margin:6px 0 0;min-height:16px;font-size:12.5px;font-weight:700;color:#b3372b}
+
+/* ===== Celular: botões que não quebram, barra de compra que cabe em telas de 320 px e alvos de toque maiores ===== */
+.cta-row .btn{white-space:nowrap;min-width:0;padding:0 8px;font-size:clamp(10.5px,3.3vw,13px);letter-spacing:.01em}
+.buy{min-width:0}.buy .btn{min-width:0;white-space:nowrap;font-size:clamp(11px,3.4vw,13px);letter-spacing:.02em;padding:0 8px}
+.buy-pr{font-size:clamp(15px,4.8vw,18px)}
+.sheet-in,.pinfo,.gal{min-width:0}
+.hero-dots button{position:relative}.hero-dots button::after{content:"";position:absolute;inset:-14px -8px}
+.pc-bar button{padding:9px 16px}
+@media(max-width:640px){.fav{width:40px;height:40px}}

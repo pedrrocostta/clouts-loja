@@ -1,0 +1,10 @@
+# Fora do site público (continuam no GitHub, mas a Vercel não publica)
+LEIA-ME.md
+firestore.rules
+serve.py
+esboco/
+previa-emails/
+_originais/
+cacador-vps/
+lista-precos.txt
+*.sql

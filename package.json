@@ -3,9 +3,11 @@
   "private": true,
   "version": "1.0.0",
   "description": "Loja CLOUTS (site estático) + funções de pagamento Mercado Pago em /api",
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "dependencies": {
     "firebase-admin": "^12.7.0",
-    "nodemailer": "^6.9.16"
+    "nodemailer": "^10.5.0"
   }
 }

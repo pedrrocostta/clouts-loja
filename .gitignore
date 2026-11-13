@@ -6,3 +6,13 @@ Thumbs.db
 previa-emails/
 esboco/
 lista-precos.txt
+# Segurança: nunca versionar dados internos, chaves ou dumps
+cacador-vps/
+.env
+.env.*
+*.pem
+*.key
+*.sql
+*service-account*.json
+*serviceAccount*.json
+*firebase-adminsdk*.json

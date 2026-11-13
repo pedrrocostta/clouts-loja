@@ -9,7 +9,8 @@ let html = null;
 // A página inicial já traz tags de compartilhamento da loja; nas peças elas são trocadas pelas da peça.
 const modelo = () => html ??= fs.readFileSync(path.join(process.cwd(), 'index.html'), 'utf8')
   .replace(/<meta (?:property="og:|name="twitter:)[^>]*>\s*/g, '').replace(/<link rel="canonical"[^>]*>\s*/g, '').replace(/<script type="application\/ld\+json">[\s\S]*?<\/script>\s*/g, '');
-const origem = req => `https://${req.headers['x-forwarded-host'] || req.headers.host}`;
+const HOSTS = /^(www\.)?cloutsoficial\.com\.br$|^clouts-loja\.vercel\.app$/;
+const origem = req => { const h = String(req.headers['x-forwarded-host'] || req.headers.host || '').split(',')[0].trim().toLowerCase(); return `https://${HOSTS.test(h) ? h : 'www.cloutsoficial.com.br'}`; };
 
 function imagem(p, base) {
   const u = String(p.img || '');

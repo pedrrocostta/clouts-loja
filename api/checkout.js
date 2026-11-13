@@ -16,6 +16,10 @@ module.exports = async (req, res) => {
     const cliente = { nome: txt(c.nome, 100), tel: txt(c.tel, 20), rua: txt(c.rua, 120), num: txt(c.num, 12), bairro: txt(c.bairro, 80), comp: txt(c.comp, 60), cep: txt(c.cep, 9) };
     if (!cliente.nome || !cliente.tel || !cliente.rua || !cliente.num || !cliente.bairro) throw erro(400, 'Preencha nome, WhatsApp e endereço.');
 
+    // Freio: no máximo 6 pedidos online abertos nos últimos 15 minutos por cliente (evita encher o banco e o Mercado Pago de pedidos falsos).
+    const abertos = await db().collection('pedidos').where('uid', '==', u.uid).where('status', '==', 'aguardando').get();
+    if (abertos.docs.filter(d => d.data().origem !== 'whatsapp' && (d.data().criadoEm?.toMillis?.() || 0) > Date.now() - 15 * 60000).length >= 6) throw erro(429, 'Muitas tentativas de pagamento seguidas. Aguarde alguns minutos.');
+
     const p = await calcular({ itens: b.itens, cupom: b.cupom, cep: cliente.cep }, u.uid);
     if (!(p.total > 0)) throw erro(400, 'Total inválido.');
 

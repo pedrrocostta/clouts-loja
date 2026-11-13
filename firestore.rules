@@ -223,7 +223,11 @@ service cloud.firestore {
         && request.resource.data.criadoEm == request.time
         && request.resource.data.itens is list && request.resource.data.itens.size() > 0 && request.resource.data.itens.size() <= 40
         && request.resource.data.total is number && request.resource.data.total >= 0 && request.resource.data.total < 100000
-        && request.resource.data.cliente is map;
+        && request.resource.data.cliente is map
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.cidade in ['Contagem', 'Betim', 'Belo Horizonte']
+        && request.resource.data.cliente.keys().hasOnly(['nome', 'tel', 'rua', 'num', 'bairro', 'comp', 'cep'])
+        && request.resource.data.subtotal is number && request.resource.data.desconto is number && request.resource.data.frete is number;
       allow delete: if false;
       // O administrador muda o andamento da entrega e, nos pedidos do WhatsApp, confirma ou cancela a venda (nos pagos online só o servidor mexe no pagamento).
       allow update: if isAdmin() && (

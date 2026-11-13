@@ -2,7 +2,8 @@
  * então continua certo quando você trocar para o domínio próprio. */
 const { db } = require('./_lib');
 
-const origem = req => `https://${req.headers['x-forwarded-host'] || req.headers.host}`;
+const HOSTS = /^(www\.)?cloutsoficial\.com\.br$|^clouts-loja\.vercel\.app$/;
+const origem = req => { const h = String(req.headers['x-forwarded-host'] || req.headers.host || '').split(',')[0].trim().toLowerCase(); return `https://${HOSTS.test(h) ? h : 'www.cloutsoficial.com.br'}`; };
 const xml = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' }[c]));
 
 module.exports = async (req, res) => {
