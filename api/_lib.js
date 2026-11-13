@@ -2,7 +2,7 @@
  * Variáveis de ambiente (Vercel → Settings → Environment Variables), NUNCA no código nem no GitHub:
  *   MP_ACCESS_TOKEN           Access Token de PRODUÇÃO da conta Mercado Pago (começa com APP_USR-)
  *   FIREBASE_SERVICE_ACCOUNT  JSON da conta de serviço do Firebase (Configurações do projeto → Contas de serviço → Gerar chave)
- *   SITE_URL                  https://clouts-loja.vercel.app  (ou o domínio próprio, sem barra no final)
+ *   SITE_URL                  https://www.cloutsoficial.com.br  (ou o domínio próprio, sem barra no final)
  *   MP_WEBHOOK_SECRET         (opcional, recomendado) "Assinatura secreta" das notificações do Mercado Pago
  */
 const admin = require('firebase-admin');

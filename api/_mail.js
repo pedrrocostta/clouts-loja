@@ -1,7 +1,7 @@
 /* E-mails da CLOUTS: envio (Resend ou Gmail) e modelos visuais. Arquivos com "_" não viram endereços públicos na Vercel.
  * Variáveis de ambiente (Vercel → Settings → Environment Variables):
  *   FIREBASE_SERVICE_ACCOUNT   (já usada pelo pagamento) JSON da conta de serviço
- *   SITE_URL                   https://clouts-loja.vercel.app (sem barra no final)
+ *   SITE_URL                   https://www.cloutsoficial.com.br (sem barra no final)
  *   Envio, escolha UMA das opções:
  *     A) Gmail da loja (sem domínio): GMAIL_USER=clouts.oficial2026@gmail.com  e  GMAIL_APP_PASSWORD=senha de app de 16 letras
  *     B) Resend (precisa de domínio verificado): RESEND_API_KEY=re_...  e  MAIL_FROM="CLOUTS <ola@seudominio.com.br>"
@@ -11,7 +11,7 @@
 const crypto = require('crypto');
 
 const OURO = '#cea147', OURO_ESC = '#b0842d', CREME = '#fdf2df', PAPEL = '#faf6ee', TINTA = '#12100c', TINTA2 = '#5f584c', LINHA = '#e8dfcd', ESCURO = '#0e0d0b';
-const site = () => (process.env.SITE_URL || 'https://clouts-loja.vercel.app').replace(/\/$/, '');
+const site = () => (process.env.SITE_URL || 'https://www.cloutsoficial.com.br').replace(/\/$/, '');
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const brl = v => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const primeiroNome = n => esc(String(n || '').trim().split(/\s+/)[0] || 'cliente');
