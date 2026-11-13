@@ -117,7 +117,7 @@ const mp = async (path, opt = {}) => {
     ...opt, headers: { Authorization: 'Bearer ' + process.env.MP_ACCESS_TOKEN, 'Content-Type': 'application/json', ...(opt.headers || {}) }
   });
   const j = await r.json().catch(() => ({}));
-  if (!r.ok) { console.error('Mercado Pago', r.status, JSON.stringify(j).slice(0, 400)); throw erro(502, 'O Mercado Pago não respondeu. Tente de novo.'); }
+  if (!r.ok) { console.error('Mercado Pago', r.status, JSON.stringify(j).slice(0, 400)); const e = erro(502, 'O Mercado Pago não respondeu. Tente de novo.'); e.mpStatus = r.status; throw e; }
   return j;
 };
 

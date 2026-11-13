@@ -29,5 +29,8 @@ module.exports = async (req, res) => {
     const pg = await mp(`/v1/payments/${id}`);   // nunca confia no corpo do aviso: pergunta ao Mercado Pago
     await aplicarPagamento(pg);
     res.status(200).end();
-  } catch (e) { console.error('webhook:', e); res.status(500).end(); }
+  } catch (e) {
+    if (e.mpStatus === 404) return res.status(200).end();   // pagamento que não existe nesta conta (aviso falso ou de outra loja): ignora, sem erro e sem novas tentativas
+    console.error('webhook:', e); res.status(500).end();
+  }
 };
