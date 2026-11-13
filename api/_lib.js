@@ -9,8 +9,8 @@ const admin = require('firebase-admin');
 
 const CIDADES = ['Contagem', 'Betim', 'Belo Horizonte'];
 // Fonte da verdade do frete: o servidor. Mantenha igual ao CONFIG.frete do app.js (que só exibe o valor).
-const FRETE = { 'Contagem': 0, 'Betim': 0, 'Belo Horizonte': 0 };
-const FRETE_GRATIS_ACIMA = null;
+const FRETE = { 'Contagem': 12, 'Betim': 15, 'Belo Horizonte': 20 };
+const FRETE_GRATIS_ACIMA = 300;   // igual a CONFIG.freteGratisAcima em app.js
 const DEGRAUS = [5, 10, 20];
 
 const norm = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();

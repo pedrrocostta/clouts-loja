@@ -1,6 +1,6 @@
 /* POST /api/checkout — recalcula o pedido no servidor, grava em "pedidos" e devolve o link de pagamento do Mercado Pago (Pix e cartão). */
 const { admin, db, configurado, usuario, calcular, mp, erro, responder } = require('./_lib');
-const { planejarReserva, aplicar, liberarPedido } = require('./_estoque');
+const { planejarReserva } = require('./_estoque');
 
 const txt = (v, n) => String(v ?? '').replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, n);
 
@@ -23,14 +23,13 @@ module.exports = async (req, res) => {
     const fs = db(), ind = await fs.collection('users').doc(u.uid).collection('meta').doc('indicacao').get();
     const ref = ind.exists && ind.data().ref && ind.data().ref !== u.uid ? String(ind.data().ref) : null;
     const doc = fs.collection('pedidos').doc();
-    // O pedido e a reserva do estoque nascem juntos (tudo ou nada): se a peça acabou de esgotar, nem cria o pedido.
+    // Só confere se ainda há estoque (a peça NÃO sai do estoque agora: ela só baixa quando o pagamento for aprovado, no webhook).
     await fs.runTransaction(async t => {
-      const { falta, ups, reservados } = await planejarReserva(t, fs, p.linhas);
+      const { falta } = await planejarReserva(t, fs, p.linhas);
       if (falta.length) throw erro(409, `A peça ${falta[0].cod} (tam. ${falta[0].tam}) acabou de esgotar. Atualize o carrinho.`);
-      aplicar(t, ups);
       t.set(doc, {
         uid: u.uid, email: u.email || '', cliente, itens: p.linhas, subtotal: p.subtotal, desconto: p.desconto, frete: p.frete, total: p.total,
-        cupom: p.cupom, percent: p.percent, cidade: p.cidade, ref, status: 'aguardando', estoqueReservado: true, estoqueItens: reservados, criadoEm: admin.firestore.FieldValue.serverTimestamp()
+        cupom: p.cupom, percent: p.percent, cidade: p.cidade, ref, status: 'aguardando', criadoEm: admin.firestore.FieldValue.serverTimestamp()
       });
     });
 
@@ -48,7 +47,7 @@ module.exports = async (req, res) => {
         statement_descriptor: 'CLOUTS',
         expires: true, expiration_date_to: new Date(Date.now() + 3 * 24 * 3600 * 1000).toISOString()
       })
-    }); } catch (e) { await liberarPedido(fs, doc, { status: 'cancelado' }).catch(() => {}); throw e; }   // não deu para abrir o pagamento: devolve a peça ao estoque
+    }); } catch (e) { await doc.update({ status: 'cancelado' }).catch(() => {}); throw e; }   // não deu para abrir o pagamento: não deixa pedido pendurado
     await doc.update({ mpPreference: pref.id });
     res.status(200).json({ pedido: doc.id, url: pref.init_point, total: p.total });
   } catch (e) { responder(res, e); }

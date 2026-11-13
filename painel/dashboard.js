@@ -130,13 +130,15 @@ export function renderDashboard(box, orders, items, periodo = '30', setPeriodo) 
   box.querySelectorAll('[data-per]').forEach(b => b.onclick = () => setPeriodo(b.dataset.per));
 }
 
-/* Devolve ao estoque as peças de um pedido cancelado (só o administrador; se o pedido não tinha reserva, não faz nada). */
-async function devolverEstoque(pedidoId) {
+/* Estoque (só o administrador): 'baixar' tira as peças do estoque na venda confirmada; 'liberar' devolve as peças de um pedido cancelado que já tinha baixado; 'cancelar' cancela um pedido online antigo que ainda segurava a peça. */
+async function estoqueApi(acao, pedidoId, extra = {}) {
   try {
-    const u = getAuth().currentUser; if (!u) return;
-    await fetch('/api/estoque', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + await u.getIdToken() }, body: JSON.stringify({ acao: 'liberar', pedidoId }) });
-  } catch {}
+    const u = getAuth().currentUser; if (!u) return null;
+    const r = await fetch('/api/estoque', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + await u.getIdToken() }, body: JSON.stringify({ acao, pedidoId, ...extra }) });
+    return await r.json();
+  } catch { return null; }
 }
+const devolverEstoque = id => estoqueApi('liberar', id);
 
 /* Avisa o cliente por e-mail (confirmado / enviado / entregue) pelo servidor. Se o e-mail não estiver configurado, ignora em silêncio. */
 async function avisarCliente(pedidoId, evento) {
@@ -158,13 +160,13 @@ export function renderPedidos(box, orders, db, toast, filtro, setFiltro) {
     <p class="msg">${list.length} pedido${list.length === 1 ? '' : 's'}${orders.length >= 500 ? ' (mostrando os 500 mais recentes)' : ''}</p>
     <div class="list ord">${list.length ? list.map(o => { const st = STATUS[o.status] || [o.status, 'g'], c = o.cliente || {}; return `
     <article class="item ordc" data-id="${esc(o.id)}"><div style="grid-column:1/-1">
-      <div class="cod">#${esc(o.id.slice(0, 6).toUpperCase())} · ${new Date(o._t).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}<span class="tags"><span class="tag ${st[1]}">${st[0]}</span>${o.cupom ? `<span class="tag">Cupom ${esc(o.cupom)} ${o.percent}%</span>` : ''}${o.ref ? '<span class="tag">Código de amigo</span>' : ''}<span class="tag g">${o.origem === 'whatsapp' ? 'WhatsApp' : 'Mercado Pago'}</span>${o.estoqueReservado === true ? '<span class="tag">Estoque reservado</span>' : ''}${o.estoqueDevolvido ? '<span class="tag g">Estoque devolvido</span>' : ''}${(o.estoqueFalta || []).length ? '<span class="tag r">Estoque insuficiente</span>' : ''}</span></div>
+      <div class="cod">#${esc(o.id.slice(0, 6).toUpperCase())} · ${new Date(o._t).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}<span class="tags"><span class="tag ${st[1]}">${st[0]}</span>${o.cupom ? `<span class="tag">Cupom ${esc(o.cupom)} ${o.percent}%</span>` : ''}${o.ref ? '<span class="tag">Código de amigo</span>' : ''}<span class="tag g">${o.origem === 'whatsapp' ? 'WhatsApp' : 'Mercado Pago'}</span>${o.estoqueReservado === true ? `<span class="tag">${o.status === 'pago' ? 'Estoque baixado' : 'Peça reservada'}</span>` : ''}${o.estoqueDevolvido ? '<span class="tag g">Estoque devolvido</span>' : ''}${(o.estoqueFalta || []).length ? '<span class="tag r">Estoque insuficiente</span>' : ''}</span></div>
       <p class="ord-cli"><b>${esc(c.nome || '—')}</b> · ${esc(c.tel || '')} · ${esc(o.email || '')}</p>
       ${(o.estoqueFalta || []).length ? `<p class="ord-end" style="color:#b3372b;font-weight:600">Faltou estoque: ${o.estoqueFalta.map(f => `${esc(f.cod)} tam. ${esc(f.tam)} (pediu ${f.pedido}, tinha ${f.tem})`).join(' · ')}. Fale com o cliente antes de confirmar.</p>` : ''}
       <p class="ord-end">${esc(c.rua || '')}, ${esc(c.num || '')}${c.comp ? ' — ' + esc(c.comp) : ''} — ${esc(c.bairro || '')}, ${esc(o.cidade || '')} · CEP ${esc(c.cep || '')}</p>
       <ul class="ord-it">${(o.itens || []).map(i => `<li>${i.q}× ${esc(i.nome)} <small>Cód. ${esc(i.cod)} · Tam. ${esc(i.tam)}</small><b>${brl(i.q * i.preco)}</b></li>`).join('')}</ul>
       <div class="ord-ft"><span>Subtotal ${brl(o.subtotal)}${o.desconto ? ` · desconto −${brl(o.desconto)}` : ''} · frete ${brl(o.frete)}</span><b>${brl(o.total)}</b></div>
-      <div class="ord-act">${o.origem === 'whatsapp' && o.status === 'aguardando' ? '<button class="btn gold sm" data-conf type="button">Confirmar venda</button><button class="btn danger sm" data-canc type="button">Cancelar pedido</button>' : ''}${o.status === 'pago' ? `<label class="f">Andamento<select data-and>${Object.entries(ANDAMENTO).map(([k, v]) => `<option value="${k}" ${(o.andamento || 'novo') === k ? 'selected' : ''}>${v}</option>`).join('')}</select></label>` : ''}
+      <div class="ord-act">${o.origem !== 'whatsapp' && o.status === 'aguardando' && o.estoqueReservado === true ? '<button class="btn danger sm" data-libmp type="button">Cancelar e liberar a peça</button>' : ''}${o.origem === 'whatsapp' && o.status === 'aguardando' ? '<button class="btn gold sm" data-conf type="button">Confirmar venda</button><button class="btn danger sm" data-canc type="button">Cancelar pedido</button>' : ''}${o.status === 'pago' ? `<label class="f">Andamento<select data-and>${Object.entries(ANDAMENTO).map(([k, v]) => `<option value="${k}" ${(o.andamento || 'novo') === k ? 'selected' : ''}>${v}</option>`).join('')}</select></label>` : ''}
         ${wa(o) ? `<a class="btn line sm" href="${wa(o)}" target="_blank" rel="noopener">WhatsApp do cliente</a>` : ''}</div></div></article>`; }).join('') : `<p class="dsh-empty">${orders.length ? 'Nenhum pedido com esse filtro.' : 'Nenhum pedido ainda. Eles aparecem aqui quando um cliente logado envia o pedido pelo WhatsApp ou paga online.'}</p>`}</div>`;
   let tm; $('#pq', box).oninput = e => { clearTimeout(tm); tm = setTimeout(() => setFiltro({ ...filtro, q: e.target.value }, true), 250); };
   $('#pst', box).onchange = e => setFiltro({ ...filtro, st: e.target.value });
@@ -174,12 +176,26 @@ export function renderPedidos(box, orders, db, toast, filtro, setFiltro) {
     catch (e) { toast(e?.code === 'permission-denied' ? 'Sem permissão. Publique as regras mais recentes do Firestore.' : 'Não foi possível atualizar.', true); }
   });
   const mudar = async (id, status) => {
+    if (status === 'pago') {   // venda confirmada: a peça sai do estoque agora
+      let r = await estoqueApi('baixar', id);
+      if (r && r.ok === false && (r.falta || []).length) {
+        const txt = r.falta.map(f => `${f.cod} tam. ${f.tam} (pedido ${f.pedido}, estoque ${f.tem})`).join('\n');
+        if (!confirm(`Estoque insuficiente:\n${txt}\n\nA peça já pode ter sido vendida para outra pessoa. Confirmar a venda mesmo assim?`)) return;
+        r = await estoqueApi('baixar', id, { forcar: true });
+      }
+      if (!r) { toast('Não foi possível atualizar o estoque. Tente de novo.', true); return; }
+    }
     try { await updateDoc(doc(db, 'pedidos', id), { status, andamento: 'novo' }); toast(status === 'pago' ? 'Venda confirmada. Já está no dashboard.' : 'Pedido cancelado.'); if (status === 'pago') avisarCliente(id, 'confirmado'); if (status === 'cancelado') devolverEstoque(id); }
     catch (e) { toast(e?.code === 'permission-denied' ? 'Sem permissão. Publique as regras mais recentes do Firestore.' : 'Não foi possível atualizar.', true); }
   };
   box.querySelectorAll('[data-conf]').forEach(b => b.onclick = () => {
     if (!b.dataset.armed) { b.dataset.armed = '1'; b.textContent = 'Toque de novo: o cliente já pagou?'; setTimeout(() => { if (b.isConnected) { delete b.dataset.armed; b.textContent = 'Confirmar venda'; } }, 4000); return; }
     mudar(b.closest('.ordc').dataset.id, 'pago');
+  });
+  box.querySelectorAll('[data-libmp]').forEach(b => b.onclick = async () => {
+    if (!b.dataset.armed) { b.dataset.armed = '1'; b.textContent = 'Toque de novo para cancelar'; setTimeout(() => { if (b.isConnected) { delete b.dataset.armed; b.textContent = 'Cancelar e liberar a peça'; } }, 4000); return; }
+    const r = await estoqueApi('cancelar', b.closest('.ordc').dataset.id);
+    toast(r?.ok ? 'Pedido cancelado. A peça voltou para a loja.' : 'Não foi possível cancelar agora.', !r?.ok);
   });
   box.querySelectorAll('[data-canc]').forEach(b => b.onclick = () => {
     if (!b.dataset.armed) { b.dataset.armed = '1'; b.textContent = 'Toque de novo para cancelar'; setTimeout(() => { if (b.isConnected) { delete b.dataset.armed; b.textContent = 'Cancelar pedido'; } }, 4000); return; }

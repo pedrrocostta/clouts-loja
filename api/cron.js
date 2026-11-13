@@ -25,7 +25,7 @@ module.exports = async (req, res) => {
       try { await enviar({ para: c.email, ...carrinho({ nome: c.nome, itens: c.itens, n: vez, uid: c.uid }) }); await d.ref.update({ enviados: vez }); enviados++; }
       catch (e) { console.error('cron carrinho', e.message); }
     }
-    // Pagamento online que ninguém pagou: o link do Mercado Pago vence em 3 dias; depois disso a peça volta para o estoque.
+    // Pedidos online antigos que ficaram com peça reservada (antes de o estoque passar a baixar só na venda confirmada): depois de 3 dias o link vence e a peça volta.
     const reservados = await fs.collection('pedidos').where('status', '==', 'aguardando').where('estoqueReservado', '==', true).get();
     for (const d of reservados.docs) {
       const o = d.data();

@@ -167,14 +167,6 @@ Object.assign(CloutsDB, {
       await fetch('/api/email', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + t }, body: JSON.stringify(corpo), keepalive: true });
     } catch {}
   },
-  // Reserva as peças do pedido no estoque em tempo real (servidor). Devolve { ok, falta? }; nunca atrapalha o pedido se falhar.
-  async estoque(corpo) {
-    try {
-      const t = await CloutsAuth.token(); if (!t) return null;
-      const r = await fetch('/api/estoque', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + t }, body: JSON.stringify(corpo) });
-      return await r.json();
-    } catch { return null; }
-  },
   // Pedidos do próprio cliente (para o cupom de primeira compra e para liberar o convite de amigos).
   async pedidos(uid, onList, onErr) {
     const { fs, db } = await this._fs();

@@ -4,8 +4,8 @@ const CONFIG = {
   instagram: 'clouts.oficial',
   cidades: ['Contagem', 'Betim', 'Belo Horizonte'],
   // Frete por cidade, em reais. Zerado por enquanto (igual aos preços). Edite aqui quando definir os valores.
-  frete: { 'Contagem': 0, 'Betim': 0, 'Belo Horizonte': 0 },
-  freteGratisAcima: null,                    // ex.: 299 => frete grátis em pedidos a partir de R$ 299
+  frete: { 'Contagem': 12, 'Betim': 15, 'Belo Horizonte': 20 },
+  freteGratisAcima: 300,                     // frete grátis em pedidos a partir de R$ 300 (subtotal das peças). Mantenha igual a FRETE_GRATIS_ACIMA em api/_lib.js
   // Pagamento online (Mercado Pago, Pix e cartão). Mude para true SÓ depois de configurar as chaves na Vercel (veja LEIA-ME.md → Pagamento)
   // e de definir os preços. Ligado, o amigo indicado só conta depois da primeira compra paga.
   pagamentoOnline: false
@@ -360,6 +360,7 @@ function viewFavs() {
 function viewEntrega() {
   app.innerHTML = `<div class="page-h"><h1>Entrega e pagamento</h1><p>Entregamos nas cidades abaixo. Calcule o frete pelo CEP no carrinho.</p></div>
   <div class="deliv">${CONFIG.cidades.map(c => `<div><h3>${c}</h3><p>Frete: ${brl(CONFIG.frete[c] || 0)}</p></div>`).join('')}</div>
+  <p class="note" style="margin-bottom:6px">${CONFIG.freteGratisAcima != null ? `<b>Frete grátis</b> em pedidos a partir de ${brl(CONFIG.freteGratisAcima)}.` : ''}</p>
   <p class="note" style="margin-bottom:18px">Formas de pagamento: Pix e cartão de crédito.</p>
   <a class="btn btn-gold" href="#/feminino">Começar a comprar</a>`;
 }
@@ -970,7 +971,7 @@ function sendOrder() {
   // Registra o pedido para o dono ver no painel (dashboard); a venda só conta depois que ele confirma o pagamento.
   if (u) CloutsDB.registrarPedido({ uid: u.uid, email: u.email || '', cliente: { nome: d.nome, tel: d.tel, rua: d.rua, num: d.num, bairro: d.bairro, comp: d.comp || '', cep: d.cep },
     itens: cart.map(i => { const p = byId(i.id); return { id: p.id, cod: String(p.cod), nome: String(p.nome).slice(0, 140), tam: String(i.tam), q: i.q, preco: p.preco }; }),
-    subtotal: cartTotal(), desconto: desc, frete, total, cupom: cp ? cp.codigo : null, percent: cp ? cp.percent : 0, cidade: ship.cidade }).then(id => { clearTimeout(cartTm); CloutsDB.estoque({ acao: 'reservar', pedidoId: id }); CloutsDB.email({ acao: 'pedido', pedidoId: id }); CloutsDB.email({ acao: 'carrinho', itens: [] }); }).catch(e => console.warn('Pedido não registrado', e));
+    subtotal: cartTotal(), desconto: desc, frete, total, cupom: cp ? cp.codigo : null, percent: cp ? cp.percent : 0, cidade: ship.cidade }).then(id => { clearTimeout(cartTm); CloutsDB.email({ acao: 'pedido', pedidoId: id }); CloutsDB.email({ acao: 'carrinho', itens: [] }); }).catch(e => console.warn('Pedido não registrado', e));
   if (cp && u) { if (!cp.camp && cp.codigo !== 'PRIMEIRA') CloutsDB.usarCupom(u.uid, cp.codigo).catch(() => {}); cupomAtivo = null; campAtiva = null; store.set('clouts.cupom', null); store.set('clouts.camp', null); }
 }
 
