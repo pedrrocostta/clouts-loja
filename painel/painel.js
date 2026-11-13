@@ -6,7 +6,7 @@ const app = initializeApp({
   apiKey: 'AIzaSyBP1WSRJqAM552UQU5rBRubeVkz7IRc2Ao', authDomain: 'clouts-409b7.firebaseapp.com', projectId: 'clouts-409b7',
   storageBucket: 'clouts-409b7.firebasestorage.app', messagingSenderId: '153191899322', appId: '1:153191899322:web:8ba2688766cc96ff326283'
 });
-const APPCHECK_SITE_KEY = '';   // mesma chave de auth.js (App Check / reCAPTCHA Enterprise); vazia = desligado
+const APPCHECK_SITE_KEY = '6Ldnzh4uAAAAADFp7opGhSvU0NA8z_pZhgeo8rKB';   // mesma chave de auth.js (App Check / reCAPTCHA Enterprise); vazia = desligado
 if (APPCHECK_SITE_KEY) {
   try { const ac = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-app-check.js'); ac.initializeAppCheck(app, { provider: new ac.ReCaptchaEnterpriseProvider(APPCHECK_SITE_KEY), isTokenAutoRefreshEnabled: true }); } catch (e) { console.warn('App Check:', e); }
 }

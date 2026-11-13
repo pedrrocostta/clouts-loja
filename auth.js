@@ -11,7 +11,7 @@ const FIREBASE_CONFIG = {
 
 /* App Check (reCAPTCHA Enterprise / Fraud Defense): cole aqui a "chave do site" criada no Firebase → App Check → Apps → reCAPTCHA. Vazia = desligado.
  * Só ative a opção "Impor/Enforce" no console depois de colocar a chave aqui e publicar, senão a loja para de ler o catálogo. */
-const APPCHECK_SITE_KEY = '';
+const APPCHECK_SITE_KEY = '6Ldnzh4uAAAAADFp7opGhSvU0NA8z_pZhgeo8rKB';
 
 const CloutsFB = (() => {
   const base = 'https://www.gstatic.com/firebasejs/10.12.2/';
