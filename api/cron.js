@@ -2,7 +2,6 @@
  * 1º lembrete depois de 3 horas parado; 2º (última chamada) depois de 3 dias. Quem pediu para parar de receber não recebe. */
 const { db } = require('./_lib');
 const { emailConfigurado, enviar, carrinho, lembreteCupom } = require('./_mail');
-const { liberarPedido } = require('./_estoque');
 
 const H = 3600000;
 module.exports = async (req, res) => {
@@ -25,12 +24,12 @@ module.exports = async (req, res) => {
       try { await enviar({ para: c.email, ...carrinho({ nome: c.nome, itens: c.itens, n: vez, uid: c.uid }) }); await d.ref.update({ enviados: vez }); enviados++; }
       catch (e) { console.error('cron carrinho', e.message); }
     }
-    // Pedidos online antigos que ficaram com peça reservada (antes de o estoque passar a baixar só na venda confirmada): depois de 3 dias o link vence e a peça volta.
-    const reservados = await fs.collection('pedidos').where('status', '==', 'aguardando').where('estoqueReservado', '==', true).get();
-    for (const d of reservados.docs) {
+    // Pagamento online que ninguém pagou: o link do Mercado Pago vale 24 h. Passado esse prazo, o pedido é cancelado (a peça nunca saiu do estoque, então não há o que devolver).
+    const parados = await fs.collection('pedidos').where('status', '==', 'aguardando').get();
+    for (const d of parados.docs) {
       const o = d.data();
-      if (o.origem === 'whatsapp' || (o.criadoEm?.toMillis?.() || agora) > agora - 3 * 24 * H - 3600000) continue;
-      try { await liberarPedido(fs, d.ref, { status: 'cancelado' }); } catch (e) { console.error('cron estoque', e.message); }
+      if (o.origem === 'whatsapp' || (o.criadoEm?.toMillis?.() || agora) > agora - 26 * H) continue;
+      try { await d.ref.update({ status: 'cancelado', ...(o.estoqueReservado === true ? { estoqueReservado: false, estoqueDescartado: true } : {}) }); } catch (e) { console.error('cron pedido parado', e.message); }
     }
     // Lembrete do cupom de primeira compra: 3 dias depois do cadastro, só para quem ainda não comprou e ainda está no prazo.
     const cfg = (await fs.collection('config').doc('loja').get()).data() || {};

@@ -45,7 +45,8 @@ module.exports = async (req, res) => {
         back_urls: { success: `${site}/?pedido=${doc.id}&s=ok`, pending: `${site}/?pedido=${doc.id}&s=pendente`, failure: `${site}/?pedido=${doc.id}&s=falha` },
         auto_return: 'approved',
         statement_descriptor: 'CLOUTS',
-        expires: true, expiration_date_to: new Date(Date.now() + 3 * 24 * 3600 * 1000).toISOString()
+        payment_methods: { excluded_payment_types: [{ id: 'ticket' }, { id: 'atm' }] },   // sem boleto/lotérica: a confirmação precisa ser rápida (a peça só baixa quando o pagamento é aprovado)
+        expires: true, expiration_date_to: new Date(Date.now() + 24 * 3600 * 1000).toISOString()
       })
     }); } catch (e) { await doc.update({ status: 'cancelado' }).catch(() => {}); throw e; }   // não deu para abrir o pagamento: não deixa pedido pendurado
     await doc.update({ mpPreference: pref.id });

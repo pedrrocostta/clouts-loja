@@ -2,7 +2,7 @@
  * A peça só sai do estoque quando a venda é CONFIRMADA (pagamento online aprovado = webhook; pedido do WhatsApp = botão "Confirmar venda" do painel).
  * { acao: 'baixar',   pedidoId, forcar? } → baixa do estoque as peças do pedido (uma única vez). Se faltar estoque, avisa; com forcar:true baixa o que houver.
  * { acao: 'liberar',  pedidoId }          → devolve ao estoque as peças de um pedido que já tinha baixado (cancelamento)
- * { acao: 'cancelar', pedidoId }          → cancela um pedido ainda "aguardando" e devolve o que ele tiver reservado (pedidos antigos)
+ * { acao: 'cancelar', pedidoId, devolver? } → cancela um pedido ainda "aguardando". Se ele tinha peça reservada (pedidos antigos), devolve ao estoque; com devolver:false só cancela (use quando você já repôs o estoque na mão)
  * Peças sem o campo "estoque" (controle não ativado) são ignoradas. */
 const { admin, db, usuario, erro, responder } = require('./_lib');
 const { planejarReserva, aplicar, liberarPedido } = require('./_estoque');
@@ -40,7 +40,8 @@ module.exports = async (req, res) => {
     if (b.acao === 'cancelar') {
       const s = await ref.get(); if (!s.exists) throw erro(404, 'Pedido não encontrado.');
       if (s.data().status !== 'aguardando') throw erro(409, 'Só dá para cancelar pedidos aguardando.');
-      await liberarPedido(fs, ref, { status: 'cancelado' });
+      if (b.devolver === false) await ref.update({ status: 'cancelado', estoqueReservado: false, estoqueDescartado: true });
+      else await liberarPedido(fs, ref, { status: 'cancelado' });
       return res.status(200).json({ ok: true });
     }
     throw erro(400, 'Ação inválida.');
