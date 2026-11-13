@@ -54,7 +54,8 @@ async function calcular({ itens, cupom, cep }, uid) {
     linhas.push({ id, cod: p.cod, nome: p.nome, tam, q, preco: reais(pc) });
   }
   const cidade = await cidadePorCep(cep);
-  let frete = FRETE[cidade] ?? 0;
+  let frete = FRETE[cidade];
+  if (!Number.isFinite(frete)) throw erro(500, 'Frete não configurado para esta cidade.');   // nunca fecha um pedido sem frete definido
   if (FRETE_GRATIS_ACIMA != null && sub >= cents(FRETE_GRATIS_ACIMA)) frete = 0;
   let percent = 0;
   if (cupom) {

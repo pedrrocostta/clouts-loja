@@ -13,7 +13,7 @@ const CONFIG = {
 
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
-const brl = v => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+const brl = v => (Number(v) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const byId = id => PRODUTOS.find(p => p.id === id);
 const norm = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
@@ -766,7 +766,7 @@ async function lookupCep(raw) {
 const freteValor = () => {
   if (!ship) return null;
   if (CONFIG.freteGratisAcima != null && cartTotal() >= CONFIG.freteGratisAcima) return 0;
-  return CONFIG.frete[ship.cidade] ?? 0;
+  return Number.isFinite(CONFIG.frete[ship.cidade]) ? CONFIG.frete[ship.cidade] : null;   // cidade sem frete definido: não deixa fechar o pedido
 };
 const maskCep = v => v.replace(/\D/g, '').slice(0, 8).replace(/(\d{5})(\d)/, '$1-$2');
 
@@ -855,7 +855,7 @@ function renderCart() {
   $('#goCheckout').onclick = () => {
     if (cart.some(i => { const p = byId(i.id); return !p.tam.includes(i.tam) || p.esgotado || i.q > estMax(p, i.tam); })) { toast('Ajuste os itens indisponíveis do carrinho'); return; }
     if (auth()?.configured && !me()) { openLogin('Entre com sua conta Google para finalizar o pedido.'); return; }
-    if (!ship) { $('#cepMsg').textContent = 'Informe seu CEP para calcular o frete.'; $('#cepMsg').classList.add('bad'); $('#cepIn').focus(); return; }
+    if (!ship || freteValor() == null) { $('#cepMsg').textContent = 'Informe seu CEP para calcular o frete.'; $('#cepMsg').classList.add('bad'); $('#cepIn').focus(); return; }
     checkout = true; renderCart();
   };
 }
