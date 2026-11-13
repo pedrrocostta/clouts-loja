@@ -30,6 +30,8 @@ export function renderPrecos(box, items, db, toast, st, redraw) {
     <div class="two"><label class="f" for="pr-de">Localizar no nome<input id="pr-de" type="text" maxlength="60" placeholder="Ex.: Valentin Jeans"></label>
       <label class="f" for="pr-pa">Substituir por (vazio = apagar)<input id="pr-pa" type="text" maxlength="60"></label></div>
     <button class="btn line sm" id="pr-sub" type="button">Substituir nos nomes das ${lista.length} peças</button>
+    <label class="f" for="pr-lista" style="margin-top:14px">Colar lista de preços (uma peça por linha: código e preço, ex.: <code>113216-1 170</code>)<textarea id="pr-lista" rows="5" style="width:100%;font:inherit;padding:10px 12px;border-radius:10px;border:1px solid #d9cfb8" placeholder="113216-1 170&#10;112420-1 180,00"></textarea></label>
+    <button class="btn line sm" id="pr-imp" type="button" style="margin-top:8px">Aplicar lista na tabela</button>
     <p class="msg" id="pr-msg"></p></div>
     <div class="pr-wrap"><table class="pr-t"><thead><tr><th>Código</th><th>Nome</th><th>Preço (R$)</th><th>Preço anterior</th><th>Custo (R$)</th><th>Margem</th></tr></thead><tbody>
     ${lista.map(p => { const e = cur(p), d = !!st.edits[p.id]; return `<tr data-id="${esc(p.id)}" class="${d ? 'dirty' : ''}">
@@ -74,6 +76,14 @@ export function renderPrecos(box, items, db, toast, st, redraw) {
     const pa = $('#pr-pa', box).value; let n = 0;
     lista.forEach(p => { const e = cur(p); if (e.nome.includes(de)) { const novo = e.nome.split(de).join(pa).replace(/\s{2,}/g, ' ').trim(); if (novo) { set(p.id, 'nome', novo); n++; } } });
     redraw(); setTimeout(() => toast(n ? `${n} nome${n === 1 ? '' : 's'} alterado${n === 1 ? '' : 's'}. Falta salvar.` : 'Nenhum nome continha esse trecho.'), 0);
+  };
+  $('#pr-imp', box).onclick = () => {
+    const linhas = $('#pr-lista', box).value.split(String.fromCharCode(10)).map(l => l.trim()).filter(Boolean); if (!linhas.length) return msg('Cole a lista primeiro.', true);
+    const porCod = new Map(items.map(p => [String(p.cod).trim().toLowerCase(), p])); let n = 0; const nao = [], ruim = [];
+    linhas.forEach(l => { const m = l.match(/^(\S+?)[\s;:]+(?:R\$\s*)?([\d.,]+)$/); if (!m) return ruim.push(l);
+      const v = parseFloat(m[2].replace(/\.(?=\d{3}(?!\d))/g, '').replace(',', '.')), p = porCod.get(m[1].toLowerCase());
+      if (!p) return nao.push(m[1]); if (!(v > 0 && v <= 100000)) return ruim.push(l); set(p.id, 'preco', r2(v)); n++; });
+    redraw(); setTimeout(() => { toast(`${n} preço${n === 1 ? '' : 's'} aplicado${n === 1 ? '' : 's'}. Confira e clique em Salvar alterações.`); const m = $('#pr-msg'); if (m && (nao.length || ruim.length)) { m.className = 'msg bad'; m.textContent = `${nao.length ? 'Código não encontrado: ' + nao.join(', ') + '. ' : ''}${ruim.length ? 'Linha inválida: ' + ruim.join(' | ') : ''}`; } }, 0);
   };
   $('#pr-des', box).onclick = () => { st.edits = {}; redraw(); };
   $('#pr-ok', box).onclick = async () => {
