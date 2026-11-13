@@ -49,6 +49,12 @@ module.exports = async (req, res) => {
     if (b.acao === 'verificar') {
       const s = await ref.get(); if (!s.exists) throw erro(404, 'Pedido não encontrado.');
       if (s.data().origem === 'whatsapp') throw erro(409, 'Pedido do WhatsApp: confirme a venda manualmente.');
+      if (b.pagamentoId) {   // consulta direta pelo número da transação (o que aparece na tela do Mercado Pago)
+        if (!/^\d{6,20}$/.test(String(b.pagamentoId))) throw erro(400, 'Número da transação inválido.');
+        const pg = await mp(`/v1/payments/${b.pagamentoId}`);
+        const status = await aplicarPagamento(pg);
+        return res.status(200).json({ ok: true, status, mp: pg.status, pagamentos: 1, referencia: String(pg.external_reference || ''), doPedido: String(pg.external_reference || '') === id });
+      }
       const r = await mp(`/v1/payments/search?external_reference=${id}&sort=date_created&criteria=desc&limit=10`);
       const lista = Array.isArray(r.results) ? r.results : [];
       if (!lista.length) return res.status(200).json({ ok: true, status: s.data().status, pagamentos: 0 });

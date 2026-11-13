@@ -259,9 +259,15 @@ export function renderPedidos(box, orders, db, toast, filtro, setFiltro) {
   });
   box.querySelectorAll('[data-verif]').forEach(b => b.onclick = async () => {
     b.disabled = true; const t0 = b.textContent; b.textContent = 'Consultando o Mercado Pago…';
-    const r = await estoqueApi('verificar', b.closest('.ordc').dataset.id);
+    const pid = b.closest('.ordc').dataset.id;
+    let r = await estoqueApi('verificar', pid);
+    if (r && !r.erro && !r.pagamentos) {   // a busca pelo pedido não achou: tenta pelo número da transação
+      const n = (prompt('O Mercado Pago não achou pagamento para este pedido.\n\nSe você tem o número da transação (ex.: 188413842645, aparece na tela do Mercado Pago), cole aqui. Se não tem, deixe vazio.') || '').replace(/\D/g, '');
+      if (n) r = await estoqueApi('verificar', pid, { pagamentoId: n });
+    }
     b.disabled = false; b.textContent = t0;
     if (!r || r.erro) return toast(r?.erro || 'Não foi possível consultar agora.', true);
+    if (r.pagamentos && r.doPedido === false) return toast(`Esse pagamento (${r.mp}) pertence ao pedido ${String(r.referencia).slice(0, 6).toUpperCase()}, não a este. Atualizei o pedido certo.`);
     toast(!r.pagamentos ? 'O Mercado Pago ainda não tem pagamento para este pedido.' : r.status === 'pago' ? 'Pagamento aprovado! Pedido atualizado e peça baixada do estoque.' : r.status === 'recusado' ? 'O pagamento foi recusado. Pedido atualizado.' : `Pagamento ainda em análise no Mercado Pago (${r.mp || 'pendente'}).`);
   });
   box.querySelectorAll('[data-libmp],[data-semdev]').forEach(b => b.onclick = async () => {
