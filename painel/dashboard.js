@@ -228,7 +228,7 @@ export function renderPedidos(box, orders, db, toast, filtro, setFiltro) {
       <p class="ord-end">${esc(c.rua || '')}, ${esc(c.num || '')}${c.comp ? ' — ' + esc(c.comp) : ''} — ${esc(c.bairro || '')}, ${esc(o.cidade || '')} · CEP ${esc(c.cep || '')}</p>
       <ul class="ord-it">${(o.itens || []).map(i => `<li>${i.q}× ${esc(i.nome)} <small>Cód. ${esc(i.cod)} · Tam. ${esc(i.tam)}</small><b>${brl(i.q * i.preco)}</b></li>`).join('')}</ul>
       <div class="ord-ft"><span>Subtotal ${brl(o.subtotal)}${o.desconto ? ` · desconto −${brl(o.desconto)}` : ''} · frete ${brl(o.frete)}</span><b>${brl(o.total)}</b></div>
-      <div class="ord-act">${o.origem === 'whatsapp' && o.status === 'aguardando' ? '<button class="btn gold sm" data-conf type="button">Confirmar venda</button>' : ''}${o.status !== 'aguardando' ? '' : o.estoqueReservado === true ? '<button class="btn danger sm" data-libmp type="button">Cancelar e devolver a peça</button><button class="btn danger sm" data-semdev type="button">Cancelar (já repus o estoque)</button>' : o.origem === 'whatsapp' ? '<button class="btn danger sm" data-canc type="button">Cancelar pedido</button>' : '<button class="btn danger sm" data-libmp type="button">Cancelar pedido</button>'}${o.status === 'pago' ? `<label class="f">Andamento<select data-and>${Object.entries(ANDAMENTO).map(([k, v]) => `<option value="${k}" ${(o.andamento || 'novo') === k ? 'selected' : ''}>${v}</option>`).join('')}</select></label>` : ''}
+      <div class="ord-act">${o.origem === 'whatsapp' && o.status === 'aguardando' ? '<button class="btn gold sm" data-conf type="button">Confirmar venda</button>' : ''}${o.origem !== 'whatsapp' && ['aguardando', 'divergente', 'cancelado'].includes(o.status) ? '<button class="btn line sm" data-verif type="button">Atualizar pagamento</button>' : ''}${o.status !== 'aguardando' ? '' : o.estoqueReservado === true ? '<button class="btn danger sm" data-libmp type="button">Cancelar e devolver a peça</button><button class="btn danger sm" data-semdev type="button">Cancelar (já repus o estoque)</button>' : o.origem === 'whatsapp' ? '<button class="btn danger sm" data-canc type="button">Cancelar pedido</button>' : '<button class="btn danger sm" data-libmp type="button">Cancelar pedido</button>'}${o.status === 'pago' ? `<label class="f">Andamento<select data-and>${Object.entries(ANDAMENTO).map(([k, v]) => `<option value="${k}" ${(o.andamento || 'novo') === k ? 'selected' : ''}>${v}</option>`).join('')}</select></label>` : ''}
         ${wa(o) ? `<a class="btn line sm" href="${wa(o)}" target="_blank" rel="noopener">WhatsApp do cliente</a>` : ''}</div></div></article>`; }).join('') : `<p class="dsh-empty">${orders.length ? 'Nenhum pedido com esse filtro.' : 'Nenhum pedido ainda. Eles aparecem aqui quando um cliente logado envia o pedido pelo WhatsApp ou paga online.'}</p>`}</div>`;
   let tm; $('#pq', box).oninput = e => { clearTimeout(tm); tm = setTimeout(() => setFiltro({ ...filtro, q: e.target.value }, true), 250); };
   $('#pst', box).onchange = e => setFiltro({ ...filtro, st: e.target.value });
@@ -256,6 +256,13 @@ export function renderPedidos(box, orders, db, toast, filtro, setFiltro) {
   box.querySelectorAll('[data-conf]').forEach(b => b.onclick = () => {
     if (!b.dataset.armed) { b.dataset.armed = '1'; b.textContent = 'Toque de novo: o cliente já pagou?'; setTimeout(() => { if (b.isConnected) { delete b.dataset.armed; b.textContent = 'Confirmar venda'; } }, 4000); return; }
     mudar(b.closest('.ordc').dataset.id, 'pago');
+  });
+  box.querySelectorAll('[data-verif]').forEach(b => b.onclick = async () => {
+    b.disabled = true; const t0 = b.textContent; b.textContent = 'Consultando o Mercado Pago…';
+    const r = await estoqueApi('verificar', b.closest('.ordc').dataset.id);
+    b.disabled = false; b.textContent = t0;
+    if (!r || r.erro) return toast(r?.erro || 'Não foi possível consultar agora.', true);
+    toast(!r.pagamentos ? 'O Mercado Pago ainda não tem pagamento para este pedido.' : r.status === 'pago' ? 'Pagamento aprovado! Pedido atualizado e peça baixada do estoque.' : r.status === 'recusado' ? 'O pagamento foi recusado. Pedido atualizado.' : `Pagamento ainda em análise no Mercado Pago (${r.mp || 'pendente'}).`);
   });
   box.querySelectorAll('[data-libmp],[data-semdev]').forEach(b => b.onclick = async () => {
     const txt = b.dataset.txt ??= b.textContent, sem = b.hasAttribute('data-semdev');

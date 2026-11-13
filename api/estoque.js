@@ -3,8 +3,10 @@
  * { acao: 'baixar',   pedidoId, forcar? } → baixa do estoque as peças do pedido (uma única vez). Se faltar estoque, avisa; com forcar:true baixa o que houver.
  * { acao: 'liberar',  pedidoId }          → devolve ao estoque as peças de um pedido que já tinha baixado (cancelamento)
  * { acao: 'cancelar', pedidoId, devolver? } → cancela um pedido ainda "aguardando". Se ele tinha peça reservada (pedidos antigos), devolve ao estoque; com devolver:false só cancela (use quando você já repôs o estoque na mão)
+ * { acao: 'verificar', pedidoId }          → pergunta ao Mercado Pago como está o pagamento do pedido e atualiza o pedido (reserva caso um aviso tenha falhado)
  * Peças sem o campo "estoque" (controle não ativado) são ignoradas. */
-const { admin, db, usuario, erro, responder } = require('./_lib');
+const { admin, db, usuario, erro, responder, mp } = require('./_lib');
+const { aplicarPagamento } = require('./_pagamento');
 const { planejarReserva, aplicar, liberarPedido } = require('./_estoque');
 
 const ADMIN = 'clouts.oficial2026@gmail.com';
@@ -43,6 +45,16 @@ module.exports = async (req, res) => {
       if (b.devolver === false) await ref.update({ status: 'cancelado', estoqueReservado: false, estoqueDescartado: true });
       else await liberarPedido(fs, ref, { status: 'cancelado' });
       return res.status(200).json({ ok: true });
+    }
+    if (b.acao === 'verificar') {
+      const s = await ref.get(); if (!s.exists) throw erro(404, 'Pedido não encontrado.');
+      if (s.data().origem === 'whatsapp') throw erro(409, 'Pedido do WhatsApp: confirme a venda manualmente.');
+      const r = await mp(`/v1/payments/search?external_reference=${id}&sort=date_created&criteria=desc&limit=10`);
+      const lista = Array.isArray(r.results) ? r.results : [];
+      if (!lista.length) return res.status(200).json({ ok: true, status: s.data().status, pagamentos: 0 });
+      const pg = lista.find(x => x.status === 'approved') || lista[0];   // aprovado tem prioridade; senão o mais recente
+      const status = await aplicarPagamento(pg);
+      return res.status(200).json({ ok: true, status, mp: pg.status, pagamentos: lista.length });
     }
     throw erro(400, 'Ação inválida.');
   } catch (e) { responder(res, e); }
