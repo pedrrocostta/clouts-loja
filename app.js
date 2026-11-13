@@ -685,7 +685,7 @@ function openSheet(id) {
       <div class="specs"><span>${p.secao === 'feminino' ? 'Feminino' : 'Masculino'}</span><span>${esc(p.modelo)}</span>
         ${p.lycra ? `<span>Lycra ${p.lycra}%</span>` : ''}${p.cor ? `<span>Cor: ${esc(p.cor)}</span>` : ''}${p.tecido ? `<span>${esc(p.tecido)}</span>` : ''}
         ${p.premium ? '<span>Premium</span>' : ''}${p.diamond ? '<span>Diamond</span>' : ''}</div>
-      ${cores.length > 1 ? `<div><div class="lbl">Cor: <b>${esc(p.cor || 'Escolha')}</b></div><div class="swatches">${cores.map(c => `<button class="swc ${c.id === p.id ? 'on' : ''}" data-c="${esc(c.id)}" aria-label="Cor ${esc(c.cor || c.cod)}" title="${esc(c.cor || c.cod)}"><img src="${esc(foto(c.img, 140))}" alt=""></button>`).join('')}</div></div>` : ''}
+      ${cores.length > 1 ? `<div><div class="lbl">Cor: <b>${esc(p.cor || 'Escolha')}</b></div><div class="swatches">${cores.map(c => `<button class="swc ${c.id === p.id ? 'on' : ''}" data-c="${esc(c.id)}" aria-label="Cor ${esc(c.cor || c.cod)}" title="${esc(c.cor || c.cod)}"><img src="${esc(foto(c.img, 160))}" alt=""></button>`).join('')}</div></div>` : ''}
       <div><div class="lbl">Tamanho</div><div class="sizes">${sizesAll(p).map(t => `<button class="sz" data-t="${t}" ${p.tam.includes(t) && !p.esgotado ? '' : 'disabled'}>${t}</button>`).join('')}</div><p class="stk" id="stkMsg" aria-live="polite"></p></div>
       <div class="buy"><span class="buy-pr">${brl(p.preco)}</span>${soldOut(p) ? '<button class="btn btn-dark block" disabled>Esgotado</button>' : `<button class="btn btn-gold block" id="addBtn">${ICON.bag} Adicionar ao carrinho</button>`}</div>
       <button class="btn btn-line block" id="favSheet">${ICON.heart} <span>${favs.includes(p.id) ? 'Remover dos favoritos' : 'Favoritar'}</span></button>
@@ -700,7 +700,9 @@ function openSheet(id) {
   // Galeria (até 10 fotos): a principal está na peça; as outras ficam em produtos/{id}/fotos e carregam ao abrir.
   let gal = [p.img, ...(p.extras || [])], gi = 0;
   const gShow = i => {
-    gi = (i + gal.length) % gal.length; $('.gal-main', sheet).src = foto(gal[gi], 1000);
+    gi = (i + gal.length) % gal.length; const im = $('.gal-main', sheet), url = gal[gi];
+    im.dataset.u = url; im.src = foto(url, 600);                                   // já está no cache: aparece na hora
+    if (foto(url, 1000) !== foto(url, 600)) { const hi = new Image(); hi.onload = () => { if (im.dataset.u === url) im.src = hi.src; }; hi.src = foto(url, 1000); }   // troca pela versão grande quando chegar
     $$('.gal-th img', sheet).forEach((x, k) => x.classList.toggle('on', k === gi)); $('.gal-ct', sheet).textContent = `${gi + 1}/${gal.length}`;
   };
   const gDraw = () => {

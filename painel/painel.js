@@ -287,8 +287,10 @@ async function nuvem(dataUrl) {
   const fd = new FormData(); fd.append('file', dataUrl); fd.append('upload_preset', cfg.uploadPreset); fd.append('folder', 'clouts');
   const r = await fetch(`https://api.cloudinary.com/v1_1/${encodeURIComponent(cfg.cloudName)}/image/upload`, { method: 'POST', body: fd });
   const j = await r.json().catch(() => ({})); if (!r.ok || !/^https:\/\/res\.cloudinary\.com\//.test(j.secure_url || '')) throw new Error(j?.error?.message || 'cloudinary');
-  return j.secure_url;
+  aquecer(j.secure_url); return j.secure_url;
 }
+/* O Cloudinary gera cada tamanho na primeira vez que alguém pede (1 a 2 s). Pedimos agora, no painel, para o cliente nunca ser o primeiro. */
+function aquecer(u) { for (const w of [160, 600, 1000]) { const i = new Image(); i.src = u.replace('/image/upload/', `/image/upload/f_auto,q_auto,w_${w}/`); } }
 const prepararFoto = async f => nuvemOk() ? nuvem(await shrink(f, 1600, 2500000)) : shrink(f);
 /* Move as fotos que ainda estão dentro do banco (base64) para o Cloudinary, uma peça por vez. */
 async function ativarEstoque() {
