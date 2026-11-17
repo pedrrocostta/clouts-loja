@@ -2,6 +2,7 @@
  * 1º lembrete depois de 3 horas parado; 2º (última chamada) depois de 3 dias. Quem pediu para parar de receber não recebe. */
 const { db } = require('./_lib');
 const { emailConfigurado, enviar, carrinho, lembreteCupom } = require('./_mail');
+const { conferirPagamentos, verificarSaude, fazerBackup, alertar } = require('./_saude');
 
 const H = 3600000;
 module.exports = async (req, res) => {
@@ -9,6 +10,14 @@ module.exports = async (req, res) => {
   if (!seg || req.headers.authorization !== `Bearer ${seg}`) return res.status(401).end();
   if (!emailConfigurado()) return res.status(503).end();
   const fs = db(), agora = Date.now(); let enviados = 0;
+  const problemas = [], extra = {};
+  // Rede de segurança (antes de cancelar pedidos parados): confirma pagamentos que o aviso do Mercado Pago não trouxe.
+  try { extra.pagamentosCorrigidos = await conferirPagamentos(agora); } catch (e) { console.error('cron conferir pagamentos', e.message); problemas.push('A conferência de pagamentos falhou: ' + e.message); }
+  try { problemas.push(...await verificarSaude()); } catch (e) { console.error('cron saúde', e.message); }
+  if (new Date(agora).getUTCDay() === 1 || req.query?.backup === '1') {   // backup por e-mail toda segunda-feira
+    try { extra.backup = await fazerBackup(); } catch (e) { console.error('cron backup', e.message); problemas.push('O backup semanal falhou: ' + e.message); }
+  }
+  try { await alertar(problemas); } catch (e) { console.error('cron alerta', e.message); }
   try {
     const snap = await fs.collection('carrinhos').get();
     for (const d of snap.docs) {
@@ -48,6 +57,6 @@ module.exports = async (req, res) => {
         catch (e) { console.error('cron lembrete cupom', e.message); }
       }
     }
-    res.status(200).json({ ok: true, enviados });
+    res.status(200).json({ ok: true, enviados, problemas: problemas.length, ...extra });
   } catch (e) { console.error('cron:', e); res.status(500).end(); }
 };

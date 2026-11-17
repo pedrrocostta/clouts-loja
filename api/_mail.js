@@ -20,19 +20,19 @@ function emailConfigurado() {
   return !!(process.env.FIREBASE_SERVICE_ACCOUNT && ((process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD) || (process.env.RESEND_API_KEY && process.env.MAIL_FROM)));
 }
 
-async function enviar({ para, assunto, html, texto }) {
+async function enviar({ para, assunto, html, texto, anexos }) {
   if (!para || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(para)) throw new Error('destinatário inválido');
   if (process.env.RESEND_API_KEY && process.env.MAIL_FROM) {
     const r = await fetch('https://api.resend.com/emails', {
       method: 'POST', headers: { Authorization: 'Bearer ' + process.env.RESEND_API_KEY, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from: process.env.MAIL_FROM, to: [para], subject: assunto, html, text: texto })
+      body: JSON.stringify({ from: process.env.MAIL_FROM, to: [para], subject: assunto, html, text: texto, ...(anexos ? { attachments: anexos.map(a => ({ filename: a.nome, content: Buffer.from(a.conteudo).toString('base64') })) } : {}) })
     });
     if (!r.ok) throw new Error('Resend ' + r.status + ' ' + (await r.text()).slice(0, 200));
     return;
   }
   const nodemailer = require('nodemailer');
   const t = nodemailer.createTransport({ service: 'gmail', auth: { user: process.env.GMAIL_USER, pass: process.env.GMAIL_APP_PASSWORD } });
-  await t.sendMail({ from: `"CLOUTS" <${process.env.GMAIL_USER}>`, to: para, subject: assunto, html, text: texto });
+  await t.sendMail({ from: `"CLOUTS" <${process.env.GMAIL_USER}>`, to: para, subject: assunto, html, text: texto, ...(anexos ? { attachments: anexos.map(a => ({ filename: a.nome, content: a.conteudo })) } : {}) });
 }
 
 /* Link "parar de receber": assinado, para ninguém descadastrar outra pessoa. */

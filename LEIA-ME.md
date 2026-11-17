@@ -130,3 +130,10 @@ Sem essas variáveis os e-mails simplesmente não saem e a loja funciona normal.
 - A confirmação é automática: o webhook (`api/webhook.js`) e também a conferência da própria tela (`GET /api/checkout?pedido=ID`, a cada ~4 s, feita só pelo dono do pedido) perguntam ao Mercado Pago e aplicam o pagamento pelo mesmo `aplicarPagamento` (pedido pago, estoque baixa, cupom queimado, e-mail).
 - O botão **Pagar com cartão** continua abrindo o Mercado Pago, agora só com cartão (Pix e transferência excluídos da página deles).
 - Um Pix pendente é cancelado no Mercado Pago quando o cliente gera um novo pedido.
+
+## Estabilidade, backup e como voltar atrás (17/11/2026)
+- **Rotina diária** (`api/cron.js` + `api/_saude.js`, Vercel Cron): (1) confere pedidos Pix/cartão "aguardando" dos últimos 3 dias direto no Mercado Pago e confirma os que foram pagos mas cujo aviso se perdeu; (2) testa Mercado Pago e banco de dados, e **avisa por e-mail a loja** se algo falhar; (3) **toda segunda-feira** envia o **backup** (produtos, pedidos, cupons, avisos, campanhas, solicitações e configurações, em `.json.gz`) para o e-mail da loja. Guarde esses e-mails (Drive).
+- **Código**: tudo fica no GitHub (cada mudança é um commit). Para desfazer uma mudança ruim: Vercel → Deployments → versão boa → "Instant Rollback" (volta em segundos) e, depois, `git revert` do commit.
+- **Marcos estáveis**: tags `estavel-AAAA-MM-DD` no Git (ex.: `git checkout estavel-2026-11-17`).
+- **Login**: no celular usa redirecionamento (a janelinha falha); erro mostra o código (ex.: `auth/...`). No iPhone, se falhar, abrir no Chrome.
+- **Celular**: campos com 16 px (sem zoom do iPhone) e `overflow-x: clip` na página.
