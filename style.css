@@ -552,3 +552,19 @@ body.sem-conv [data-invite],body.sem-conv #cupomShare,body.sem-conv [data-conv]{
 .req-f .sizes{margin:0}
 
 .sr-only{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+
+/* Pix dentro da loja */
+.pix{display:grid;gap:14px;justify-items:center;text-align:center;padding:6px 0}
+.pix-tot{margin:0;font-size:15px}.pix-tot b{font-size:20px}
+.pix-qr{width:min(220px,62vw);height:auto;aspect-ratio:1;border:1px solid #d3c8b0;border-radius:12px;padding:8px;background:#fff;image-rendering:pixelated}
+.pix-pass{margin:0;padding-left:20px;text-align:left;font-size:13px;color:var(--ink2);display:grid;gap:4px;max-width:340px}
+.pix-cod{display:grid;grid-template-columns:1fr auto;gap:8px;width:100%}
+.pix-cod input{min-width:0;font-size:12px;border:1px solid #d3c8b0;border-radius:10px;padding:0 10px;background:#fff;color:var(--ink2);text-overflow:ellipsis}
+.pix-cod .btn{white-space:nowrap}
+.pix-st{margin:0;font-size:13px;color:var(--ink2);display:flex;align-items:center;gap:8px;justify-content:center}
+.pix-dot{width:9px;height:9px;border-radius:50%;background:#32bcad;animation:pixp 1.2s ease-in-out infinite}
+@keyframes pixp{50%{opacity:.25;transform:scale(.7)}}
+.pix-ok{text-align:center;padding:30px 6px;display:grid;gap:10px;justify-items:center}
+.pix-ok h2{margin:0}
+.pix-check{width:64px;height:64px;border-radius:50%;background:#32bcad;color:#fff;font-size:34px;display:grid;place-items:center}
+@media (prefers-reduced-motion:reduce){.pix-dot{animation:none}}

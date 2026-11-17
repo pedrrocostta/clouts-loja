@@ -1,11 +1,30 @@
-/* POST /api/checkout — recalcula o pedido no servidor, grava em "pedidos" e devolve o link de pagamento do Mercado Pago (Pix e cartão). */
+/* POST /api/checkout — recalcula o pedido no servidor, grava em "pedidos" e:
+ *   • metodo "pix"  → gera o Pix (QR Code + copia e cola) pela API de pagamentos do Mercado Pago, para mostrar dentro da loja;
+ *   • senão         → devolve o link do Mercado Pago (cartão).
+ * GET /api/checkout?pedido=ID — o cliente (dono do pedido) consulta se o Pix já foi pago; o servidor confere direto no Mercado Pago. */
 const { admin, db, configurado, usuario, calcular, mp, erro, responder } = require('./_lib');
 const { planejarReserva } = require('./_estoque');
+const { aplicarPagamento } = require('./_pagamento');
+const PIX_MIN = 30;   // minutos de validade do QR Code
 
 const txt = (v, n) => String(v ?? '').replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, n);
 
 module.exports = async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
+  if (req.method === 'GET') {
+    try {
+      const u = await usuario(req); if (!u) throw erro(401, 'Entre com sua conta Google.');
+      const id = String(req.query?.pedido || ''); if (!/^[A-Za-z0-9]{10,40}$/.test(id)) throw erro(400, 'Pedido inválido.');
+      const ref = db().collection('pedidos').doc(id), s = await ref.get();
+      if (!s.exists || s.data().uid !== u.uid) throw erro(404, 'Pedido não encontrado.');
+      let o = s.data();
+      if (o.status === 'aguardando' && o.pixPagamento && configurado()) {
+        const pg = await mp(`/v1/payments/${o.pixPagamento}`);
+        if (pg.external_reference === id) { await aplicarPagamento(pg); o = (await ref.get()).data(); }
+      }
+      return res.status(200).json({ status: o.status });
+    } catch (e) { return responder(res, e); }
+  }
   if (req.method !== 'POST') return res.status(405).json({ erro: 'Método não permitido.' });
   if (!configurado()) return res.status(503).json({ erro: 'Pagamento online ainda não está ativo. Finalize pelo WhatsApp.' });
   try {
@@ -32,6 +51,7 @@ module.exports = async (req, res) => {
     for (const d of meus.docs) {
       const x = d.data(); if (x.origem === 'whatsapp' || x.status !== 'aguardando') continue;
       await d.ref.update({ status: 'cancelado' }).catch(() => {});
+      if (x.pixPagamento) mp(`/v1/payments/${x.pixPagamento}`, { method: 'PUT', body: JSON.stringify({ status: 'cancelled' }) }).catch(() => {});
       if (x.mpPreference) mp(`/checkout/preferences/${x.mpPreference}`, { method: 'PUT', body: JSON.stringify({ expires: true, expiration_date_to: new Date().toISOString() }) }).catch(() => {});
     }
     // Só confere se ainda há estoque (a peça NÃO sai do estoque agora: ela só baixa quando o pagamento for aprovado, no webhook).
@@ -45,6 +65,24 @@ module.exports = async (req, res) => {
     });
 
     const site = process.env.SITE_URL.replace(/\/$/, '');
+    if (b.metodo === 'pix') {
+      let pg;
+      try {
+        pg = await mp('/v1/payments', {
+          method: 'POST', headers: { 'X-Idempotency-Key': doc.id },
+          body: JSON.stringify({
+            transaction_amount: p.total, description: `Pedido CLOUTS ${doc.id.slice(0, 6).toUpperCase()}`, payment_method_id: 'pix',
+            payer: { email: u.email || 'cliente@cloutsoficial.com.br', first_name: cliente.nome.split(' ')[0] },
+            external_reference: doc.id, notification_url: `${site}/api/webhook`, statement_descriptor: 'CLOUTS',
+            date_of_expiration: new Date(Date.now() + PIX_MIN * 60000 - 3 * 3600000).toISOString().replace('Z', '-03:00')
+          })
+        });
+      } catch (e) { await doc.update({ status: 'cancelado' }).catch(() => {}); throw e; }
+      const td = pg.point_of_interaction?.transaction_data || {};
+      if (!td.qr_code) { await doc.update({ status: 'cancelado' }).catch(() => {}); throw erro(502, 'Não foi possível gerar o Pix agora. Tente de novo ou use outra forma de pagamento.'); }
+      await doc.update({ pixPagamento: String(pg.id), pagamentoTipo: 'pix' });
+      return res.status(200).json({ pedido: doc.id, total: p.total, pix: { codigo: td.qr_code, qr: td.qr_code_base64 || null, minutos: PIX_MIN } });
+    }
     let pref;
     try { pref = await mp('/checkout/preferences', {
       method: 'POST',
@@ -56,7 +94,7 @@ module.exports = async (req, res) => {
         back_urls: { success: `${site}/?pedido=${doc.id}&s=ok`, pending: `${site}/?pedido=${doc.id}&s=pendente`, failure: `${site}/?pedido=${doc.id}&s=falha` },
         auto_return: 'approved',
         statement_descriptor: 'CLOUTS',
-        payment_methods: { excluded_payment_types: [{ id: 'ticket' }, { id: 'atm' }] },   // sem boleto/lotérica: a confirmação precisa ser rápida (a peça só baixa quando o pagamento é aprovado)
+        payment_methods: { excluded_payment_types: [{ id: 'ticket' }, { id: 'atm' }, { id: 'bank_transfer' }] },   // só cartão aqui (o Pix é gerado dentro da loja); sem boleto/lotérica: a confirmação precisa ser rápida (a peça só baixa quando o pagamento é aprovado)
         expires: true, expiration_date_to: new Date(Date.now() + 24 * 3600 * 1000).toISOString()
       })
     }); } catch (e) { await doc.update({ status: 'cancelado' }).catch(() => {}); throw e; }   // não deu para abrir o pagamento: não deixa pedido pendurado

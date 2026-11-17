@@ -124,3 +124,9 @@ Sem essas variáveis os e-mails simplesmente não saem e a loja funciona normal.
 - Código: análise estática sem variável indefinida; testes automáticos (estoque, pagamento, cupons, solicitações, Analytics) passando.
 - Privacidade: política atualizada (Analytics, reCAPTCHA, Cloudinary, e-mails, pedidos de peça); a lista de administradores no código público do painel agora é só impressão digital (SHA-256).
 - Página inicial ganhou título principal (h1) para Google e leitores de tela.
+
+## Pix dentro da loja (17/11/2026)
+- Botão **Pagar com Pix**: `api/checkout.js` (`metodo: "pix"`) cria o pedido e gera o Pix pela API de pagamentos do Mercado Pago (`POST /v1/payments`, `payment_method_id: pix`, validade de 30 min). A loja mostra o QR Code e o "copia e cola" no próprio carrinho, sem sair do site.
+- A confirmação é automática: o webhook (`api/webhook.js`) e também a conferência da própria tela (`GET /api/checkout?pedido=ID`, a cada ~4 s, feita só pelo dono do pedido) perguntam ao Mercado Pago e aplicam o pagamento pelo mesmo `aplicarPagamento` (pedido pago, estoque baixa, cupom queimado, e-mail).
+- O botão **Pagar com cartão** continua abrindo o Mercado Pago, agora só com cartão (Pix e transferência excluídos da página deles).
+- Um Pix pendente é cancelado no Mercado Pago quando o cliente gera um novo pedido.

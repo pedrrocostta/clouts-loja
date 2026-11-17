@@ -849,11 +849,12 @@ function updateBadges() {
   [['#cartCount', n], ['#bCartCount', n], ['#favCount', favs.length], ['#bellCount', avisosNovos().length]].forEach(([s, v]) => { const el = $(s); el.textContent = v; el.hidden = !v; });
 }
 
-let checkout = false;
+let checkout = false, pixTela = null;
 function renderCart() {
   updateBadges();
   $('#cartQtyLbl').textContent = cart.length ? `(${cartQty()} ${cartQty() === 1 ? 'item' : 'itens'})` : '';
   const body = $('#cartBody'), foot = $('#cartFoot');
+  if (pixTela) return renderPix();
   if (!cart.length) {
     checkout = false;
     body.innerHTML = `<div class="empty-cart">${ICON.bag}<p><b>Seu carrinho está vazio</b></p><p>Escolha suas calças favoritas.</p></div>`;
@@ -933,7 +934,7 @@ function renderCheckout() {
     <div class="two"><label>CEP<input name="cep" inputmode="numeric" maxlength="9" required value="${esc(ship.cep)}"></label><label>Cidade<input name="cidade" readonly value="${esc(ship.cidade)}"></label></div>
     <div class="two"><label>Rua<input name="rua" autocomplete="street-address" required value="${esc(ship.rua || saved.rua || '')}"></label><label>Número<input name="num" inputmode="numeric" required value="${esc(saved.num || '')}"></label></div>
     <div class="two"><label>Bairro<input name="bairro" required value="${esc(ship.bairro || saved.bairro || '')}"></label><label>Complemento<input name="comp" value="${esc(saved.comp || '')}"></label></div>
-    <fieldset class="pay"><legend>Forma de pagamento</legend>
+    <fieldset class="pay"${pagBotao() ? ' hidden' : ''}><legend>Forma de pagamento</legend>
       <label class="opt"><input type="radio" name="pag" value="Pix" checked><span>${ICON.pix}<b>Pix</b><small>Aprovação imediata. Enviamos a chave/QR Code no WhatsApp.</small></span></label>
       <label class="opt"><input type="radio" name="pag" value="Cartão de crédito"><span>${ICON.card}<b>Cartão de crédito</b><small>Enviamos o link seguro de pagamento no WhatsApp.</small></span></label>
     </fieldset></form>`;
@@ -941,7 +942,8 @@ function renderCheckout() {
     ${descontoValor() ? `<div class="tot disc"><span>Cupom ${esc(cupNome(cupomAtivo))}</span><span>− ${brl(descontoValor())}</span></div>` : ''}
     <div class="tot"><span>Frete (${esc(ship.cidade)})</span><span id="ckFrete">${brl(freteValor())}</span></div>
     <div class="tot big"><span>Total</span><b id="ckTotal">${brl(totalPedido())}</b></div>
-    ${pagBotao() ? `<button class="btn btn-gold block" id="payMp">${ICON.card} Pagar com Pix ou cartão</button>
+    ${pagBotao() ? `<button class="btn btn-gold block" id="payPix">${ICON.pix} Pagar com Pix</button>
+    <button class="btn btn-dark block" id="payMp">${ICON.card} Pagar com cartão</button>
     <button class="btn btn-line block" id="sendWa">${ICON.chat} Prefiro finalizar pelo WhatsApp</button>`
       : `<button class="btn btn-gold block" id="sendWa">${ICON.chat} Enviar pedido no WhatsApp</button>`}
     <button class="btn block link" id="backCart">← Voltar ao carrinho</button>`;
@@ -956,29 +958,91 @@ function renderCheckout() {
   };
   $('#backCart').onclick = () => { checkout = false; renderCart(); };
   $('#sendWa').onclick = sendOrder;
-  if ($('#payMp')) $('#payMp').onclick = payMp;
+  if ($('#payMp')) $('#payMp').onclick = () => payMp('cartao');
+  if ($('#payPix')) $('#payPix').onclick = () => payMp('pix');
 }
 /* Pagamento online: o servidor (api/checkout.js) recalcula preço, frete e cupom e devolve o link do Mercado Pago. */
 let pagando = false;
-async function payMp() {
+async function payMp(metodo) {
   const f = $('#ckForm'), d = Object.fromEntries(new FormData(f)); let ok = true;
   ['nome', 'tel', 'cep', 'rua', 'num', 'bairro'].forEach(k => { const el = f.elements[k]; const bad = !String(d[k] || '').trim(); el.classList.toggle('err', bad); if (bad) ok = false; });
   if (!ok) { toast('Preencha os campos obrigatórios'); return; }
   if (pagando) return;
-  const btn = $('#payMp'), txt = btn.innerHTML; pagando = true; btn.disabled = true; btn.textContent = 'Abrindo o pagamento…';
+  const btn = $(metodo === 'pix' ? '#payPix' : '#payMp'), outro = $(metodo === 'pix' ? '#payMp' : '#payPix'), txt = btn.innerHTML; pagando = true; btn.disabled = true; if (outro) outro.disabled = true; btn.textContent = metodo === 'pix' ? 'Gerando o Pix…' : 'Abrindo o pagamento…';
   try {
     const token = await window.CloutsAuth.token(); if (!token) throw new Error('Entre com sua conta Google para pagar.');
     store.set('clouts.cliente', { nome: d.nome, tel: d.tel, rua: d.rua, num: d.num, bairro: d.bairro, comp: d.comp });
     let ref = null; try { ref = localStorage.getItem('clouts.ref'); } catch {}
     const r = await fetch('/api/checkout', {
       method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-      body: JSON.stringify({ itens: cart.map(i => ({ id: i.id, tam: i.tam, q: i.q })), cupom: cupomObj()?.codigo || null, ref,
+      body: JSON.stringify({ metodo, itens: cart.map(i => ({ id: i.id, tam: i.tam, q: i.q })), cupom: cupomObj()?.codigo || null, ref,
         cliente: { nome: d.nome, tel: d.tel, rua: d.rua, num: d.num, bairro: d.bairro, comp: d.comp, cep: d.cep } })
     });
     const j = await r.json().catch(() => ({}));
-    if (!r.ok || !j.url) throw new Error(j.erro || 'Não foi possível abrir o pagamento. Tente de novo ou finalize pelo WhatsApp.');
+    if (!r.ok || !(j.url || j.pix)) throw new Error(j.erro || 'Não foi possível abrir o pagamento. Tente de novo ou finalize pelo WhatsApp.');
+    if (j.pix) { pagando = false; abrirPix(j); return; }
     location.href = j.url;
-  } catch (e) { toast(e.message || 'Não foi possível abrir o pagamento.'); pagando = false; btn.disabled = false; btn.innerHTML = txt; }
+  } catch (e) { toast(e.message || 'Não foi possível abrir o pagamento.'); pagando = false; btn.disabled = false; if (outro) outro.disabled = false; btn.innerHTML = txt; }
+}
+
+/* Pix dentro da loja: mostra o QR Code e o "copia e cola", e confere sozinho se já foi pago (o servidor pergunta ao Mercado Pago). */
+let pixTimer = null;
+function pararPix() { clearInterval(pixTimer); pixTimer = null; }
+function abrirPix(j) {
+  pararPix();
+  pixTela = { pedido: j.pedido, total: j.total, codigo: j.pix.codigo, qr: j.pix.qr, fim: Date.now() + j.pix.minutos * 60000, estado: 'espera' };
+  renderCart();
+  let n = 0;
+  pixTimer = setInterval(async () => {
+    if (!pixTela) return pararPix();
+    const falta = pixTela.fim - Date.now(), el = $('#pixTempo');
+    if (el) el.textContent = falta > 0 ? `${String(Math.floor(falta / 60000)).padStart(2, '0')}:${String(Math.floor(falta / 1000) % 60).padStart(2, '0')}` : '00:00';
+    if (falta <= -20000 && pixTela.estado === 'espera') { pixTela.estado = 'expirou'; pararPix(); renderCart(); return; }
+    if (++n % 4 !== 0) return;   // confere o pagamento a cada ~4 s
+    try {
+      const token = await window.CloutsAuth.token(); if (!token || !pixTela) return;
+      const r = await fetch('/api/checkout?pedido=' + encodeURIComponent(pixTela.pedido), { headers: { Authorization: 'Bearer ' + token }, cache: 'no-store' });
+      const s = await r.json().catch(() => ({}));
+      if (s.status === 'pago' || s.status === 'divergente') pixPago();
+      else if (s.status === 'recusado' || s.status === 'cancelado') { pixTela.estado = 'expirou'; pararPix(); renderCart(); }
+    } catch { /* tenta de novo no próximo ciclo */ }
+  }, 1000);
+}
+function pixPago() {
+  pararPix(); if (!pixTela) return;
+  pixTela.estado = 'pago';
+  cart = []; cupomAtivo = null; campAtiva = null; store.set('clouts.cart', []); store.set('clouts.cupom', null); store.set('clouts.camp', null); updateBadges(); renderCart();
+}
+function renderPix() {
+  const body = $('#cartBody'), foot = $('#cartFoot'), p = pixTela;
+  $('#cartQtyLbl').textContent = '';
+  if (p.estado === 'pago') {
+    body.innerHTML = `<div class="pix-ok"><div class="pix-check">✓</div><h2>Pagamento recebido!</h2><p class="note">Obrigado pela compra, ${brl(p.total)} confirmados. Vamos preparar seu pedido e falar com você no WhatsApp para combinar a entrega.</p></div>`;
+    foot.innerHTML = `<a class="btn btn-gold block" href="${waLink('Olá! Acabei de pagar meu pedido pelo Pix.')}" target="_blank" rel="noopener">${ICON.chat} Falar no WhatsApp</a><button class="btn block link" id="pixFim">Continuar comprando</button>`;
+    $('#pixFim').onclick = () => { pixTela = null; closeAll(); renderCart(); };
+    return;
+  }
+  if (p.estado === 'expirou') {
+    body.innerHTML = `<div class="pix-ok"><h2>Esse Pix expirou</h2><p class="note">Nada foi cobrado. Seu carrinho continua salvo: gere um novo Pix para pagar.</p></div>`;
+    foot.innerHTML = `<button class="btn btn-gold block" id="pixNovo">Gerar novo Pix</button><button class="btn block link" id="pixVolta">← Voltar</button>`;
+    $('#pixNovo').onclick = () => { pixTela = null; checkout = true; renderCart(); };
+    $('#pixVolta').onclick = () => { pixTela = null; checkout = false; renderCart(); };
+    return;
+  }
+  body.innerHTML = `<div class="pix">
+    <p class="pix-tot">Pague <b>${brl(p.total)}</b> com Pix</p>
+    ${p.qr ? `<img class="pix-qr" alt="QR Code do Pix" width="220" height="220" src="data:image/png;base64,${p.qr}">` : ''}
+    <ol class="pix-pass"><li>Abra o app do seu banco e escolha <b>Pix</b></li><li>Leia o QR Code <b>ou</b> use o <b>Pix copia e cola</b></li><li>Confirme o valor. A confirmação aqui é automática</li></ol>
+    <div class="pix-cod"><input id="pixCod" readonly value="${esc(p.codigo)}" aria-label="Código Pix copia e cola"><button class="btn btn-dark" id="pixCopia" type="button">Copiar código</button></div>
+    <p class="pix-st"><span class="pix-dot"></span>Aguardando o pagamento · expira em <b id="pixTempo">--:--</b></p></div>`;
+  foot.innerHTML = `<button class="btn btn-line block" id="pixVolta">← Escolher outra forma de pagamento</button>`;
+  $('#pixCopia').onclick = async () => {
+    const b = $('#pixCopia'), c = $('#pixCod');
+    try { await navigator.clipboard.writeText(p.codigo); } catch { c.select(); try { document.execCommand('copy'); } catch {} }
+    b.textContent = 'Código copiado!'; setTimeout(() => { if ($('#pixCopia')) $('#pixCopia').textContent = 'Copiar código'; }, 2500);
+  };
+  $('#pixCod').onclick = e => e.target.select();
+  $('#pixVolta').onclick = () => { if (!confirm('Voltar? Se você já pagou este Pix, o pagamento ainda será confirmado.')) return; pararPix(); pixTela = null; checkout = true; renderCart(); };
 }
 /* Volta do Mercado Pago: ?pedido=...&s=ok|pendente|falha (só mensagem; quem confirma o pagamento é o servidor). */
 function voltaDoPagamento() {
