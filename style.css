@@ -568,3 +568,8 @@ body.sem-conv [data-invite],body.sem-conv #cupomShare,body.sem-conv [data-conv]{
 .pix-ok h2{margin:0}
 .pix-check{width:64px;height:64px;border-radius:50%;background:#32bcad;color:#fff;font-size:34px;display:grid;place-items:center}
 @media (prefers-reduced-motion:reduce){.pix-dot{animation:none}}
+
+/* Celular: campos com letra de 16 px (menos que isso o Safari do iPhone dá zoom ao tocar e a página sai do enquadramento) e nada de rolagem lateral */
+@media (pointer:coarse),(max-width:820px){input,select,textarea{font-size:16px!important}}
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+html,body{overflow-x:clip}

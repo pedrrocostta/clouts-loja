@@ -504,8 +504,14 @@ function openLogin(motivo, oferta) {
   $('#gBtn', s).onclick = async () => {
     if (!auth()?.configured) { $('#gMsg', s).textContent = 'O login com Google será ativado assim que a configuração do Firebase for concluída (veja o LEIA-ME).'; return; }
     try { const u = await auth().signIn(); closeSheet(); posLogin(u); }
-    catch (e) { $('#gMsg', s).textContent = e.code === 'auth/popup-closed-by-user' ? 'Login cancelado.' : 'Não foi possível entrar agora. Tente novamente.'; }
+    catch (e) { $('#gMsg', s).textContent = ['auth/popup-closed-by-user', 'auth/cancelled-popup-request'].includes(e.code) ? 'Login cancelado.' : msgLogin(e); }
   };
+}
+// Mensagem de erro do login com o motivo (código) e, no iPhone, a dica do Chrome.
+function msgLogin(e) {
+  const iphone = /iPhone|iPad|iPod/i.test(navigator.userAgent), dentro = /FBAN|FBAV|Instagram|WhatsApp|Line\/|; wv\)/i.test(navigator.userAgent);
+  const dica = dentro ? ' Você está dentro de outro aplicativo: abra o endereço no Chrome ou no Safari.' : iphone ? ' Se continuar, abra o site no Chrome.' : '';
+  return 'Não foi possível entrar agora.' + dica + (e?.code ? ` (código: ${e.code})` : '');
 }
 function posLogin(u) {
   toast('Bem-vindo(a) à CLOUTS!');
@@ -516,7 +522,7 @@ function posLogin(u) {
 async function voltaDoLogin() {
   try {
     const u = await auth()?.redirectResult(); if (!u) return;
-    if (u.erro) { toast('Não foi possível entrar agora. Tente novamente.'); return; }
+    if (u.erro) { toast(msgLogin(u.erro)); return; }
     posLogin(u);
   } catch (e) { console.warn('Login:', e); }
 }

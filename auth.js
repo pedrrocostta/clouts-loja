@@ -71,7 +71,8 @@ const CloutsAuth = (() => {
     async redirectResult() {
       await init(); if (!redirP) return null;
       const r = await redirP; redirP = null;
-      if (!r) return null; if (r.erro) return { erro: r.erro };
+      if (!r) return user ? null : { erro: { code: 'sem-resposta' } };   // voltou do Google e não ficou logado (ex.: Safari bloqueou o armazenamento)
+      if (r.erro) return { erro: r.erro };
       return { ...pick(r.user), isNew: !!mod.getAdditionalUserInfo(r)?.isNewUser };
     },
     async signOut() { await init(); await mod.signOut(auth); },
