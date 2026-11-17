@@ -142,11 +142,11 @@ function carrinho({ nome, itens, n, uid }) {
 /* Aviso para quem pediu uma peça/tamanho que não tinha e agora chegou. */
 function chegou({ nome, produto, tam, produtoId }) {
   const url = `${site()}/p/${encodeURIComponent(produtoId)}`;
-  const corpo = `${titulo('A peça que você pediu chegou!')}${par(`Oi, ${primeiroNome(nome)}! Boa notícia: <b>${esc(produto)}</b>, no tamanho <b>${esc(tam)}</b>, chegou na CLOUTS.`)}${par('As peças saem rápido, então garanta a sua agora.')}${botao('Ver a peça', url)}`;
+  const corpo = `${titulo('A peça que você solicitou chegou!')}${par(`Oi, ${primeiroNome(nome)}! A peça que você solicitou acabou de chegar na loja: <b>${esc(produto)}</b>, no tamanho <b>${esc(tam)}</b>.`)}${par('As peças saem rápido, então garanta a sua agora.')}${botao('Ver a peça', url)}`;
   return {
-    assunto: 'Chegou a peça que você pediu · CLOUTS',
-    texto: `${produto} (tam. ${tam}) chegou na CLOUTS. Veja: ${url}`,
-    html: layout({ preheader: 'A peça que você solicitou já está disponível.', corpo, rodape: 'Você recebeu este e-mail porque solicitou esta peça na CLOUTS.' })
+    assunto: 'A peça que você solicitou chegou · CLOUTS',
+    texto: `A peça que você solicitou acabou de chegar na loja: ${produto} (tam. ${tam}). Veja: ${url}`,
+    html: layout({ preheader: 'A peça que você solicitou acabou de chegar na loja.', corpo, rodape: 'Você recebeu este e-mail porque solicitou esta peça na CLOUTS.' })
   };
 }
 

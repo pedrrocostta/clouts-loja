@@ -7,7 +7,7 @@ const app = initializeApp({
   storageBucket: 'clouts-409b7.firebasestorage.app', messagingSenderId: '153191899322', appId: '1:153191899322:web:8ba2688766cc96ff326283'
 });
 const APPCHECK_SITE_KEY = '6Ldnzh4uAAAAADFp7opGhSvU0NA8z_pZhgeo8rKB';   // mesma chave de auth.js (App Check / reCAPTCHA Enterprise); vazia = desligado
-if (APPCHECK_SITE_KEY) {
+if (APPCHECK_SITE_KEY && !/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) {
   try { const ac = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-app-check.js'); ac.initializeAppCheck(app, { provider: new ac.ReCaptchaEnterpriseProvider(APPCHECK_SITE_KEY), isTokenAutoRefreshEnabled: true }); } catch (e) { console.warn('App Check:', e); }
 }
 import { ouvirPedidos, renderDashboard, renderPedidos } from './dashboard.js';
@@ -121,6 +121,14 @@ let cfg = {}, camps = [], unsubCfg = null, unsubCamp = null;
 const drawCupons = () => { const b = $('#tabCupons'); if (!b || b.contains(document.activeElement) && document.activeElement.tagName === 'INPUT' && document.activeElement.type !== 'checkbox') return; renderCupons(b, cfg, camps, db, toast, divulgarCampanha); };
 let solic = [], unsubSol = null;
 const avisarSolic = async ids => { try { const u = auth.currentUser; const r = await fetch('/api/email', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + await u.getIdToken() }, body: JSON.stringify({ acao: 'solicitacao', ids }) }); return await r.json(); } catch { return null; } };
+/* Quando um tamanho volta ao estoque e alguém tinha pedido essa peça, oferece avisar por e-mail na hora. */
+async function avisarChegada(p, tams) {
+  const ids = solic.filter(s => s.produtoId === p.id && tams.includes(s.tam) && ['aberta', 'comprada'].includes(s.status)).map(s => s.id);
+  if (!ids.length) return;
+  if (!confirm(`${ids.length} pessoa${ids.length === 1 ? '' : 's'} pediu${ids.length === 1 ? '' : 'ram'} esta peça no tamanho ${tams.join(', ')}.\n\nAvisar por e-mail que ela chegou na loja?`)) return;
+  const r = await avisarSolic(ids);
+  toast(!r || r.erro ? 'Não foi possível enviar os avisos agora. Use a aba Solicitações.' : `${r.enviados} cliente${r.enviados === 1 ? '' : 's'} avisado${r.enviados === 1 ? '' : 's'} por e-mail.`, !r || !!r.erro);
+}
 const drawSolic = () => { const b = $('#tabSolic'); if (!b) return; if (b.contains(document.activeElement) && ['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement.tagName)) return; renderSolicitacoes(b, solic, items, db, toast, avisarSolic); };
 let prSt = novoEstadoPrecos();
 const drawPrecos = foco => { const b = $('#tabPrecos'); if (!b) return; if (!foco && b.contains(document.activeElement) && ['INPUT', 'SELECT'].includes(document.activeElement.tagName)) return;
@@ -247,11 +255,12 @@ $('#main').addEventListener('click', async e => {
 $('#main').addEventListener('change', async e => {
   const inp = e.target.closest('.item input[data-t]'); if (!inp) return;
   const p = items.find(x => x.id === inp.closest('.item').dataset.id); if (!p) return;
-  const t = inp.dataset.t, n = clampQ(inp.value); inp.value = n; inp.closest('.szq').classList.toggle('on', n > 0);
+  const t = inp.dataset.t, n = clampQ(inp.value), antes = qtd(p, t); inp.value = n; inp.closest('.szq').classList.toggle('on', n > 0);
   try {
     if (p.estoque) await updateDoc(doc(db, 'produtos', p.id), { ['estoque.' + t]: n, tam: n > 0 ? arrayUnion(t) : arrayRemove(t) });   // só este tamanho: não atropela uma venda que acabou de acontecer
     else { const est = Object.fromEntries((p.tam || []).map(x => [x, 1])); est[t] = n; await updateDoc(doc(db, 'produtos', p.id), { estoque: est, tam: TAMS.filter(x => (est[x] || 0) > 0) }); }
     toast(n > 0 ? `Estoque salvo: ${n} un. no tamanho ${t}.` : `Tamanho ${t} zerado.`);
+    if (antes === 0 && n > 0) avisarChegada(p, [t]);
   } catch (er) { fail(er); }
 });
 
@@ -421,6 +430,7 @@ function openEditor(p) {
       fotos.slice(1).forEach((f, i) => wb.set(doc(db, 'produtos', id, 'fotos', String(i + 1)), { img: f, ordem: i + 1 }));
       for (let i = fotos.length; i <= Math.max(antigas, 9); i++) wb.delete(doc(db, 'produtos', id, 'fotos', String(i)));
       await wb.commit(); toast('Salvo. Já está na loja.'); close();
+      if (!novo) { const volta = lista.filter(t => qtd(p, t) === 0 && (data.estoque[t] || 0) > 0); if (volta.length) avisarChegada(p, volta); }
     }
     catch (er) { b.disabled = false; msg(er?.code === 'permission-denied' ? 'Sua conta não tem permissão para alterar o catálogo.' : 'Não foi possível salvar. Se a foto for muito grande, use uma menor.', true); }
   };

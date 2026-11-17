@@ -227,7 +227,7 @@ export function renderPedidos(box, orders, db, toast, filtro, setFiltro) {
     <p class="msg">${list.length} pedido${list.length === 1 ? '' : 's'}${orders.length >= 500 ? ' (mostrando os 500 mais recentes)' : ''}</p>
     <div class="list ord">${list.length ? list.map(o => { const st = STATUS[o.status] || [o.status, 'g'], c = o.cliente || {}; return `
     <article class="item ordc" data-id="${esc(o.id)}"><div style="grid-column:1/-1">
-      <div class="cod">#${esc(o.id.slice(0, 6).toUpperCase())} · ${new Date(o._t).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}<span class="tags"><span class="tag ${st[1]}">${st[0]}</span>${o.cupom ? `<span class="tag">Cupom ${esc(o.cupom)} ${o.percent}%</span>` : ''}${o.ref ? '<span class="tag">Código de amigo</span>' : ''}<span class="tag g">${o.origem === 'whatsapp' ? 'WhatsApp' : 'Mercado Pago'}</span>${o.estoqueReservado === true ? `<span class="tag">${o.status === 'pago' ? 'Estoque baixado' : 'Peça reservada'}</span>` : ''}${o.status === 'aguardando' && Date.now() - o._t > 2 * DIA ? `<span class="tag r">Parado há ${Math.floor((Date.now() - o._t) / DIA)} dias</span>` : ''}${o.estoqueDevolvido ? '<span class="tag g">Estoque devolvido</span>' : ''}${(o.estoqueFalta || []).length ? '<span class="tag r">Estoque insuficiente</span>' : ''}</span></div>
+      <div class="cod">#${esc(o.id.slice(0, 6).toUpperCase())} · ${new Date(o._t).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}<span class="tags"><span class="tag ${st[1]}">${st[0]}</span>${o.cupom ? `<span class="tag">Cupom ${esc(o.cupom)} ${o.percent}%</span>` : ''}${o.ref ? '<span class="tag">Código de amigo</span>' : ''}<span class="tag g">${o.origem === 'whatsapp' ? 'WhatsApp' : 'Mercado Pago'}</span>${o.estoqueReservado === true ? `<span class="tag">${o.status === 'pago' ? 'Estoque baixado' : 'Peça reservada'}</span>` : ''}${o.status === 'aguardando' && Date.now() - o._t > 2 * DIA ? `<span class="tag r">Parado há ${Math.floor((Date.now() - o._t) / DIA)} dias</span>` : ''}${o.estoqueDevolvido ? '<span class="tag g">Estoque devolvido</span>' : ''}${(o.estoqueFalta || []).length ? '<span class="tag r">Estoque insuficiente</span>' : ''}${o.cupomRepetido ? '<span class="tag r">Cupom repetido: confira</span>' : ''}</span></div>
       <p class="ord-cli"><b>${esc(c.nome || '—')}</b> · ${esc(c.tel || '')} · ${esc(o.email || '')}</p>
       ${(o.estoqueFalta || []).length ? `<p class="ord-end" style="color:#b3372b;font-weight:600">Faltou estoque: ${o.estoqueFalta.map(f => `${esc(f.cod)} tam. ${esc(f.tam)} (pediu ${f.pedido}, tinha ${f.tem})`).join(' · ')}. Fale com o cliente antes de confirmar.</p>` : ''}
       <p class="ord-end">${esc(c.rua || '')}, ${esc(c.num || '')}${c.comp ? ' — ' + esc(c.comp) : ''} — ${esc(c.bairro || '')}, ${esc(o.cidade || '')} · CEP ${esc(c.cep || '')}</p>
@@ -244,6 +244,11 @@ export function renderPedidos(box, orders, db, toast, filtro, setFiltro) {
   });
   const mudar = async (id, status) => {
     if (status === 'pago') {   // venda confirmada: a peça sai do estoque agora
+      const o = orders.find(x => x.id === id);
+      if (o?.origem === 'whatsapp') {   // pedido do WhatsApp nasce no celular do cliente: o servidor refaz as contas antes de você confirmar
+        const c = await estoqueApi('conferir', id);
+        if (c?.problemas?.length && !confirm(`Atenção, confira antes de confirmar a venda:\n\n• ${c.problemas.join('\n• ')}\n\nConfirmar mesmo assim?`)) return;
+      }
       let r = await estoqueApi('baixar', id);
       if (r && r.ok === false && (r.falta || []).length) {
         const txt = r.falta.map(f => `${f.cod} tam. ${f.tam} (pedido ${f.pedido}, estoque ${f.tem})`).join('\n');

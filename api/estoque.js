@@ -3,10 +3,12 @@
  * { acao: 'baixar',   pedidoId, forcar? } → baixa do estoque as peças do pedido (uma única vez). Se faltar estoque, avisa; com forcar:true baixa o que houver.
  * { acao: 'liberar',  pedidoId }          → devolve ao estoque as peças de um pedido que já tinha baixado (cancelamento)
  * { acao: 'cancelar', pedidoId, devolver? } → cancela um pedido ainda "aguardando". Se ele tinha peça reservada (pedidos antigos), devolve ao estoque; com devolver:false só cancela (use quando você já repôs o estoque na mão)
+ * { acao: 'conferir', pedidoId }           → refaz o pedido (preço, frete, cupom) com os dados reais e devolve os problemas encontrados (pedidos do WhatsApp)
  * { acao: 'verificar', pedidoId }          → pergunta ao Mercado Pago como está o pagamento do pedido e atualiza o pedido (reserva caso um aviso tenha falhado)
  * Peças sem o campo "estoque" (controle não ativado) são ignoradas. */
 const { admin, db, usuario, erro, responder, mp } = require('./_lib');
 const { aplicarPagamento } = require('./_pagamento');
+const { conferirPedido } = require('./_conferencia');
 const { planejarReserva, aplicar, liberarPedido } = require('./_estoque');
 
 const ADMIN = 'clouts.oficial2026@gmail.com';
@@ -46,6 +48,11 @@ module.exports = async (req, res) => {
       else await liberarPedido(fs, ref, { status: 'cancelado' });
       return res.status(200).json({ ok: true });
     }
+    if (b.acao === 'conferir') {
+      const s = await ref.get(); if (!s.exists) throw erro(404, 'Pedido não encontrado.');
+      return res.status(200).json({ ok: true, problemas: await conferirPedido(fs, s.data(), id) });
+    }
+
     if (b.acao === 'verificar') {
       const s = await ref.get(); if (!s.exists) throw erro(404, 'Pedido não encontrado.');
       if (s.data().origem === 'whatsapp') throw erro(409, 'Pedido do WhatsApp: confirme a venda manualmente.');

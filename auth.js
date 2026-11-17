@@ -21,7 +21,7 @@ const CloutsFB = (() => {
     getApp() {
       return appP ??= import(base + 'firebase-app.js').then(async m => {
         const app = m.initializeApp(FIREBASE_CONFIG);
-        if (APPCHECK_SITE_KEY) {
+        if (APPCHECK_SITE_KEY && !/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) {   // testes locais não contam nas métricas
           try { const ac = await import(base + 'firebase-app-check.js'); ac.initializeAppCheck(app, { provider: new ac.ReCaptchaEnterpriseProvider(APPCHECK_SITE_KEY), isTokenAutoRefreshEnabled: true }); } catch (e) { console.warn('App Check:', e); }
         }
         return app;

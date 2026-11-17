@@ -36,7 +36,7 @@ const cents = v => Math.round(Number(v) * 100);
 const reais = c => Math.round(c) / 100;
 
 /* Calcula o pedido a partir do que está no Firestore (preço, estoque e cupom do servidor). O navegador só informa ids, tamanhos e quantidades. */
-async function calcular({ itens, cupom, cep }, uid) {
+async function calcular({ itens, cupom, cep, tel }, uid) {
   if (!Array.isArray(itens) || !itens.length || itens.length > 40) throw erro(400, 'Carrinho vazio ou inválido.');
   const fs = db();
   let sub = 0; const linhas = [];
@@ -77,8 +77,16 @@ async function calcular({ itens, cupom, cep }, uid) {
       const pct = Math.min(50, Number(cfg.primeiraPct) > 0 ? Number(cfg.primeiraPct) : 10), dias = Math.min(30, Number(cfg.primeiraDias) > 0 ? Number(cfg.primeiraDias) : 7);
       const usr = await admin.auth().getUser(uid), criado = Date.parse(usr.metadata.creationTime);
       if (!(criado + dias * 86400000 > Date.now())) throw erro(409, 'O cupom de primeira compra expirou.');
+      // Gasta o cupom: pedido pago, ou pedido do WhatsApp em andamento. Link de pagamento aberto e não pago NÃO gasta (o cliente pode voltar e tentar de novo).
+      const gasta = x => !['cancelado', 'recusado'].includes(x.status) && !(x.origem !== 'whatsapp' && x.status === 'aguardando');
       const ant = await fs.collection('pedidos').where('uid', '==', uid).get();
-      if (ant.docs.some(d => !['cancelado', 'recusado'].includes(d.data().status))) throw erro(409, 'O cupom de primeira compra vale apenas na primeira compra.');
+      if (ant.docs.some(d => gasta(d.data()))) throw erro(409, 'O cupom de primeira compra vale apenas na primeira compra.');
+      // Outra conta Google com o mesmo WhatsApp não ganha o cupom de novo.
+      const t = String(tel || '').replace(/\D/g, '').slice(-11);
+      if (t.length >= 10) {
+        const mesmo = await fs.collection('pedidos').where('telDigitos', '==', t).where('cupom', '==', 'PRIMEIRA').get();
+        if (mesmo.docs.some(d => d.data().uid !== uid && gasta(d.data()))) throw erro(409, 'O cupom de primeira compra já foi usado com este WhatsApp.');
+      }
       percent = pct;
     } else {
       // Código promocional criado pelo dono no painel (campanhas/{CÓDIGO}): ativo, dentro da validade, uma vez por cliente.
@@ -121,4 +129,5 @@ const mp = async (path, opt = {}) => {
   return j;
 };
 
-module.exports = { admin, db, configurado, usuario, calcular, mp, erro, responder, cents, reais, DEGRAUS };
+const FRETE_INFO = { FRETE, GRATIS: FRETE_GRATIS_ACIMA };
+module.exports = { admin, db, configurado, usuario, calcular, mp, erro, responder, cents, reais, DEGRAUS, FRETE_INFO };

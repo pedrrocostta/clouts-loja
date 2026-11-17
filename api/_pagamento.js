@@ -36,6 +36,12 @@ async function aplicarPagamento(pg) {
       t.set(fs.collection('referrals').doc(o.ref), { n: admin.firestore.FieldValue.increment(1) }, { merge: true });
     }
   });
+  if (virouPago && virouPago.cupom) {   // mesmo cupom em outro pedido já pago pelo mesmo cliente? (duas guias abertas pagas ao mesmo tempo) → marca para o administrador ver
+    try {
+      const outros = await fs.collection('pedidos').where('uid', '==', virouPago.uid).where('cupom', '==', virouPago.cupom).where('status', '==', 'pago').get();
+      if (outros.docs.some(d => d.id !== pedidoId)) await ref.update({ cupomRepetido: true });
+    } catch (e) { console.error('conferência de cupom:', e.message); }
+  }
   if (virouPago && virouPago.email && emailConfigurado()) {
     const o = virouPago;   // falha de e-mail nunca derruba a confirmação
     try { await enviar({ para: o.email, ...emailPedido({ evento: 'confirmado', nome: o.cliente?.nome, pedidoId, itens: o.itens, subtotal: o.subtotal, desconto: o.desconto, frete: o.frete, total: o.total, cidade: o.cidade }) }); }

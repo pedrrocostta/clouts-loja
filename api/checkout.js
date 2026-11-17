@@ -16,24 +16,31 @@ module.exports = async (req, res) => {
     const cliente = { nome: txt(c.nome, 100), tel: txt(c.tel, 20), rua: txt(c.rua, 120), num: txt(c.num, 12), bairro: txt(c.bairro, 80), comp: txt(c.comp, 60), cep: txt(c.cep, 9) };
     if (!cliente.nome || !cliente.tel || !cliente.rua || !cliente.num || !cliente.bairro) throw erro(400, 'Preencha nome, WhatsApp e endereço.');
 
-    // Freio: no máximo 6 pedidos online abertos nos últimos 15 minutos por cliente (evita encher o banco e o Mercado Pago de pedidos falsos).
-    const abertos = await db().collection('pedidos').where('uid', '==', u.uid).where('status', '==', 'aguardando').get();
-    if (abertos.docs.filter(d => d.data().origem !== 'whatsapp' && (d.data().criadoEm?.toMillis?.() || 0) > Date.now() - 15 * 60000).length >= 6) throw erro(429, 'Muitas tentativas de pagamento seguidas. Aguarde alguns minutos.');
+    // Freio: no máximo 8 pedidos online criados nos últimos 15 minutos por cliente (evita encher o banco e o Mercado Pago de pedidos falsos).
+    const meus = await db().collection('pedidos').where('uid', '==', u.uid).get();
+    if (meus.docs.filter(d => d.data().origem !== 'whatsapp' && (d.data().criadoEm?.toMillis?.() || 0) > Date.now() - 15 * 60000).length >= 8) throw erro(429, 'Muitas tentativas de pagamento seguidas. Aguarde alguns minutos.');
 
-    const p = await calcular({ itens: b.itens, cupom: b.cupom, cep: cliente.cep }, u.uid);
+    const p = await calcular({ itens: b.itens, cupom: b.cupom, cep: cliente.cep, tel: cliente.tel }, u.uid);
     if (!(p.total > 0)) throw erro(400, 'Total inválido.');
 
     // Quem convidou vem do código de amigo que o cliente usou (users/{uid}/meta/indicacao, gravado uma única vez), não do navegador.
     const fs = db(), ind = await fs.collection('users').doc(u.uid).collection('meta').doc('indicacao').get();
     const ref = ind.exists && ind.data().ref && ind.data().ref !== u.uid ? String(ind.data().ref) : null;
     const doc = fs.collection('pedidos').doc();
+    // Um link de pagamento por vez: pedidos online anteriores ainda não pagos deste cliente são cancelados e seus links expiram.
+    // Assim o mesmo cupom não fica "preso" em vários links que poderiam ser pagos ao mesmo tempo.
+    for (const d of meus.docs) {
+      const x = d.data(); if (x.origem === 'whatsapp' || x.status !== 'aguardando') continue;
+      await d.ref.update({ status: 'cancelado' }).catch(() => {});
+      if (x.mpPreference) mp(`/checkout/preferences/${x.mpPreference}`, { method: 'PUT', body: JSON.stringify({ expires: true, expiration_date_to: new Date().toISOString() }) }).catch(() => {});
+    }
     // Só confere se ainda há estoque (a peça NÃO sai do estoque agora: ela só baixa quando o pagamento for aprovado, no webhook).
     await fs.runTransaction(async t => {
       const { falta } = await planejarReserva(t, fs, p.linhas);
       if (falta.length) throw erro(409, `A peça ${falta[0].cod} (tam. ${falta[0].tam}) acabou de esgotar. Atualize o carrinho.`);
       t.set(doc, {
         uid: u.uid, email: u.email || '', cliente, itens: p.linhas, subtotal: p.subtotal, desconto: p.desconto, frete: p.frete, total: p.total,
-        cupom: p.cupom, percent: p.percent, cidade: p.cidade, ref, status: 'aguardando', criadoEm: admin.firestore.FieldValue.serverTimestamp()
+        cupom: p.cupom, percent: p.percent, cidade: p.cidade, telDigitos: String(cliente.tel).replace(/\D/g, '').slice(-11), ref, status: 'aguardando', criadoEm: admin.firestore.FieldValue.serverTimestamp()
       });
     });
 

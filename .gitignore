@@ -16,3 +16,4 @@ cacador-vps/
 *service-account*.json
 *serviceAccount*.json
 *firebase-adminsdk*.json
+node_modules
