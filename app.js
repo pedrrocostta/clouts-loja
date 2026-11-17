@@ -82,13 +82,15 @@ function aplicarConfig(c) {
   iniciarMedicao(); avisoCookies();
 }
 /* ---------- Medição (Google Analytics e Pixel da Meta): só depois que o visitante aceita os cookies ---------- */
+const GA_ID_PADRAO = 'G-VQ23DQ3JFY';          // código de medição da CLOUTS (é público). Fica embutido para a medição nunca depender de preencher o painel; o painel (Site) pode trocar por outro.
+const gaIdAtivo = () => loja.gaId || GA_ID_PADRAO;
 const medicao = { ga: false, px: false };
 function iniciarMedicao() {
   if (store.get('clouts.cookies', null) !== 'sim') return;
-  if (!medicao.ga && /^G-[A-Z0-9]{4,15}$/.test(loja.gaId || '')) {
+  if (!medicao.ga && /^G-[A-Z0-9]{4,15}$/.test(gaIdAtivo())) {
     medicao.ga = true; window.dataLayer = window.dataLayer || []; window.gtag = function () { dataLayer.push(arguments); };
-    gtag('js', new Date()); gtag('config', loja.gaId);
-    const s = document.createElement('script'); s.async = true; s.src = 'https://www.googletagmanager.com/gtag/js?id=' + loja.gaId; document.head.appendChild(s);
+    gtag('js', new Date()); gtag('config', gaIdAtivo());
+    const s = document.createElement('script'); s.async = true; s.src = 'https://www.googletagmanager.com/gtag/js?id=' + gaIdAtivo(); document.head.appendChild(s);
   }
   if (!medicao.px && /^[0-9]{5,20}$/.test(loja.pixelId || '')) {
     medicao.px = true;
@@ -100,7 +102,7 @@ function iniciarMedicao() {
 const track = (ga, fb, d = {}) => { try { if (medicao.ga) gtag('event', ga, d.ga || {}); if (medicao.px && fb) fbq('track', fb, d.fb || {}); } catch {} };
 const trkItem = (p, q = 1) => ({ item_id: p.cod, item_name: p.nome, price: p.preco, quantity: q });
 function avisoCookies() {
-  if (!(loja.gaId || loja.pixelId) || store.get('clouts.cookies', null) || $('#ckBar')) return;
+  if (!(gaIdAtivo() || loja.pixelId) || store.get('clouts.cookies', null) || $('#ckBar')) return;
   const el = document.createElement('div'); el.id = 'ckBar'; el.className = 'ck'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', 'Cookies');
   el.innerHTML = '<p>Usamos cookies para entender o uso da loja e mostrar anúncios mais úteis. Veja a <a href="privacidade.html">Política de privacidade</a>.</p><div><button type="button" data-ck="nao">Recusar</button><button type="button" data-ck="sim" class="y">Aceitar</button></div>';
   el.onclick = e => { const b = e.target.closest('[data-ck]'); if (!b) return; store.set('clouts.cookies', b.dataset.ck); el.remove(); iniciarMedicao(); };

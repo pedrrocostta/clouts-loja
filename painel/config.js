@@ -13,6 +13,7 @@ const salvarCfg = (db, cfg, patch) => setDoc(doc(db, 'config', 'loja'), { ...cfg
 const sw = (k, on, titulo, desc) => `<label class="sw cfg-sw"><input type="checkbox" data-cfg="${k}" ${on ? 'checked' : ''}><i></i><span><b>${titulo}</b><small>${desc}</small></span></label>`;
 
 export function renderCupons(box, cfg, camps, db, toast, divulgar) {
+  delete box.dataset.sujo;
   const on = k => cfg[k] !== false;
   const agora = Date.now();
   box.innerHTML = `
@@ -45,6 +46,8 @@ export function renderCupons(box, cfg, camps, db, toast, divulgar) {
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><button class="btn line sm" data-div type="button">Divulgar no sininho</button><button class="btn danger sm" data-del type="button">Excluir</button></div></div></article>`;
   }).join('') : '<div class="empty">Nenhum código criado ainda.</div>'}</div>`;
 
+  // Enquanto houver texto digitado e não salvo, o painel não redesenha este formulário (senão uma atualização em tempo real apagaria o que você escreveu).
+  box.querySelectorAll('input[type=text],input[type=number],select,textarea').forEach(el => el.addEventListener('input', () => { box.dataset.sujo = '1'; }));
   box.querySelectorAll('[data-cfg]').forEach(i => i.onchange = async () => {
     try { await salvarCfg(db, cfg, { [i.dataset.cfg]: i.checked }); toast(i.checked ? 'Ligado. Já vale na loja.' : 'Desligado. Já saiu da loja.'); }
     catch (e) { i.checked = !i.checked; toast(msgErro(e), true); }
@@ -53,7 +56,7 @@ export function renderCupons(box, cfg, camps, db, toast, divulgar) {
     const m = $('#p-msg', box), pct = Math.round(+$('#p-pct', box).value), dias = Math.round(+$('#p-dias', box).value);
     if (!(pct >= 1 && pct <= 50)) { m.className = 'msg bad'; m.textContent = 'O desconto vai de 1% a 50%.'; return; }
     if (!(dias >= 1 && dias <= 30)) { m.className = 'msg bad'; m.textContent = 'A validade vai de 1 a 30 dias.'; return; }
-    try { await salvarCfg(db, cfg, { primeiraPct: pct, primeiraDias: dias }); m.className = 'msg'; m.textContent = ''; toast('Salvo. Já vale na loja.'); } catch (e) { m.className = 'msg bad'; m.textContent = msgErro(e); }
+    try { await salvarCfg(db, cfg, { primeiraPct: pct, primeiraDias: dias }); m.className = 'msg'; m.textContent = ''; delete box.dataset.sujo; toast('Salvo. Já vale na loja.'); } catch (e) { m.className = 'msg bad'; m.textContent = msgErro(e); }
   };
   $('#campForm', box).onsubmit = async e => {
     e.preventDefault(); const m = $('#c-msg', box), id = $('#c-cod', box).value.toUpperCase().replace(/[^A-Z0-9]/g, ''), pct = Math.round(+$('#c-pct', box).value), dias = +$('#c-val', box).value;
@@ -63,7 +66,7 @@ export function renderCupons(box, cfg, camps, db, toast, divulgar) {
     if (camps.some(c => c.id === id)) { m.className = 'msg bad'; m.textContent = 'Já existe um código com esse nome.'; return; }
     const data = { percent: pct, ativo: true, criadoEm: serverTimestamp(), expiraEm: dias ? Timestamp.fromMillis(Date.now() + dias * 86400000) : null };
     const d = $('#c-desc', box).value.trim(); if (d) data.descricao = d;
-    try { await setDoc(doc(db, 'campanhas', id), data); toast(`Código ${id} criado e ativo.`); } catch (er) { m.className = 'msg bad'; m.textContent = msgErro(er); }
+    try { await setDoc(doc(db, 'campanhas', id), data); delete box.dataset.sujo; toast(`Código ${id} criado e ativo.`); } catch (er) { m.className = 'msg bad'; m.textContent = msgErro(er); }
   };
   box.querySelectorAll('[data-code]').forEach(card => {
     const id = card.dataset.code, c = camps.find(x => x.id === id);
@@ -78,6 +81,7 @@ export function renderCupons(box, cfg, camps, db, toast, divulgar) {
 }
 
 export function renderSite(box, cfg, db, toast) {
+  delete box.dataset.sujo;
   box.innerHTML = `<form class="cfg-card" id="siteForm"><h2>Textos e contato da loja</h2>
     <p class="msg">O que você mudar aqui aparece na loja na hora, sem precisar publicar nada.</p>
     <label class="f" for="s-barra">Frase da barra dourada do topo <span class="cnt" id="s-cnt">${(cfg.barra || '').length}/140</span><input id="s-barra" type="text" maxlength="140" value="${esc(cfg.barra || '')}" placeholder="Deixe vazio para usar: Entregamos em Contagem · Betim · Belo Horizonte"></label>
@@ -98,6 +102,7 @@ export function renderSite(box, cfg, db, toast) {
     <button class="btn gold" type="submit">Salvar</button></form>
   <div class="cfg-card"><h2>Onde editar o resto</h2>
     <ul class="mini"><li><b>Peças</b>: aba Peças (preço, De/Por, fotos, tamanhos, descrição, visibilidade).</li><li><b>Promoções e recados</b>: aba Avisos e promoções.</li><li><b>Cupons e códigos</b>: aba Cupons.</li><li><b>Banners da página inicial e preços de frete</b>: ainda são arquivos do site; me peça a troca que eu faço.</li></ul></div>`;
+  box.querySelectorAll('input,textarea').forEach(el => el.addEventListener('input', () => { box.dataset.sujo = '1'; }));   // texto não salvo: o painel não redesenha este formulário
   $('#s-barra', box).oninput = e => { $('#s-cnt', box).textContent = e.target.value.length + '/140'; };
   $('#s-guia', box).oninput = e => { $('#g-cnt', box).textContent = e.target.value.length + '/3000'; };
   $('#siteForm', box).onsubmit = async e => {
@@ -109,6 +114,6 @@ export function renderSite(box, cfg, db, toast) {
     if (up && !/^[A-Za-z0-9_-]{1,60}$/.test(up)) { m.className = 'msg bad'; m.textContent = 'Upload preset inválido: use só letras, números, - e _.'; return; }
     const novo = { ...cfg }; if (barra) novo.barra = barra; else delete novo.barra; if (wa) novo.whatsapp = wa; else delete novo.whatsapp;
     [['gaId', ga], ['gaPropertyId', gp], ['pixelId', px], ['cloudName', cn], ['uploadPreset', up], ['guiaMedidas', guia]].forEach(([k, v]) => { if (v) novo[k] = v; else delete novo[k]; });
-    try { await setDoc(doc(db, 'config', 'loja'), novo); m.className = 'msg'; m.textContent = ''; toast('Salvo. Já está na loja.'); } catch (er) { m.className = 'msg bad'; m.textContent = msgErro(er); }
+    try { await setDoc(doc(db, 'config', 'loja'), novo); m.className = 'msg'; m.textContent = ''; delete box.dataset.sujo; toast('Salvo. Já está na loja.'); } catch (er) { m.className = 'msg bad'; m.textContent = msgErro(er); }
   };
 }

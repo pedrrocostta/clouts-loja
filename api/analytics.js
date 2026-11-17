@@ -8,6 +8,7 @@ const crypto = require('crypto');
 const { db, usuario, erro, responder } = require('./_lib');
 
 const ADMIN = 'clouts.oficial2026@gmail.com';
+const PROPRIEDADE_PADRAO = '556669532';   // propriedade do GA4 da loja (não é segredo); o painel (Site) pode trocar
 const ehAdmin = u => u && u.email === ADMIN && u.email_verified === true && u.firebase?.sign_in_provider === 'google.com';
 
 /* Token de acesso (JWT assinado com a chave da conta de serviço), guardado até perto de vencer. */
@@ -73,7 +74,7 @@ module.exports = async (req, res) => {
     if (!ehAdmin(u)) throw erro(403, 'Somente o administrador.');
     const b = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
     const periodo = FAIXAS[String(b.periodo)] ? String(b.periodo) : '30';
-    const cfg = (await db().collection('config').doc('loja').get()).data() || {}, prop = String(cfg.gaPropertyId || '').replace(/\D/g, '');
+    const cfg = (await db().collection('config').doc('loja').get()).data() || {}, prop = String(cfg.gaPropertyId || PROPRIEDADE_PADRAO).replace(/\D/g, '');
     if (!prop) return res.status(200).json({ ok: false, motivo: 'sem-config' });
     const m = memo[prop + periodo]; if (m && Date.now() - m.t < 60000) return res.status(200).json(m.dados);
     try {

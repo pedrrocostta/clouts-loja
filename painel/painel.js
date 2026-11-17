@@ -118,7 +118,7 @@ function showTab(t) {
 
 /* ---------- Cupons e configurações do site ---------- */
 let cfg = {}, camps = [], unsubCfg = null, unsubCamp = null;
-const drawCupons = () => { const b = $('#tabCupons'); if (!b || b.contains(document.activeElement) && document.activeElement.tagName === 'INPUT' && document.activeElement.type !== 'checkbox') return; renderCupons(b, cfg, camps, db, toast, divulgarCampanha); };
+const drawCupons = () => { const b = $('#tabCupons'); if (!b || b.dataset.sujo || b.contains(document.activeElement) && document.activeElement.tagName === 'INPUT' && document.activeElement.type !== 'checkbox') return; renderCupons(b, cfg, camps, db, toast, divulgarCampanha); };
 let solic = [], unsubSol = null;
 const avisarSolic = async ids => { try { const u = auth.currentUser; const r = await fetch('/api/email', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + await u.getIdToken() }, body: JSON.stringify({ acao: 'solicitacao', ids }) }); return await r.json(); } catch { return null; } };
 /* Quando um tamanho volta ao estoque e alguém tinha pedido essa peça, oferece avisar por e-mail na hora. */
@@ -135,7 +135,7 @@ const drawPrecos = foco => { const b = $('#tabPrecos'); if (!b) return; if (!foc
   const had = foco && document.activeElement?.id === 'pr-q', pos = had ? document.activeElement.selectionStart : 0;
   renderPrecos(b, items, db, toast, prSt, () => drawPrecos(true));
   if (had) { const i = $('#pr-q'); i.focus(); i.setSelectionRange(pos, pos); } };
-const drawSite = () => { const b = $('#tabSite'); if (!b || b.contains(document.activeElement) && ['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) return; renderSite(b, cfg, db, toast); };
+const drawSite = () => { const b = $('#tabSite'); if (!b || b.dataset.sujo || b.contains(document.activeElement) && ['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) return; renderSite(b, cfg, db, toast); };
 async function divulgarCampanha(c) {
   const ex = c.expiraEm?.toMillis?.();
   try {
