@@ -503,9 +503,22 @@ function openLogin(motivo, oferta) {
   if (oferta && $('#gLater', s)) $('#gLater', s).onclick = () => closeSheet();
   $('#gBtn', s).onclick = async () => {
     if (!auth()?.configured) { $('#gMsg', s).textContent = 'O login com Google será ativado assim que a configuração do Firebase for concluída (veja o LEIA-ME).'; return; }
-    try { const u = await auth().signIn(); closeSheet(); toast('Bem-vindo(a) à CLOUTS!'); if (u.isNew && !CONFIG.pagamentoOnline) registrarConvite(u.uid); if (u.isNew) CloutsDB.meuCodigo(u.uid).catch(() => {}).finally(() => CloutsDB.email({ acao: 'boasvindas' })); else syncCarrinho(); }
+    try { const u = await auth().signIn(); closeSheet(); posLogin(u); }
     catch (e) { $('#gMsg', s).textContent = e.code === 'auth/popup-closed-by-user' ? 'Login cancelado.' : 'Não foi possível entrar agora. Tente novamente.'; }
   };
+}
+function posLogin(u) {
+  toast('Bem-vindo(a) à CLOUTS!');
+  if (u.isNew && !CONFIG.pagamentoOnline) registrarConvite(u.uid);
+  if (u.isNew) CloutsDB.meuCodigo(u.uid).catch(() => {}).finally(() => CloutsDB.email({ acao: 'boasvindas' })); else syncCarrinho();
+}
+/* Volta do login do Google no celular (a página foi para o Google e voltou). */
+async function voltaDoLogin() {
+  try {
+    const u = await auth()?.redirectResult(); if (!u) return;
+    if (u.erro) { toast('Não foi possível entrar agora. Tente novamente.'); return; }
+    posLogin(u);
+  } catch (e) { console.warn('Login:', e); }
 }
 /* Ao sair da conta, apaga do aparelho o que é pessoal (carrinho, endereço, dados do cliente, cupom aplicado). */
 let lastUid = null;
@@ -1097,7 +1110,7 @@ aplicarConfig(loja);
 hideSplash();
 voltaDoPagamento();
 if (auth()) auth().onChange(onUser);
-setTimeout(() => window.CloutsAuth?.start(), 300);
+setTimeout(() => window.CloutsAuth?.start().then(voltaDoLogin), 300);
 idle(() => {
   if (window.CloutsDB) CloutsDB.avisos(onAvisos, () => {});
   if (window.CloutsDB) CloutsDB.config(aplicarConfig, () => {});

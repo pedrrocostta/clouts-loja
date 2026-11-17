@@ -1,5 +1,5 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
-import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut, setPersistence, browserSessionPersistence, browserLocalPersistence } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signInWithRedirect, signOut, setPersistence, browserSessionPersistence, browserLocalPersistence } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
 import { getFirestore, collection, onSnapshot, doc, setDoc, updateDoc, deleteDoc, writeBatch, addDoc, serverTimestamp, query, orderBy, limit, Timestamp, getDocs, arrayUnion, arrayRemove } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
 // Login do Google pelo próprio domínio da loja (o navegador do celular às vezes isola o armazenamento do endereço do Firebase e dá o erro "missing initial state").
@@ -76,7 +76,9 @@ function viewLogin(aviso) {
     b.disabled = true; m.className = 'msg'; m.textContent = 'Abrindo o Google…';
     try {
       const p = new GoogleAuthProvider(); p.setCustomParameters({ prompt: 'select_account' });
-      await signInWithPopup(auth, p);   // sem nenhum 'await' antes: os navegadores de celular só abrem a janela do Google se ela abrir direto do toque lockSave({ n: 0, ate: 0 }); m.textContent = '';
+      if (/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent)) { await signInWithRedirect(auth, p); return; }   // celular: vai para o Google na mesma aba e volta já logado (a janelinha falha em vários celulares)
+      await signInWithPopup(auth, p);   // sem nenhum 'await' antes: os navegadores de celular só abrem a janela do Google se ela abrir direto do toque
+      lockSave({ n: 0, ate: 0 }); m.textContent = '';
     } catch (er) {
       if (er?.code === 'auth/popup-closed-by-user' || er?.code === 'auth/cancelled-popup-request') { m.textContent = ''; b.disabled = false; return; }
       const st = lockInfo(), n = st.n + 1;

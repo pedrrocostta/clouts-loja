@@ -35,7 +35,9 @@ const CloutsFB = (() => {
 })();
 
 const CloutsAuth = (() => {
-  const subs = []; let user = null, mod = null, auth = null, ready = null;
+  const subs = []; let user = null, mod = null, auth = null, ready = null, redirP = null;
+  // No celular o login abre a tela do Google na própria aba e volta já logado (a janelinha/popup falha em vários celulares: a conta é escolhida e nada acontece).
+  const celular = () => { try { return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || (matchMedia('(pointer:coarse)').matches && innerWidth < 900); } catch { return false; } };
   const notify = () => subs.forEach(f => f(user));
   const pick = u => u && ({ uid: u.uid, nome: u.displayName || '', email: u.email || '', foto: u.photoURL || '', criadoEm: Date.parse(u.metadata?.creationTime) || 0 });
 
@@ -44,6 +46,8 @@ const CloutsAuth = (() => {
     return ready ??= (async () => {
       const [app, authM] = await Promise.all([CloutsFB.getApp(), import(CloutsFB.base + 'firebase-auth.js')]);
       mod = authM; auth = authM.getAuth(app);
+      let voltando = false; try { voltando = sessionStorage.getItem('clouts.redir') === '1'; } catch {}
+      if (voltando) redirP = authM.getRedirectResult(auth).catch(e => ({ erro: e })).finally(() => { try { sessionStorage.removeItem('clouts.redir'); } catch {} });
       authM.onAuthStateChanged(auth, u => { user = pick(u); notify(); });
     })();
   }
@@ -54,7 +58,20 @@ const CloutsAuth = (() => {
     start() { return init().catch(e => console.error('Firebase:', e)); },
     async signIn() {
       await init();
-      const r = await mod.signInWithPopup(auth, new mod.GoogleAuthProvider());
+      const prov = new mod.GoogleAuthProvider(); prov.setCustomParameters({ prompt: 'select_account' });
+      if (celular()) {
+        try { sessionStorage.setItem('clouts.redir', '1'); } catch {}
+        await mod.signInWithRedirect(auth, prov);
+        return new Promise(() => {});   // a página vai para o Google; o resultado é tratado quando ela volta (redirectResult)
+      }
+      const r = await mod.signInWithPopup(auth, prov);
+      return { ...pick(r.user), isNew: !!mod.getAdditionalUserInfo(r)?.isNewUser };
+    },
+    // Depois da volta do Google (celular): devolve o usuário (com isNew) ou {erro}; null se não estava voltando de um login.
+    async redirectResult() {
+      await init(); if (!redirP) return null;
+      const r = await redirP; redirP = null;
+      if (!r) return null; if (r.erro) return { erro: r.erro };
       return { ...pick(r.user), isNew: !!mod.getAdditionalUserInfo(r)?.isNewUser };
     },
     async signOut() { await init(); await mod.signOut(auth); },
