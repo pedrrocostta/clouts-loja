@@ -1,6 +1,7 @@
 /* Dashboard e pedidos do painel CLOUTS. Lê a coleção "pedidos" (criada pelo servidor quando o cliente paga online ou pelo site no pedido do WhatsApp). */
 import { collection, onSnapshot, query, orderBy, limit, doc, updateDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 import { getAuth } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+import { montarVisitas } from './analytics.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -77,7 +78,7 @@ function metricas(orders, items, ini, fim) {
   return { dentro, pagos, fat, n, pecas, desc, fret, ticket: n ? fat / n : 0, lucro, comCusto, semCusto };
 }
 
-export function renderDashboard(box, orders, items, periodo = '30', setPeriodo) {
+export function renderDashboard(box, orders, items, periodo = '30', setPeriodo, extras = {}) {
   const agora = Date.now(), t0 = desde(periodo), dias = periodo === 'tudo' ? null : tamanhoPeriodo(periodo);
   const m = metricas(orders, items, t0, agora + 1), ant = dias ? metricas(orders, items, t0 - dias * DIA, t0) : null;
   const { dentro: inP, pagos, fat, n, pecas, desc, fret, ticket, lucro, comCusto, semCusto } = m;
@@ -146,6 +147,8 @@ export function renderDashboard(box, orders, items, periodo = '30', setPeriodo) 
     ${comCusto ? kpi('', 'Lucro estimado', lucro, 'brl', `${Math.round(lucro / Math.max(1, fat) * 100)}% do faturamento${semCusto ? ` · ${semCusto} un. sem custo` : ''}`, delta(lucro, ant?.lucro)) : kpi('', 'Lucro estimado', 0, 'brl', 'cadastre o custo na aba Preços')}
   </div>
 
+  <section class="dsh-card ga-card" id="gaBox"></section>
+
   <section class="dsh-card"><h3>Vendas por dia</h3>
     <p class="vb-info" id="vbInfo" aria-live="polite">${melhor.v ? `Melhor dia: <b>${dmLongo(melhor.d)}</b> · ${brl(melhor.v)} (${melhor.n} pedido${melhor.n === 1 ? '' : 's'})` : 'Toque em uma barra para ver o dia.'}</p>
     <div class="vb-wrap"><span class="vb-max">${brl(maxD)}</span>
@@ -170,6 +173,7 @@ export function renderDashboard(box, orders, items, periodo = '30', setPeriodo) 
   <div class="kpis small">
     <div class="kpi ${paraEntregar ? 'warn' : ''}"><small>Para entregar</small><b>${paraEntregar}</b><span>pagos, ainda não entregues</span></div>
     <div class="kpi ${aguard.length ? 'warn' : ''}"><small>Aguardando confirmação</small><b>${aguard.length}</b><span>${brl(aguard.reduce((s, o) => s + (o.total || 0), 0))} em aberto</span></div>
+    <div class="kpi ${extras.solicitacoes ? 'warn' : ''}"><small>Solicitações de peça</small><b>${extras.solicitacoes || 0}</b><span>para comprar no fornecedor</span></div>
     <div class="kpi"><small>Unidades em estoque</small><b>${num(unidades)}</b><span>${comEst.length} peça${comEst.length === 1 ? '' : 's'} com controle</span></div>
     <div class="kpi ${ultima ? 'warn' : ''}"><small>Na última unidade</small><b>${ultima}</b><span>peças visíveis</span></div>
   </div>
@@ -190,6 +194,7 @@ export function renderDashboard(box, orders, items, periodo = '30', setPeriodo) 
   vb.addEventListener('pointermove', porX); vb.addEventListener('pointerdown', porX);   // mouse passando ou dedo arrastando sobre as barras
   box.querySelectorAll('.vb-c').forEach(b => b.onclick = () => mostrar(+b.dataset.i));
   if (animar) contar(box);
+  montarVisitas($('#gaBox', box), periodo, n);
 }
 
 /* Estoque (só o administrador): 'baixar' tira as peças do estoque na venda confirmada; 'liberar' devolve as peças de um pedido cancelado que já tinha baixado; 'cancelar' cancela um pedido online antigo que ainda segurava a peça. */

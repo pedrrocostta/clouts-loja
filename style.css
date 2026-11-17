@@ -544,3 +544,9 @@ body.sem-conv [data-invite],body.sem-conv #cupomShare,body.sem-conv [data-conv]{
 .hero-dots button{position:relative}.hero-dots button::after{content:"";position:absolute;inset:-14px -8px}
 .pc-bar button{padding:9px 16px}
 @media(max-width:640px){.fav{width:40px;height:40px}}
+
+/* Solicitar peça */
+.req{margin-top:10px}
+.req-f{display:grid;gap:10px;padding:14px;border:1px dashed var(--gold);border-radius:14px;background:var(--cream)}
+.req-f>b{font-size:14px}.req-f.ok{text-align:center;border-style:solid;background:#f1f8f3;border-color:#b9dcc4}.req-f.ok b{color:#2f7d4f}.req-f.ok span{font-size:13px;color:var(--ink2)}
+.req-f .sizes{margin:0}

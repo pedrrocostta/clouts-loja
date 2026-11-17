@@ -89,6 +89,7 @@ export function renderSite(box, cfg, db, toast) {
     <p class="msg">Cole os códigos e a loja passa a medir as visitas e as compras. Só mede quem aceita os cookies. Vazio = desligado.</p>
     <div class="two"><label class="f" for="s-ga">Google Analytics (ID G-XXXXXXX)<input id="s-ga" type="text" maxlength="20" value="${esc(cfg.gaId || '')}" placeholder="G-ABC123XYZ"></label>
       <label class="f" for="s-px">Pixel da Meta (só números)<input id="s-px" type="text" inputmode="numeric" maxlength="20" value="${esc(cfg.pixelId || '')}" placeholder="123456789012345"></label></div>
+    <label class="f" for="s-gp">ID da propriedade do Analytics (só números) — para mostrar as visitas aqui no painel<input id="s-gp" type="text" inputmode="numeric" maxlength="15" value="${esc(cfg.gaPropertyId || '')}" placeholder="Ex.: 512345678 (Administrador → Configurações da propriedade)"></label>
     <h2 style="margin-top:22px">Fotos (Cloudinary)</h2>
     <p class="msg">Com isto preenchido, as fotos novas vão para o Cloudinary em vez de ficarem dentro do banco, e a loja fica bem mais rápida. Crie a conta gratuita em cloudinary.com, copie o "Cloud name" e crie um "Upload preset" do tipo <b>Unsigned</b>.</p>
     <div class="two"><label class="f" for="s-cn">Cloud name<input id="s-cn" type="text" maxlength="60" value="${esc(cfg.cloudName || '')}" placeholder="meu-cloud"></label>
@@ -102,12 +103,12 @@ export function renderSite(box, cfg, db, toast) {
   $('#siteForm', box).onsubmit = async e => {
     e.preventDefault(); const m = $('#s-msg', box), wa = $('#s-wa', box).value.replace(/\D/g, ''), barra = $('#s-barra', box).value.trim();
     if (wa && (wa.length < 12 || wa.length > 15)) { m.className = 'msg bad'; m.textContent = 'Digite o WhatsApp com 55 + DDD + número (12 a 13 dígitos).'; return; }
-    const ga = $('#s-ga', box).value.trim().toUpperCase(), px = $('#s-px', box).value.replace(/\D/g, ''), cn = $('#s-cn', box).value.trim(), up = $('#s-up', box).value.trim(), guia = $('#s-guia', box).value.trim();
+    const gp = $('#s-gp', box).value.replace(/\D/g, ''), ga = $('#s-ga', box).value.trim().toUpperCase(), px = $('#s-px', box).value.replace(/\D/g, ''), cn = $('#s-cn', box).value.trim(), up = $('#s-up', box).value.trim(), guia = $('#s-guia', box).value.trim();
     if (ga && !/^G-[A-Z0-9]{4,15}$/.test(ga)) { m.className = 'msg bad'; m.textContent = 'O ID do Google Analytics começa com G- (ex.: G-ABC123XYZ).'; return; }
     if (cn && !/^[A-Za-z0-9_-]{1,60}$/.test(cn)) { m.className = 'msg bad'; m.textContent = 'Cloud name inválido: use só letras, números, - e _.'; return; }
     if (up && !/^[A-Za-z0-9_-]{1,60}$/.test(up)) { m.className = 'msg bad'; m.textContent = 'Upload preset inválido: use só letras, números, - e _.'; return; }
     const novo = { ...cfg }; if (barra) novo.barra = barra; else delete novo.barra; if (wa) novo.whatsapp = wa; else delete novo.whatsapp;
-    [['gaId', ga], ['pixelId', px], ['cloudName', cn], ['uploadPreset', up], ['guiaMedidas', guia]].forEach(([k, v]) => { if (v) novo[k] = v; else delete novo[k]; });
+    [['gaId', ga], ['gaPropertyId', gp], ['pixelId', px], ['cloudName', cn], ['uploadPreset', up], ['guiaMedidas', guia]].forEach(([k, v]) => { if (v) novo[k] = v; else delete novo[k]; });
     try { await setDoc(doc(db, 'config', 'loja'), novo); m.className = 'msg'; m.textContent = ''; toast('Salvo. Já está na loja.'); } catch (er) { m.className = 'msg bad'; m.textContent = msgErro(er); }
   };
 }

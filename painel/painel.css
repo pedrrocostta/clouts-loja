@@ -210,3 +210,27 @@ textarea{width:100%;border:1px solid #d3c8b0;border-radius:10px;padding:10px 12p
 }
 @media(max-width:899px){.kpis:not(.small){grid-template-columns:repeat(2,1fr)}.kpi.gold{grid-column:1/-1}}
 @media(min-width:900px){.kpis:not(.small){grid-template-columns:repeat(4,1fr)}.kpi.gold{grid-column:span 2}.kpis.small:not(.tight){grid-template-columns:repeat(4,1fr)}}
+
+/* Solicitações */
+.tab-n{display:inline-block;margin-left:6px;min-width:20px;padding:1px 6px;border-radius:99px;background:var(--red);color:#fff;font-size:11px;font-weight:700;line-height:18px;text-align:center}
+.sol-bar{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin:6px 0 12px}
+.item.sol{grid-template-columns:72px 1fr}.item.sol .thumb{width:72px;height:96px;display:block}
+.sol-det,.sol-hist{margin-top:8px;font-size:13px}.sol-det summary,.sol-hist summary{cursor:pointer;font-weight:600;color:var(--ink2)}
+.sol-lista{list-style:none;display:grid;gap:8px;margin:8px 0}
+.sol-lista li{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:space-between;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:#fff;font-size:12.5px}
+.sol-lista li>span:first-child{flex:1 1 200px;min-width:0;overflow-wrap:anywhere}
+.sol-hist{margin:18px 0}
+
+/* Visitas do site (Google Analytics) */
+.ga-card{padding-bottom:6px}
+.ga-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+.ga-head h3{margin:0}.ga-head h3 small{text-transform:none;letter-spacing:0;font-weight:500}
+.ga-ao-vivo{display:inline-flex;align-items:center;gap:7px;font-size:12.5px;font-weight:700;color:var(--ok);background:#eaf5ee;border-radius:99px;padding:5px 12px}
+.ga-ao-vivo i{width:8px;height:8px;border-radius:50%;background:var(--ok);animation:gaPulso 1.6s ease-in-out infinite}
+@keyframes gaPulso{50%{opacity:.25;transform:scale(1.4)}}
+@media(prefers-reduced-motion:reduce){.ga-ao-vivo i{animation:none}}
+.ga-kpis{margin-bottom:12px}.ga-kpis .kpi b{font-size:24px}
+.ga-grid{margin-top:14px}.ga-grid .dsh-card{background:#fff}
+.ga-guia{background:var(--cream);border:1px dashed var(--gold);border-radius:12px;padding:14px 16px;font-size:13px;line-height:1.5}
+.ga-guia ol{margin:8px 0 2px 18px;display:grid;gap:6px}.ga-guia code{background:#fff;border:1px solid var(--line);border-radius:6px;padding:1px 6px;font-size:12px;overflow-wrap:anywhere}
+@media(max-width:560px){.ga-kpis{grid-template-columns:repeat(2,1fr)}.ga-kpis .kpi:last-child{grid-column:1/-1}}

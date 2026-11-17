@@ -2,9 +2,10 @@
  * { acao: 'boasvindas' }                              → boas-vindas (uma única vez por cliente)
  * { acao: 'carrinho', itens: [{id,q,tam}] }           → guarda o carrinho para o lembrete (vazio = limpa)
  * { acao: 'pedido', pedidoId }                        → "recebemos o seu pedido" (só o dono do pedido)
- * { acao: 'andamento', pedidoId, evento }             → confirmado | enviado | entregue (só o administrador) */
+ * { acao: 'andamento', pedidoId, evento }             → confirmado | enviado | entregue (só o administrador)
+ * { acao: 'solicitacao', ids: [...] }                 → avisa por e-mail quem pediu uma peça que ela chegou (só o administrador) */
 const { admin, db, usuario, erro, responder } = require('./_lib');
-const { emailConfigurado, enviar, boasVindas, pedido } = require('./_mail');
+const { emailConfigurado, enviar, boasVindas, pedido, chegou } = require('./_mail');
 
 const numCfg = (v, d, max) => Math.min(max, Number(v) > 0 ? Number(v) : d);
 
@@ -56,6 +57,21 @@ module.exports = async (req, res) => {
       if (ant.exists && JSON.stringify(ant.data().itens) === JSON.stringify(linhas)) return res.status(200).json({ ok: true });   // igual: não reinicia a contagem de horas
       await ref.set({ uid: u.uid, email: u.email, nome: u.name || '', itens: linhas, atualizadoEm: FV.serverTimestamp(), enviados: 0 });
       return res.status(200).json({ ok: true });
+    }
+
+    if (b.acao === 'solicitacao') {
+      if (!ehAdmin(u)) throw erro(403, 'Somente o administrador.');
+      const ids = (Array.isArray(b.ids) ? b.ids : []).map(String).filter(x => /^[\w-]{10,200}$/.test(x)).slice(0, 60);
+      let enviados = 0, falhas = 0;
+      for (const sid of ids) {
+        const ref = fs.collection('solicitacoes').doc(sid);
+        // marca antes de enviar (transação): duas cliques seguidos não mandam e-mail duas vezes
+        const s0 = await fs.runTransaction(async t => { const s = await t.get(ref); if (!s.exists || !['aberta', 'comprada'].includes(s.data().status)) return null; t.update(ref, { status: 'avisada', avisadaEm: FV.serverTimestamp() }); return s.data(); });
+        if (!s0) continue;
+        try { await enviar({ para: s0.email, ...chegou({ nome: s0.nomeCliente, produto: s0.nome, tam: s0.tam, produtoId: s0.produtoId }) }); enviados++; }
+        catch (e) { falhas++; console.error('aviso de peça:', e.message); await ref.update({ status: 'comprada' }); }   // falhou: volta para "comprada" e dá para tentar de novo
+      }
+      return res.status(200).json({ ok: true, enviados, falhas });
     }
 
     if (b.acao === 'pedido' || b.acao === 'andamento') {

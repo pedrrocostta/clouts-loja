@@ -13,6 +13,7 @@ if (APPCHECK_SITE_KEY) {
 import { ouvirPedidos, renderDashboard, renderPedidos } from './dashboard.js';
 import { ouvirConfig, ouvirCampanhas, renderCupons, renderSite } from './config.js';
 import { renderPrecos, novoEstadoPrecos } from './precos.js';
+import { ouvirSolicitacoes, renderSolicitacoes, totalAbertas } from './solicitacoes.js';
 const auth = getAuth(app), db = getFirestore(app), col = collection(db, 'produtos');
 
 /* ---------- Segurança ---------- */
@@ -54,7 +55,7 @@ const fail = e => toast(e?.code === 'permission-denied' ? 'Sua conta não tem pe
 
 /* ---------- Login ---------- */
 function viewLogin(aviso) {
-  $('#topActs').hidden = true; unsub?.(); unsub = null; unsubAv?.(); unsubAv = null; unsubPed?.(); unsubPed = null; pedidos = []; unsubCfg?.(); unsubCfg = null; unsubCamp?.(); unsubCamp = null;
+  $('#topActs').hidden = true; unsub?.(); unsub = null; unsubAv?.(); unsubAv = null; unsubPed?.(); unsubPed = null; pedidos = []; unsubSol?.(); unsubSol = null; solic = []; unsubCfg?.(); unsubCfg = null; unsubCamp?.(); unsubCamp = null;
   // Entrada só com a conta Google do dono (com verificação em duas etapas ligada na conta Google). Sem senha própria do painel.
   main.innerHTML = `<form class="login" id="lf"><img src="/img/logo.png" alt=""><h2>Entrar no painel</h2>
     <p class="msg" style="margin:0 0 4px">Entre com a conta Google do administrador.</p>
@@ -85,6 +86,7 @@ onAuthStateChanged(auth, u => {
   viewPanel();
   unsubPed?.(); pedErr = false; unsubPed = ouvirPedidos(db, list => { pedidos = list; pedErr = false; if (abaAtual === 'dash') drawDash(); if (abaAtual === 'pedidos' && document.activeElement?.tagName !== 'SELECT') drawPedidos(true); }, () => { pedErr = true; drawDash(); });
   abaAtual = 'dash'; drawDash();
+  unsubSol?.(); unsubSol = ouvirSolicitacoes(db, l => { solic = l; const n = totalAbertas(l), e = $('#solN'); if (e) { e.textContent = n; e.hidden = !n; } if (abaAtual === 'solic') drawSolic(); if (abaAtual === 'dash') drawDash(); }, () => {});
   unsubCfg?.(); unsubCfg = ouvirConfig(db, c => { cfg = c; if (abaAtual === 'cupons') drawCupons(); if (abaAtual === 'site') drawSite(); }, () => {});
   unsubCamp?.(); unsubCamp = ouvirCampanhas(db, l => { camps = l; if (abaAtual === 'cupons') drawCupons(); }, () => {});
   unsub?.(); unsub = onSnapshot(col, snap => { items = snap.docs.map(d => ({ id: d.id, ...d.data() })); renderList(); if (abaAtual === 'dash') drawDash(); if (abaAtual === 'precos') drawPrecos(); },
@@ -93,8 +95,8 @@ onAuthStateChanged(auth, u => {
 
 /* ---------- Painel ---------- */
 function viewPanel() {
-  main.innerHTML = `<div class="tabs" role="tablist"><button class="tab on" role="tab" data-tab="dash">Dashboard</button><button class="tab" role="tab" data-tab="pedidos">Pedidos</button><button class="tab" role="tab" data-tab="pecas">Peças</button><button class="tab" role="tab" data-tab="precos">Preços</button><button class="tab" role="tab" data-tab="cupons">Cupons</button><button class="tab" role="tab" data-tab="avisos">Avisos e promoções</button><button class="tab" role="tab" data-tab="site">Site</button></div>
-    <section id="tabDash"></section><section id="tabPedidos" hidden></section>
+  main.innerHTML = `<div class="tabs" role="tablist"><button class="tab on" role="tab" data-tab="dash">Dashboard</button><button class="tab" role="tab" data-tab="pedidos">Pedidos</button><button class="tab" role="tab" data-tab="solic">Solicitações<span class="tab-n" id="solN" hidden></span></button><button class="tab" role="tab" data-tab="pecas">Peças</button><button class="tab" role="tab" data-tab="precos">Preços</button><button class="tab" role="tab" data-tab="cupons">Cupons</button><button class="tab" role="tab" data-tab="avisos">Avisos e promoções</button><button class="tab" role="tab" data-tab="site">Site</button></div>
+    <section id="tabDash"></section><section id="tabPedidos" hidden></section><section id="tabSolic" hidden></section>
     <section id="tabPecas" hidden><div class="bar"><input id="q" type="text" placeholder="Buscar por código, referência ou nome" aria-label="Buscar">
       <select id="fs" aria-label="Seção"><option value="">Todas as seções</option><option value="feminino">Feminino</option><option value="masculino">Masculino</option></select>
       <select id="ft" aria-label="Status"><option value="">Todos os status</option><option value="vis">Visíveis</option><option value="oculta">Ocultas</option><option value="esg">Esgotadas</option></select></div>
@@ -109,14 +111,17 @@ function viewPanel() {
 
 function showTab(t) {
   $$('.tab').forEach(b => { const on = b.dataset.tab === t; b.classList.toggle('on', on); b.setAttribute('aria-selected', on); if (on) b.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' }); });
-  $('#tabDash').hidden = t !== 'dash'; $('#tabPedidos').hidden = t !== 'pedidos'; $('#tabPecas').hidden = t !== 'pecas'; $('#tabAvisos').hidden = t !== 'avisos'; $('#tabCupons').hidden = t !== 'cupons'; $('#tabSite').hidden = t !== 'site'; $('#tabPrecos').hidden = t !== 'precos';
+  $('#tabDash').hidden = t !== 'dash'; $('#tabPedidos').hidden = t !== 'pedidos'; $('#tabPecas').hidden = t !== 'pecas'; $('#tabAvisos').hidden = t !== 'avisos'; $('#tabCupons').hidden = t !== 'cupons'; $('#tabSite').hidden = t !== 'site'; $('#tabPrecos').hidden = t !== 'precos'; $('#tabSolic').hidden = t !== 'solic';
   if (t === 'avisos' && !$('#tabAvisos').firstChild) viewAvisos();
-  abaAtual = t; if (t === 'cupons') drawCupons(); if (t === 'site') drawSite(); if (t === 'dash') drawDash(); if (t === 'pedidos') drawPedidos(); if (t === 'precos') drawPrecos();
+  abaAtual = t; if (t === 'cupons') drawCupons(); if (t === 'site') drawSite(); if (t === 'dash') drawDash(); if (t === 'pedidos') drawPedidos(); if (t === 'precos') drawPrecos(); if (t === 'solic') drawSolic();
 }
 
 /* ---------- Cupons e configurações do site ---------- */
 let cfg = {}, camps = [], unsubCfg = null, unsubCamp = null;
 const drawCupons = () => { const b = $('#tabCupons'); if (!b || b.contains(document.activeElement) && document.activeElement.tagName === 'INPUT' && document.activeElement.type !== 'checkbox') return; renderCupons(b, cfg, camps, db, toast, divulgarCampanha); };
+let solic = [], unsubSol = null;
+const avisarSolic = async ids => { try { const u = auth.currentUser; const r = await fetch('/api/email', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + await u.getIdToken() }, body: JSON.stringify({ acao: 'solicitacao', ids }) }); return await r.json(); } catch { return null; } };
+const drawSolic = () => { const b = $('#tabSolic'); if (!b) return; if (b.contains(document.activeElement) && ['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement.tagName)) return; renderSolicitacoes(b, solic, items, db, toast, avisarSolic); };
 let prSt = novoEstadoPrecos();
 const drawPrecos = foco => { const b = $('#tabPrecos'); if (!b) return; if (!foco && b.contains(document.activeElement) && ['INPUT', 'SELECT'].includes(document.activeElement.tagName)) return;
   const had = foco && document.activeElement?.id === 'pr-q', pos = had ? document.activeElement.selectionStart : 0;
@@ -135,7 +140,7 @@ async function divulgarCampanha(c) {
 let abaAtual = 'dash', pedidos = [], unsubPed = null, periodo = '30', pedFiltro = { q: '', st: '' }, pedErr = false;
 const drawDash = () => { const b = $('#tabDash'); if (!b) return;
   if (pedErr) { b.innerHTML = '<div class="dsh-hero"><b>Não foi possível ler os pedidos.</b><span>Publique as regras mais recentes do Firestore (arquivo firestore.rules) e recarregue.</span></div>'; return; }
-  renderDashboard(b, pedidos, items, periodo, p => { periodo = p; drawDash(); }); };
+  renderDashboard(b, pedidos, items, periodo, p => { periodo = p; drawDash(); }, { solicitacoes: totalAbertas(solic) }); };
 const drawPedidos = (keepFocus) => { const b = $('#tabPedidos'); if (!b) return; const had = keepFocus && document.activeElement?.id === 'pq', pos = had ? document.activeElement.selectionStart : 0;
   renderPedidos(b, pedidos, db, toast, pedFiltro, (f, foco) => { pedFiltro = f; drawPedidos(foco); });
   if (had) { const i = $('#pq'); i.focus(); i.setSelectionRange(pos, pos); } };

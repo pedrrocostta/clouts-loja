@@ -167,6 +167,14 @@ Object.assign(CloutsDB, {
       await fetch('/api/email', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + t }, body: JSON.stringify(corpo), keepalive: true });
     } catch {}
   },
+  // Pede uma peça/tamanho que não está disponível (vai para a lista de compra do painel). Um pedido por cliente, peça e tamanho.
+  async solicitar(p, tam, whats) {
+    const u = CloutsAuth.user; if (!u) throw new Error('login');
+    const { fs, db } = await this._fs(), ref = fs.doc(db, 'solicitacoes', `${u.uid}_${p.id}_${tam}`);
+    if ((await fs.getDoc(ref)).exists()) return 'existe';
+    await fs.setDoc(ref, { uid: u.uid, email: u.email, nomeCliente: String(u.nome || '').slice(0, 100), produtoId: p.id, cod: String(p.cod).slice(0, 40), nome: String(p.nome).slice(0, 140), tam, whats: whats || '', criadoEm: fs.serverTimestamp(), status: 'aberta' });
+    return 'ok';
+  },
   // Pedidos do próprio cliente (para o cupom de primeira compra e para liberar o convite de amigos).
   async pedidos(uid, onList, onErr) {
     const { fs, db } = await this._fs();

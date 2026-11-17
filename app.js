@@ -32,7 +32,7 @@ const tipoTam = p => p.tipoTam || (/cal[cç]a|bermuda|short/i.test(`${p.nome || 
 const sizesAll = p => tipoTam(p) === 'letra' ? ['PP', 'P', 'M', 'G', 'GG', 'GGG']
   : [...new Set([...(p.secao === 'feminino' ? ['36', '38', '40', '42', '44', '46'] : ['38', '40', '42', '44', '46', '48']), ...(p.tam || []).filter(t => /^\d+$/.test(t))])].sort((a, b) => a - b);
 /* Agrupa os modelos longos nos filtros da loja (ex.: "Jaqueta Jeans Feminina Tradicional" entra em "Jaqueta"). */
-const GRUPOS = ['Jaqueta', 'Cigarrete', 'Wide Leg', 'Boot Cut', 'Flare', 'Skinny', 'Slim', 'Reta', 'Pantalona', 'Jogger', 'Cargo', 'Mom', 'Baggy', 'Bermuda', 'Short', 'Saia', 'Vestido', 'Colete', 'Camisa', 'Blusa'];
+const GRUPOS = ['Jaqueta', 'Cigarrete', 'Wide Leg', 'Boot Cut', 'Flare', 'Skinny', 'Slim', 'Reta', 'Pantalona', 'Jogger', 'Cargo', 'Mom', 'Baggy', 'Bermuda', 'Short', 'Saia', 'Vestido', 'Colete', 'Camisa', 'Blusa', 'Conjunto'];
 const grupo = p => GRUPOS.find(g => norm(p.modelo || p.nome).includes(norm(g))) || p.modelo || '';
 const soldOut = p => !!p.esgotado || !(p.tam || []).length;
 /* Estoque por tamanho (painel → Peças): quantas unidades existem do tamanho. Sem controle ativado = sem limite. */
@@ -664,6 +664,36 @@ function abrirZoom(list, i0) {
   setTimeout(() => el.querySelector('.zm-h')?.remove(), 3500);
 }
 
+/* "Solicitar peça": quando o tamanho não existe (ou a peça esgotou), o cliente pede e a loja compra no fornecedor. */
+const indisponiveis = p => soldOut(p) ? sizesAll(p) : sizesAll(p).filter(t => !(p.tam || []).includes(t));
+const soliciteHTML = p => indisponiveis(p).length ? `<div class="req" id="reqBox"><button class="btn btn-line block" id="reqBtn" type="button">${soldOut(p) ? 'Peça esgotada? Solicitar esta peça' : 'Não achou o seu tamanho? Solicitar peça'}</button></div>` : '';
+function bindSolicite(p, sheet) {
+  const box = $('#reqBox', sheet); if (!box) return;
+  const pedidas = () => store.get('clouts.solic', []);
+  $('#reqBtn', sheet).onclick = () => {
+    if (!me()) { openLogin('Entre com o Google para solicitar a peça. Avisamos você por e-mail quando ela chegar.'); return; }
+    const lista = indisponiveis(p), jaPediu = t => pedidas().includes(`${p.id}_${t}`), tel0 = String((store.get('clouts.cliente', {}) || {}).tel || '').replace(/\D/g, '');
+    box.innerHTML = `<div class="req-f"><b>Qual tamanho você quer?</b>
+      <div class="sizes">${lista.map(t => `<button type="button" class="sz" data-rt="${t}" ${jaPediu(t) ? 'disabled title="Você já pediu este tamanho"' : ''}>${t}${jaPediu(t) ? ' ✓' : ''}</button>`).join('')}</div>
+      <label class="f" for="reqTel">WhatsApp (opcional, para avisarmos mais rápido)<input id="reqTel" inputmode="tel" autocomplete="tel" maxlength="16" placeholder="(31) 99999-9999" value="${esc(tel0)}"></label>
+      <button class="btn btn-gold block" id="reqOk" type="button">Enviar solicitação</button><p class="note" id="reqMsg" aria-live="polite"></p></div>`;
+    let tam = null; $$('[data-rt]', box).forEach(b => b.onclick = () => { tam = b.dataset.rt; $$('[data-rt]', box).forEach(x => x.classList.toggle('on', x === b)); $('#reqMsg', box).textContent = ''; });
+    if (lista.length === 1 && !jaPediu(lista[0])) $('[data-rt]', box).click();
+    $('#reqOk', box).onclick = async () => {
+      const m = $('#reqMsg', box); m.className = 'note';
+      if (!tam) { m.className = 'note bad'; m.textContent = 'Escolha o tamanho.'; return; }
+      let w = $('#reqTel', box).value.replace(/\D/g, ''); if (w && w.length <= 11) w = '55' + w;
+      if (w && (w.length < 12 || w.length > 15)) { m.className = 'note bad'; m.textContent = 'Confira o WhatsApp (DDD + número).'; return; }
+      const b = $('#reqOk', box); b.disabled = true; b.textContent = 'Enviando…';
+      try {
+        const r = await CloutsDB.solicitar(p, tam, w);
+        store.set('clouts.solic', [...new Set([...pedidas(), `${p.id}_${tam}`])]);
+        track('solicitar_peca', null, { ga: { item_id: p.cod, tamanho: tam } });
+        box.innerHTML = `<div class="req-f ok"><b>${r === 'existe' ? 'Você já tinha pedido esta peça.' : 'Solicitação enviada!'}</b><span>Vamos comprar e avisar você por e-mail${w ? ' (e no WhatsApp)' : ''} quando o tamanho ${esc(tam)} chegar.</span></div>`;
+      } catch (e) { b.disabled = false; b.textContent = 'Enviar solicitação'; m.className = 'note bad'; m.textContent = 'Não foi possível enviar agora. Tente de novo.'; }
+    };
+  };
+}
 /* Guia de medidas do painel (Site → Guia de medidas): linhas separadas por vírgula; a 1ª linha é o cabeçalho. */
 function guiaHTML() {
   const linhas = String(loja.guiaMedidas || '').split('\n').map(l => l.split(',').map(c => c.trim())).filter(l => l.some(Boolean));
@@ -687,7 +717,7 @@ function openSheet(id) {
         ${p.lycra ? `<span>Lycra ${p.lycra}%</span>` : ''}${p.cor ? `<span>Cor: ${esc(p.cor)}</span>` : ''}${p.tecido ? `<span>${esc(p.tecido)}</span>` : ''}
         ${p.premium ? '<span>Premium</span>' : ''}${p.diamond ? '<span>Diamond</span>' : ''}</div>
       ${cores.length > 1 ? `<div><div class="lbl">Cor: <b>${esc(p.cor || 'Escolha')}</b></div><div class="swatches">${cores.map(c => `<button class="swc ${c.id === p.id ? 'on' : ''}" data-c="${esc(c.id)}" aria-label="Cor ${esc(c.cor || c.cod)}" title="${esc(c.cor || c.cod)}"><img src="${esc(foto(c.img, 160))}" alt=""></button>`).join('')}</div></div>` : ''}
-      <div><div class="lbl">Tamanho</div><div class="sizes">${sizesAll(p).map(t => `<button class="sz" data-t="${t}" ${p.tam.includes(t) && !p.esgotado ? '' : 'disabled'}>${t}</button>`).join('')}</div><p class="stk" id="stkMsg" aria-live="polite"></p></div>
+      <div><div class="lbl">Tamanho</div><div class="sizes">${sizesAll(p).map(t => `<button class="sz" data-t="${t}" ${p.tam.includes(t) && !p.esgotado ? '' : 'disabled'}>${t}</button>`).join('')}</div><p class="stk" id="stkMsg" aria-live="polite"></p>${soliciteHTML(p)}</div>
       <div class="buy"><span class="buy-pr">${brl(p.preco)}</span>${soldOut(p) ? '<button class="btn btn-dark block" disabled>Esgotado</button>' : `<button class="btn btn-gold block" id="addBtn">${ICON.bag} Adicionar ao carrinho</button>`}</div>
       <button class="btn btn-line block" id="favSheet">${ICON.heart} <span>${favs.includes(p.id) ? 'Remover dos favoritos' : 'Favoritar'}</span></button>
       <button class="btn btn-line block" id="shareSheet" type="button">Compartilhar esta peça</button>
@@ -725,6 +755,7 @@ function openSheet(id) {
     if (!sel) { $$('.sz', sheet).forEach(x => { x.classList.remove('err'); void x.offsetWidth; x.classList.add('err'); }); toast('Escolha um tamanho'); return; }
     if (addToCart(p.id, sel) === false) return; closeSheet(); openCart();
   };
+  bindSolicite(p, sheet);
   $('#shareSheet', sheet).onclick = async () => {
     const url = location.origin + '/p/' + encodeURIComponent(p.id), data = { title: p.nome + ' — CLOUTS', text: 'Olha essa peça da CLOUTS:', url };
     try { if (navigator.share) { await navigator.share(data); return; } await navigator.clipboard.writeText(url); toast('Link copiado'); } catch (e) { if (e?.name !== 'AbortError') toast('Não foi possível compartilhar'); }
