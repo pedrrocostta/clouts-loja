@@ -131,6 +131,6 @@ const mp = async (path, opt = {}) => {
 
 const FRETE_INFO = { FRETE, GRATIS: FRETE_GRATIS_ACIMA };
 /* Administradores do painel: contas Google verificadas. Para autorizar mais alguém, acrescente o e-mail aqui, em painel/painel.js (ADMINS) e em firestore.rules (isAdmin) e republique as regras. */
-const ADMINS = ['clouts.oficial2026@gmail.com'];
+const ADMINS = ['clouts.oficial2026@gmail.com', 'brenovilaca48@gmail.com'];
 const ehAdmin = u => !!u && ADMINS.includes(String(u.email || '').toLowerCase()) && u.email_verified === true && u.firebase?.sign_in_provider === 'google.com';
 module.exports = { admin, db, configurado, usuario, calcular, mp, erro, responder, cents, reais, DEGRAUS, FRETE_INFO, ADMINS, ehAdmin };

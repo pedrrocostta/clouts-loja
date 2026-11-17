@@ -2,8 +2,12 @@ import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/fireba
 import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut, setPersistence, browserSessionPersistence, browserLocalPersistence } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
 import { getFirestore, collection, onSnapshot, doc, setDoc, updateDoc, deleteDoc, writeBatch, addDoc, serverTimestamp, query, orderBy, limit, Timestamp, getDocs, getDoc, arrayUnion, arrayRemove } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
+// Login do Google pelo próprio domínio da loja (o navegador do celular às vezes isola o armazenamento do endereço do Firebase e dá o erro "missing initial state").
+// Só liga com ?authproxy=1 (teste) ou quando AUTH_PROXY_PADRAO for true. Exige o endereço /__/auth/handler liberado no cliente OAuth do Google.
+const AUTH_PROXY_PADRAO = false;
+const AUTH_PROXY = (() => { try { const q = new URLSearchParams(location.search).get('authproxy'); if (q === '1') localStorage.setItem('clouts.authproxy', '1'); else if (q === '0') localStorage.removeItem('clouts.authproxy'); return /(^|\.)cloutsoficial\.com\.br$/.test(location.hostname) && (AUTH_PROXY_PADRAO || localStorage.getItem('clouts.authproxy') === '1'); } catch { return false; } })();
 const app = initializeApp({
-  apiKey: 'AIzaSyBP1WSRJqAM552UQU5rBRubeVkz7IRc2Ao', authDomain: 'clouts-409b7.firebaseapp.com', projectId: 'clouts-409b7',
+  apiKey: 'AIzaSyBP1WSRJqAM552UQU5rBRubeVkz7IRc2Ao', authDomain: AUTH_PROXY ? location.hostname : 'clouts-409b7.firebaseapp.com', projectId: 'clouts-409b7',
   storageBucket: 'clouts-409b7.firebasestorage.app', messagingSenderId: '153191899322', appId: '1:153191899322:web:8ba2688766cc96ff326283'
 });
 const APPCHECK_SITE_KEY = '6Ldnzh4uAAAAADFp7opGhSvU0NA8z_pZhgeo8rKB';   // mesma chave de auth.js (App Check / reCAPTCHA Enterprise); vazia = desligado
@@ -18,7 +22,7 @@ const auth = getAuth(app), db = getFirestore(app), col = collection(db, 'produto
 
 /* ---------- Segurança ---------- */
 // A regra que realmente protege os dados fica no Firestore (firestore.rules). Estas travas são camadas extras.
-const ADMINS = ['clouts.oficial2026@gmail.com'];
+const ADMINS = ['clouts.oficial2026@gmail.com', 'brenovilaca48@gmail.com'];
 const manter = () => { try { return localStorage.getItem('painel.manter') === '1'; } catch { return false; } };
 const IDLE_MS = () => manter() ? 8 * 3600 * 1000 : 20 * 60 * 1000;   // sem uso: 20 min (padrão) ou 8 h se o dono marcou "manter conectado neste aparelho"
 setPersistence(auth, manter() ? browserLocalPersistence : browserSessionPersistence).catch(() => {});   // padrão: fechar a aba encerra a sessão
@@ -63,15 +67,14 @@ function viewLogin(aviso) {
     <label class="sw" style="justify-content:center"><input type="checkbox" id="lk" ${manter() ? 'checked' : ''}><i></i>Manter conectado neste aparelho</label>
     <p class="msg" style="margin:-4px 0 0;font-size:11.5px">Use só no seu celular ou computador. Em aparelho de outras pessoas, deixe desmarcado.</p>
     <button class="btn gold" id="lb" type="submit">Entrar com o Google</button><p class="msg ${aviso ? 'bad' : ''}" id="lm">${esc(aviso || '')}</p></form>`;
+  $('#lk').onchange = e => { try { localStorage.setItem('painel.manter', e.target.checked ? '1' : '0'); } catch {} setPersistence(auth, e.target.checked ? browserLocalPersistence : browserSessionPersistence).catch(() => {}); };   // a escolha vale já (antes do toque em Entrar)
   $('#lf').onsubmit = async e => {
     e.preventDefault(); const b = $('#lb'), m = $('#lm');
     if (falta()) { m.className = 'msg bad'; m.textContent = `Muitas tentativas. Aguarde ${falta()} s.`; return; }
     b.disabled = true; m.className = 'msg'; m.textContent = 'Abrindo o Google…';
     try {
       const p = new GoogleAuthProvider(); p.setCustomParameters({ prompt: 'select_account' });
-      const lk = $('#lk').checked; try { localStorage.setItem('painel.manter', lk ? '1' : '0'); } catch {}
-      await setPersistence(auth, lk ? browserLocalPersistence : browserSessionPersistence);
-      await signInWithPopup(auth, p); lockSave({ n: 0, ate: 0 }); m.textContent = '';
+      await signInWithPopup(auth, p);   // sem nenhum 'await' antes: os navegadores de celular só abrem a janela do Google se ela abrir direto do toque lockSave({ n: 0, ate: 0 }); m.textContent = '';
     } catch (er) {
       if (er?.code === 'auth/popup-closed-by-user' || er?.code === 'auth/cancelled-popup-request') { m.textContent = ''; b.disabled = false; return; }
       const st = lockInfo(), n = st.n + 1;

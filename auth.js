@@ -1,8 +1,12 @@
 /* Firebase da CLOUTS: login com Google (clientes) e catálogo em tempo real (Firestore).
  * A configuração do app web do Firebase é pública; quem protege os dados são as regras do Firestore (firestore.rules). */
+// Login do Google pelo próprio domínio da loja (o navegador do celular às vezes isola o armazenamento do endereço do Firebase e dá o erro "missing initial state").
+// Só liga com ?authproxy=1 (teste) ou quando AUTH_PROXY_PADRAO for true. Exige o endereço /__/auth/handler liberado no cliente OAuth do Google.
+const AUTH_PROXY_PADRAO = false;
+const AUTH_PROXY = (() => { try { const q = new URLSearchParams(location.search).get('authproxy'); if (q === '1') localStorage.setItem('clouts.authproxy', '1'); else if (q === '0') localStorage.removeItem('clouts.authproxy'); return /(^|\.)cloutsoficial\.com\.br$/.test(location.hostname) && (AUTH_PROXY_PADRAO || localStorage.getItem('clouts.authproxy') === '1'); } catch { return false; } })();
 const FIREBASE_CONFIG = {
   apiKey: 'AIzaSyBP1WSRJqAM552UQU5rBRubeVkz7IRc2Ao',
-  authDomain: 'clouts-409b7.firebaseapp.com',
+  authDomain: AUTH_PROXY ? location.hostname : 'clouts-409b7.firebaseapp.com',
   projectId: 'clouts-409b7',
   storageBucket: 'clouts-409b7.firebasestorage.app',
   messagingSenderId: '153191899322',
