@@ -1031,7 +1031,7 @@ function renderPix() {
   }
   body.innerHTML = `<div class="pix">
     <p class="pix-tot">Pague <b>${brl(p.total)}</b> com Pix</p>
-    ${p.qr ? `<img class="pix-qr" alt="QR Code do Pix" width="220" height="220" src="data:image/png;base64,${p.qr}">` : ''}
+    ${p.qr ? `<img class="pix-qr" alt="QR Code do Pix" width="250" height="250" src="data:image/png;base64,${p.qr}">` : ''}
     <ol class="pix-pass"><li>Abra o app do seu banco e escolha <b>Pix</b></li><li>Leia o QR Code <b>ou</b> use o <b>Pix copia e cola</b></li><li>Confirme o valor. A confirmação aqui é automática</li></ol>
     <div class="pix-cod"><input id="pixCod" readonly value="${esc(p.codigo)}" aria-label="Código Pix copia e cola"><button class="btn btn-dark" id="pixCopia" type="button">Copiar código</button></div>
     <p class="pix-st"><span class="pix-dot"></span>Aguardando o pagamento · expira em <b id="pixTempo">--:--</b></p></div>`;

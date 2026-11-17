@@ -556,7 +556,7 @@ body.sem-conv [data-invite],body.sem-conv #cupomShare,body.sem-conv [data-conv]{
 /* Pix dentro da loja */
 .pix{display:grid;gap:14px;justify-items:center;text-align:center;padding:6px 0}
 .pix-tot{margin:0;font-size:15px}.pix-tot b{font-size:20px}
-.pix-qr{width:min(220px,62vw);height:auto;aspect-ratio:1;border:1px solid #d3c8b0;border-radius:12px;padding:8px;background:#fff;image-rendering:pixelated}
+.pix-qr{width:min(250px,70vw);height:auto;aspect-ratio:1;border:1px solid #d3c8b0;border-radius:12px;padding:14px;background:#fff;object-fit:contain}
 .pix-pass{margin:0;padding-left:20px;text-align:left;font-size:13px;color:var(--ink2);display:grid;gap:4px;max-width:340px}
 .pix-cod{display:grid;grid-template-columns:1fr auto;gap:8px;width:100%}
 .pix-cod input{min-width:0;font-size:12px;border:1px solid #d3c8b0;border-radius:10px;padding:0 10px;background:#fff;color:var(--ink2);text-overflow:ellipsis}
