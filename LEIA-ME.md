@@ -115,3 +115,12 @@ Sem essas variáveis os e-mails simplesmente não saem e a loja funciona normal.
 ## Administradores do painel
 - Lista de e-mails autorizados em **três lugares** (têm que ser iguais): `ADMINS` em `api/_lib.js`, `ADMINS` em `painel/painel.js` e `isAdmin()` em `firestore.rules` (depois **republicar as regras**). Cada pessoa entra com a própria conta Google (e o próprio 2FA).
 - Na tela de login do painel há **"Manter conectado neste aparelho"** (sessão de até 8 h sem uso, em vez de 20 min). Só para aparelho próprio.
+
+## Check-up de 17/11/2026 (segurança e correção)
+- Sem segredos no código nem no histórico do Git; arquivos públicos só têm chaves públicas (Firebase, App Check, Analytics).
+- Banco: sem login só dá para ler catálogo, avisos e configurações; 9 coleções negadas e 6 escritas sem login negadas (testado ao vivo).
+- Rotas do servidor: exigem login/segredo, não vazam detalhes de erro; aviso de webhook com corpo quebrado vira 400.
+- 40 páginas de peça com título, canonical, dados estruturados e foto de compartilhamento; sitemap válido; links das páginas institucionais ok.
+- Código: análise estática sem variável indefinida; testes automáticos (estoque, pagamento, cupons, solicitações, Analytics) passando.
+- Privacidade: política atualizada (Analytics, reCAPTCHA, Cloudinary, e-mails, pedidos de peça); a lista de administradores no código público do painel agora é só impressão digital (SHA-256).
+- Página inicial ganhou título principal (h1) para Google e leitores de tela.

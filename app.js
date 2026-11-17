@@ -273,6 +273,7 @@ function lazyVideos() {
 function viewHome() {
   const fem = PRODUTOS.filter(p => p.secao === 'feminino'), mas = PRODUTOS.filter(p => p.secao === 'masculino');
   app.innerHTML = `
+  <h1 class="sr-only">CLOUTS: calças femininas e masculinas com entrega em Contagem, Betim e Belo Horizonte</h1>
   <section class="bn" aria-roledescription="carrossel" aria-label="Destaques">
     <div class="bn-track">${BANNERS.map((b, i) => `<a class="bn-slide${i ? '' : ' on'}" href="${b.href}" aria-label="${esc(b.alt)}"><picture><source media="(max-width:700px)" srcset="img/banners/${b.f}-mobile.webp"><img src="img/banners/${b.f}-desktop.webp" alt="${esc(b.alt)}" width="2496" height="1040" decoding="async" ${i ? 'loading="lazy"' : 'fetchpriority="high"'}></picture></a>`).join('')}</div>
     <button class="bn-arr prev" type="button" aria-label="Anterior">‹</button><button class="bn-arr next" type="button" aria-label="Próximo">›</button>

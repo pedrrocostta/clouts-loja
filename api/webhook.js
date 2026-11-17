@@ -18,7 +18,7 @@ module.exports = async (req, res) => {
   if (req.method !== 'POST') return res.status(200).end();
   if (!configurado()) return res.status(503).end();
   try {
-    const b = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
+    let b; try { b = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {}); } catch { return res.status(400).end(); }   // aviso com corpo quebrado: ignora
     const tipo = b.type || req.query.type || req.query.topic;
     const id = b.data?.id || req.query['data.id'] || req.query.id;
     if (tipo !== 'payment' || !id || !/^\d{1,20}$/.test(String(id))) return res.status(200).end();

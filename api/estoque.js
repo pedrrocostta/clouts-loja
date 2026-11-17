@@ -6,7 +6,7 @@
  * { acao: 'conferir', pedidoId }           → refaz o pedido (preço, frete, cupom) com os dados reais e devolve os problemas encontrados (pedidos do WhatsApp)
  * { acao: 'verificar', pedidoId }          → pergunta ao Mercado Pago como está o pagamento do pedido e atualiza o pedido (reserva caso um aviso tenha falhado)
  * Peças sem o campo "estoque" (controle não ativado) são ignoradas. */
-const { admin, db, usuario, erro, responder, mp, ehAdmin } = require('./_lib');
+const { db, usuario, erro, responder, mp, ehAdmin } = require('./_lib');
 const { aplicarPagamento } = require('./_pagamento');
 const { conferirPedido } = require('./_conferencia');
 const { planejarReserva, aplicar, liberarPedido } = require('./_estoque');

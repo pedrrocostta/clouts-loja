@@ -1,6 +1,6 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
 import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut, setPersistence, browserSessionPersistence, browserLocalPersistence } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
-import { getFirestore, collection, onSnapshot, doc, setDoc, updateDoc, deleteDoc, writeBatch, addDoc, serverTimestamp, query, orderBy, limit, Timestamp, getDocs, getDoc, arrayUnion, arrayRemove } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+import { getFirestore, collection, onSnapshot, doc, setDoc, updateDoc, deleteDoc, writeBatch, addDoc, serverTimestamp, query, orderBy, limit, Timestamp, getDocs, arrayUnion, arrayRemove } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
 // Login do Google pelo próprio domínio da loja (o navegador do celular às vezes isola o armazenamento do endereço do Firebase e dá o erro "missing initial state").
 // Só liga com ?authproxy=1 (teste) ou quando AUTH_PROXY_PADRAO for true. Exige o endereço /__/auth/handler liberado no cliente OAuth do Google.
@@ -22,7 +22,9 @@ const auth = getAuth(app), db = getFirestore(app), col = collection(db, 'produto
 
 /* ---------- Segurança ---------- */
 // A regra que realmente protege os dados fica no Firestore (firestore.rules). Estas travas são camadas extras.
-const ADMINS = ['clouts.oficial2026@gmail.com', 'brenovilaca48@gmail.com'];
+// Só as "impressões digitais" (SHA-256) dos e-mails autorizados ficam neste arquivo público, para o e-mail de ninguém aparecer. A lista de verdade (em texto) fica só no servidor (api/_lib.js) e nas regras do banco.
+const ADMIN_HASHES = ["91aefe75a15da739e088fa6eb48a8e6130e8fd940dad786a241451992240b02e", "d73193a4d4ff079e49a90fcc1fde6a9bc44243b5fe68af184d151b620eddc75d"];
+const ehAdminEmail = async e => { const h = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(String(e || '').trim().toLowerCase())); return ADMIN_HASHES.includes([...new Uint8Array(h)].map(b => b.toString(16).padStart(2, '0')).join('')); };
 const manter = () => { try { return localStorage.getItem('painel.manter') === '1'; } catch { return false; } };
 const IDLE_MS = () => manter() ? 8 * 3600 * 1000 : 20 * 60 * 1000;   // sem uso: 20 min (padrão) ou 8 h se o dono marcou "manter conectado neste aparelho"
 setPersistence(auth, manter() ? browserLocalPersistence : browserSessionPersistence).catch(() => {});   // padrão: fechar a aba encerra a sessão
@@ -86,9 +88,9 @@ function viewLogin(aviso) {
   };
 }
 $('#outBtn').onclick = () => signOut(auth);
-onAuthStateChanged(auth, u => {
+onAuthStateChanged(auth, async u => {
   if (!u) { clearTimeout(idleT); return viewLogin(); }
-  if (!ADMINS.includes((u.email || '').toLowerCase()) || !u.emailVerified) { signOut(auth); return viewLogin('Esta conta não tem acesso ao painel.'); }
+  if (!(await ehAdminEmail(u.email)) || !u.emailVerified) { signOut(auth); return viewLogin('Esta conta não tem acesso ao painel.'); }
   bump();
   $('#who').textContent = u.email; $('#topActs').hidden = false;
   viewPanel();
