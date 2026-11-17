@@ -4,13 +4,11 @@
  * { acao: 'pedido', pedidoId }                        → "recebemos o seu pedido" (só o dono do pedido)
  * { acao: 'andamento', pedidoId, evento }             → confirmado | enviado | entregue (só o administrador)
  * { acao: 'solicitacao', ids: [...] }                 → avisa por e-mail quem pediu uma peça que ela chegou (só o administrador) */
-const { admin, db, usuario, erro, responder } = require('./_lib');
+const { admin, db, usuario, erro, responder, ehAdmin } = require('./_lib');
 const { emailConfigurado, enviar, boasVindas, pedido, chegou } = require('./_mail');
 
 const numCfg = (v, d, max) => Math.min(max, Number(v) > 0 ? Number(v) : d);
 
-const ADMIN = 'clouts.oficial2026@gmail.com';
-const ehAdmin = u => u && u.email === ADMIN && u.email_verified === true && u.firebase?.sign_in_provider === 'google.com';
 
 module.exports = async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');

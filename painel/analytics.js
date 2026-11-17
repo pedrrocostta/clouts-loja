@@ -39,7 +39,7 @@ function desenhar(box, d, periodo, pedidosPagos, animar) {
   const vi = d.eventos.view_item || 0, ac = d.eventos.add_to_cart || 0, ld = d.eventos.generate_lead || 0, pg = pedidosPagos || 0;
   const pct = (x, y) => y ? Math.round(x / y * 100) + '%' : '—';
   const kpi = (t, v, nota, dl) => `<div class="kpi"><small>${t}</small><b>${v}</b><span>${nota}</span>${dl || ''}</div>`;
-  box.innerHTML = `<div class="${animar ? 'anim' : ''}"><div class="ga-head"><h3>Visitas do site <small>(Google Analytics)</small></h3><span class="ga-ao-vivo" id="gaAgora" title="Pessoas com a loja aberta nos últimos 30 minutos (só quem aceitou os cookies). Atualiza sozinho a cada 20 segundos."><i></i><b>${num(d.agora)}</b> agora no site</span></div>
+  box.innerHTML = `<div class="${animar ? 'anim' : ''}"><div class="ga-head"><h3>Visitas do site <small>(Google Analytics)</small></h3><span id="gaAgoraInfo" class="ga-info"></span><span class="ga-ao-vivo" id="gaAgora" title="Pessoas com a loja aberta nos últimos 30 minutos (só quem aceitou os cookies). Atualiza sozinho a cada 20 segundos."><i></i><b>${num(d.agora)}</b> agora no site</span></div>
     <div class="kpis small ga-kpis">
       ${kpi('Visitantes', num(a.usuarios), 'pessoas diferentes', delta(a.usuarios, p?.usuarios))}
       ${kpi('Visitas', num(a.sessoes), `${a.usuarios ? (a.sessoes / a.usuarios).toFixed(1).replace('.', ',') : '0'} por visitante`, delta(a.sessoes, p?.sessoes))}
@@ -77,9 +77,10 @@ async function atualizarAgora() {
   try {
     const u = getAuth().currentUser; if (!u) return;
     const r = await fetch('/api/analytics', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + await u.getIdToken() }, body: JSON.stringify({ agora: true }) });
-    const d = await r.json().catch(() => null);
-    if (d?.ok) { const b = el.querySelector('b'); if (b) b.textContent = num(d.agora); }
-  } catch { /* tenta de novo no próximo ciclo */ }
+    const d = await r.json().catch(() => null), info = document.getElementById('gaAgoraInfo');
+    if (d?.ok) { const b = el.querySelector('b'); if (b) b.textContent = num(d.agora); if (info) { info.className = 'ga-info'; info.textContent = 'atualizado ' + new Date().toLocaleTimeString('pt-BR'); } }
+    else if (info) { info.className = 'ga-info bad'; info.textContent = d?.motivo ? 'sem leitura: ' + ({ 'api-desativada': 'ative a Google Analytics Data API', 'sem-acesso': 'dê acesso de Leitor à conta de serviço', 'propriedade-invalida': 'ID da propriedade errado', erro: 'erro ao ler o Analytics' }[d.motivo] || d.motivo) : `sem resposta do servidor (${r.status})`; }
+  } catch { const info = document.getElementById('gaAgoraInfo'); if (info) { info.className = 'ga-info bad'; info.textContent = 'sem conexão com o servidor'; } }
 }
 function ligarAgora() { if (!timerAgora) timerAgora = setInterval(atualizarAgora, 20000); atualizarAgora(); }
 

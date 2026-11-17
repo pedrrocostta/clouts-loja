@@ -5,11 +5,9 @@
  *   3) no painel → Site → "ID da propriedade do Analytics" (número, não o G-XXXX).
  * Os números só incluem quem aceitou os cookies. */
 const crypto = require('crypto');
-const { db, usuario, erro, responder } = require('./_lib');
+const { db, usuario, erro, responder, ehAdmin } = require('./_lib');
 
-const ADMIN = 'clouts.oficial2026@gmail.com';
 const PROPRIEDADE_PADRAO = '556669532';   // propriedade do GA4 da loja (não é segredo); o painel (Site) pode trocar
-const ehAdmin = u => u && u.email === ADMIN && u.email_verified === true && u.firebase?.sign_in_provider === 'google.com';
 
 /* Token de acesso (JWT assinado com a chave da conta de serviço), guardado até perto de vencer. */
 let tok = { v: null, exp: 0 }, tokP = null;

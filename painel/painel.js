@@ -1,5 +1,5 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
-import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut, setPersistence, browserSessionPersistence } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut, setPersistence, browserSessionPersistence, browserLocalPersistence } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
 import { getFirestore, collection, onSnapshot, doc, setDoc, updateDoc, deleteDoc, writeBatch, addDoc, serverTimestamp, query, orderBy, limit, Timestamp, getDocs, getDoc, arrayUnion, arrayRemove } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
 const app = initializeApp({
@@ -19,11 +19,12 @@ const auth = getAuth(app), db = getFirestore(app), col = collection(db, 'produto
 /* ---------- Segurança ---------- */
 // A regra que realmente protege os dados fica no Firestore (firestore.rules). Estas travas são camadas extras.
 const ADMINS = ['clouts.oficial2026@gmail.com'];
-const IDLE_MS = 20 * 60 * 1000;                       // encerra a sessão após 20 min sem uso
-setPersistence(auth, browserSessionPersistence).catch(() => {});   // fechar a aba encerra a sessão
+const manter = () => { try { return localStorage.getItem('painel.manter') === '1'; } catch { return false; } };
+const IDLE_MS = () => manter() ? 8 * 3600 * 1000 : 20 * 60 * 1000;   // sem uso: 20 min (padrão) ou 8 h se o dono marcou "manter conectado neste aparelho"
+setPersistence(auth, manter() ? browserLocalPersistence : browserSessionPersistence).catch(() => {});   // padrão: fechar a aba encerra a sessão
 
 let idleT = null;
-const bump = () => { clearTimeout(idleT); if (auth.currentUser) idleT = setTimeout(async () => { await signOut(auth); toast('Sessão encerrada por inatividade. Entre novamente.'); }, IDLE_MS); };
+const bump = () => { clearTimeout(idleT); if (auth.currentUser) idleT = setTimeout(async () => { await signOut(auth); toast('Sessão encerrada por inatividade. Entre novamente.'); }, IDLE_MS()); };
 ['click', 'keydown', 'touchstart', 'mousemove'].forEach(ev => addEventListener(ev, bump, { passive: true }));
 
 const LK = 'painel.tentativas';                        // limite de tentativas de login neste aparelho
@@ -59,6 +60,8 @@ function viewLogin(aviso) {
   // Entrada só com a conta Google do dono (com verificação em duas etapas ligada na conta Google). Sem senha própria do painel.
   main.innerHTML = `<form class="login" id="lf"><img src="/img/logo.png" alt=""><h2>Entrar no painel</h2>
     <p class="msg" style="margin:0 0 4px">Entre com a conta Google do administrador.</p>
+    <label class="sw" style="justify-content:center"><input type="checkbox" id="lk" ${manter() ? 'checked' : ''}><i></i>Manter conectado neste aparelho</label>
+    <p class="msg" style="margin:-4px 0 0;font-size:11.5px">Use só no seu celular ou computador. Em aparelho de outras pessoas, deixe desmarcado.</p>
     <button class="btn gold" id="lb" type="submit">Entrar com o Google</button><p class="msg ${aviso ? 'bad' : ''}" id="lm">${esc(aviso || '')}</p></form>`;
   $('#lf').onsubmit = async e => {
     e.preventDefault(); const b = $('#lb'), m = $('#lm');
@@ -66,6 +69,8 @@ function viewLogin(aviso) {
     b.disabled = true; m.className = 'msg'; m.textContent = 'Abrindo o Google…';
     try {
       const p = new GoogleAuthProvider(); p.setCustomParameters({ prompt: 'select_account' });
+      const lk = $('#lk').checked; try { localStorage.setItem('painel.manter', lk ? '1' : '0'); } catch {}
+      await setPersistence(auth, lk ? browserLocalPersistence : browserSessionPersistence);
       await signInWithPopup(auth, p); lockSave({ n: 0, ate: 0 }); m.textContent = '';
     } catch (er) {
       if (er?.code === 'auth/popup-closed-by-user' || er?.code === 'auth/cancelled-popup-request') { m.textContent = ''; b.disabled = false; return; }

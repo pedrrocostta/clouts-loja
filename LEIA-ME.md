@@ -111,3 +111,7 @@ Sem essas variáveis os e-mails simplesmente não saem e a loja funciona normal.
 ## Configurações que não podem se perder
 - O **código do Google Analytics** (`G-VQ23DQ3JFY`, em `app.js`) e o **ID da propriedade** (`556669532`, em `api/analytics.js`) estão embutidos no código como valores padrão. O painel (Site) só serve para trocar por outros; se ficar vazio, a loja mede do mesmo jeito.
 - Os formulários da aba **Site** e **Cupons** não são mais redesenhados enquanto há texto digitado e não salvo (antes, uma atualização em tempo real podia apagar o que você acabou de colar).
+
+## Administradores do painel
+- Lista de e-mails autorizados em **três lugares** (têm que ser iguais): `ADMINS` em `api/_lib.js`, `ADMINS` em `painel/painel.js` e `isAdmin()` em `firestore.rules` (depois **republicar as regras**). Cada pessoa entra com a própria conta Google (e o próprio 2FA).
+- Na tela de login do painel há **"Manter conectado neste aparelho"** (sessão de até 8 h sem uso, em vez de 20 min). Só para aparelho próprio.
