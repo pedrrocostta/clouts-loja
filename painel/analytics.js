@@ -39,7 +39,7 @@ function desenhar(box, d, periodo, pedidosPagos, animar) {
   const vi = d.eventos.view_item || 0, ac = d.eventos.add_to_cart || 0, ld = d.eventos.generate_lead || 0, pg = pedidosPagos || 0;
   const pct = (x, y) => y ? Math.round(x / y * 100) + '%' : '—';
   const kpi = (t, v, nota, dl) => `<div class="kpi"><small>${t}</small><b>${v}</b><span>${nota}</span>${dl || ''}</div>`;
-  box.innerHTML = `<div class="${animar ? 'anim' : ''}"><div class="ga-head"><h3>Visitas do site <small>(Google Analytics)</small></h3><span class="ga-ao-vivo"><i></i>${num(d.agora)} agora no site</span></div>
+  box.innerHTML = `<div class="${animar ? 'anim' : ''}"><div class="ga-head"><h3>Visitas do site <small>(Google Analytics)</small></h3><span class="ga-ao-vivo" id="gaAgora" title="Pessoas com a loja aberta nos últimos 30 minutos (só quem aceitou os cookies). Atualiza sozinho a cada 20 segundos."><i></i><b>${num(d.agora)}</b> agora no site</span></div>
     <div class="kpis small ga-kpis">
       ${kpi('Visitantes', num(a.usuarios), 'pessoas diferentes', delta(a.usuarios, p?.usuarios))}
       ${kpi('Visitas', num(a.sessoes), `${a.usuarios ? (a.sessoes / a.usuarios).toFixed(1).replace('.', ',') : '0'} por visitante`, delta(a.sessoes, p?.sessoes))}
@@ -65,7 +65,23 @@ function desenhar(box, d, periodo, pedidosPagos, animar) {
     vb.addEventListener('pointermove', porX); vb.addEventListener('pointerdown', porX);
     box.querySelectorAll('.vb-c').forEach(b => b.onclick = () => mostrar(+b.dataset.i));
   }
+  if (d.agoraErro) { const n = box.querySelector('.ga-head'); if (n) n.insertAdjacentHTML('afterend', `<p class="dsh-note bad">O contador ao vivo não conseguiu ler o Analytics agora (${esc(d.agoraErro)}).</p>`); }
+  ligarAgora();
 }
+
+/* Contador "agora no site": não usa memória e se atualiza sozinho enquanto o dashboard estiver aberto. */
+let timerAgora = null;
+async function atualizarAgora() {
+  const el = document.getElementById('gaAgora');
+  if (!el) { clearInterval(timerAgora); timerAgora = null; return; }
+  try {
+    const u = getAuth().currentUser; if (!u) return;
+    const r = await fetch('/api/analytics', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + await u.getIdToken() }, body: JSON.stringify({ agora: true }) });
+    const d = await r.json().catch(() => null);
+    if (d?.ok) { const b = el.querySelector('b'); if (b) b.textContent = num(d.agora); }
+  } catch { /* tenta de novo no próximo ciclo */ }
+}
+function ligarAgora() { if (!timerAgora) timerAgora = setInterval(atualizarAgora, 20000); atualizarAgora(); }
 
 let alvo = null;       // onde desenhar quando a resposta chegar (o dashboard se redesenha a cada pedido novo)
 const voo = {};        // pedidos em andamento por período

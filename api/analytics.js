@@ -1,4 +1,4 @@
-/* POST /api/analytics { periodo: 'hoje'|'7'|'30'|'90'|'tudo' } — visitas do site (Google Analytics 4) para o dashboard do painel. Só o administrador.
+/* POST /api/analytics { periodo: 'hoje'|'7'|'30'|'90'|'tudo' }  ou  { agora: true } (só o contador de pessoas no site, sem memória) — visitas do site (Google Analytics 4) para o dashboard do painel. Só o administrador.
  * Usa a mesma conta de serviço do Firebase (FIREBASE_SERVICE_ACCOUNT) para ler a propriedade do Analytics. Para funcionar:
  *   1) ativar a "Google Analytics Data API" no projeto do Google Cloud (clouts-409b7);
  *   2) no Analytics → Administrador → Gerenciamento de acesso da propriedade, adicionar o e-mail da conta de serviço como "Leitor";
@@ -41,6 +41,7 @@ const linhas = r => (r?.rows || []).map(x => [...(x.dimensionValues || []).map(v
 const METRICAS = ['activeUsers', 'sessions', 'screenPageViews', 'newUsers', 'averageSessionDuration'];
 const totais = r => { const v = linhas(r)[0] || [0, 0, 0, 0, 0]; return { usuarios: v[0], sessoes: v[1], visualizacoes: v[2], novos: v[3], duracao: Math.round(v[4] || 0) }; };
 
+const ativos = r => Number(r?.totals?.[0]?.metricValues?.[0]?.value ?? r?.rows?.[0]?.metricValues?.[0]?.value ?? 0) || 0;
 const memo = {};   // 60 s por período: o painel pode atualizar sem gastar a cota do Google
 
 async function relatorio(prop, periodo) {
@@ -55,15 +56,24 @@ async function relatorio(prop, periodo) {
     T('eventos', ga(prop, 'runReport', { dateRanges: rg(cur), dimensions: [{ name: 'eventName' }], metrics: [{ name: 'eventCount' }], dimensionFilter: { filter: { fieldName: 'eventName', inListFilter: { values: ['view_item', 'add_to_cart', 'generate_lead', 'solicitar_peca'] } } } })),
     T('pecas', ga(prop, 'runReport', { dateRanges: rg(cur), dimensions: [{ name: 'itemName' }], metrics: [{ name: 'itemsViewed' }], orderBys: [{ metric: { metricName: 'itemsViewed' }, desc: true }], limit: 6 })),
     T('cidades', ga(prop, 'runReport', { dateRanges: rg(cur), dimensions: [{ name: 'city' }], metrics: [{ name: 'activeUsers' }], orderBys: [{ metric: { metricName: 'activeUsers' }, desc: true }], limit: 6 })),
-    T('agora', ga(prop, 'runRealtimeReport', { metrics: [{ name: 'activeUsers' }] }))
+    ga(prop, 'runRealtimeReport', { metrics: [{ name: 'activeUsers' }] }).then(v => ({ v }), e => ({ e }))
   ]);
   const ev = {}; linhas(eventos).forEach(([k, n]) => { ev[k] = n; });
-  const rt = agora?.totals?.[0]?.metricValues?.[0]?.value ?? agora?.rows?.[0]?.metricValues?.[0]?.value ?? 0;
+  const rt = ativos(agora?.v);
   return {
     ok: true, periodo, atual: totais(atual), anterior: anterior ? totais(anterior) : null,
     porDia: linhas(dia).map(([d, u, s]) => ({ d, u, s })), canais: linhas(canais).filter(x => x[0] !== '(not set)'), aparelhos: linhas(aparelhos),
+    agoraErro: agora?.e ? String(agora.e.gaMsg || agora.e.message).slice(0, 160) : null,
     eventos: ev, pecas: linhas(pecas).filter(x => x[0] && x[0] !== '(not set)'), cidades: linhas(cidades).filter(x => x[0] && x[0] !== '(not set)'), agora: Number(rt) || 0
   };
+}
+
+function motivoDe(e) {
+  const msg = String(e.gaMsg || e.message || ''), sa = (() => { try { return JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT).client_email; } catch { return ''; } })();
+  if (e.gaStatus === 403 && /has not been used|is disabled|SERVICE_DISABLED|accessNotConfigured/i.test(msg)) return { ok: false, motivo: 'api-desativada', conta: sa };
+  if (e.gaStatus === 403) return { ok: false, motivo: 'sem-acesso', conta: sa };
+  if (e.gaStatus === 400 || e.gaStatus === 404) return { ok: false, motivo: 'propriedade-invalida', conta: sa };
+  console.error('analytics:', msg); return { ok: false, motivo: 'erro', conta: sa };
 }
 
 module.exports = async (req, res) => {
@@ -76,16 +86,14 @@ module.exports = async (req, res) => {
     const periodo = FAIXAS[String(b.periodo)] ? String(b.periodo) : '30';
     const cfg = (await db().collection('config').doc('loja').get()).data() || {}, prop = String(cfg.gaPropertyId || PROPRIEDADE_PADRAO).replace(/\D/g, '');
     if (!prop) return res.status(200).json({ ok: false, motivo: 'sem-config' });
+    if (b.agora === true) {   // contador "agora no site": sempre fresco
+      try { return res.status(200).json({ ok: true, agora: ativos(await ga(prop, 'runRealtimeReport', { metrics: [{ name: 'activeUsers' }] })) }); }
+      catch (e) { return res.status(200).json(motivoDe(e)); }
+    }
     const m = memo[prop + periodo]; if (m && Date.now() - m.t < 60000) return res.status(200).json(m.dados);
     try {
       const dados = await relatorio(prop, periodo); memo[prop + periodo] = { t: Date.now(), dados };
       return res.status(200).json(dados);
-    } catch (e) {
-      const msg = String(e.gaMsg || e.message || ''), sa = (() => { try { return JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT).client_email; } catch { return ''; } })();
-      if (e.gaStatus === 403 && /has not been used|is disabled|SERVICE_DISABLED|accessNotConfigured/i.test(msg)) return res.status(200).json({ ok: false, motivo: 'api-desativada', conta: sa });
-      if (e.gaStatus === 403) return res.status(200).json({ ok: false, motivo: 'sem-acesso', conta: sa });
-      if (e.gaStatus === 400 || e.gaStatus === 404) return res.status(200).json({ ok: false, motivo: 'propriedade-invalida', conta: sa });
-      console.error('analytics:', msg); return res.status(200).json({ ok: false, motivo: 'erro', conta: sa });
-    }
+    } catch (e) { return res.status(200).json(motivoDe(e)); }
   } catch (e) { responder(res, e); }
 };
