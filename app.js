@@ -1,6 +1,6 @@
 /* CLOUTS — loja online (sem dependências). */
 const CONFIG = {
-  whatsapp: '5531994810359',                 // (31) 99481-0359 — trocar quando o cliente tiver outro número
+  whatsapp: '5531994810357',                 // (31) 99481-0357 — trocar quando o cliente tiver outro número
   instagram: 'clouts.oficial',
   cidades: ['Contagem', 'Betim', 'Belo Horizonte'],
   // Frete por cidade, em reais. Zerado por enquanto (igual aos preços). Edite aqui quando definir os valores.

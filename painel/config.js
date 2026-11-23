@@ -85,7 +85,7 @@ export function renderSite(box, cfg, db, toast) {
   box.innerHTML = `<form class="cfg-card" id="siteForm"><h2>Textos e contato da loja</h2>
     <p class="msg">O que você mudar aqui aparece na loja na hora, sem precisar publicar nada.</p>
     <label class="f" for="s-barra">Frase da barra dourada do topo <span class="cnt" id="s-cnt">${(cfg.barra || '').length}/140</span><input id="s-barra" type="text" maxlength="140" value="${esc(cfg.barra || '')}" placeholder="Deixe vazio para usar: Entregamos em Contagem · Betim · Belo Horizonte"></label>
-    <label class="f" for="s-wa">WhatsApp de pedidos (com DDI e DDD, só números)<input id="s-wa" type="text" inputmode="numeric" maxlength="15" value="${esc(cfg.whatsapp || '')}" placeholder="Ex.: 5531994810359 (vazio = número atual da loja)"></label>
+    <label class="f" for="s-wa">WhatsApp de pedidos (com DDI e DDD, só números)<input id="s-wa" type="text" inputmode="numeric" maxlength="15" value="${esc(cfg.whatsapp || '')}" placeholder="Ex.: 5531994810357 (vazio = número atual da loja)"></label>
     <h2 style="margin-top:22px">Guia de medidas</h2>
     <p class="msg">Uma linha por tamanho, com as colunas separadas por vírgula. A 1ª linha é o título das colunas. Aparece na página de cada peça. Deixe vazio para esconder.<br>Exemplo: <code>Tamanho, Cintura (cm), Quadril (cm)</code> e na linha de baixo <code>38, 68, 94</code>.</p>
     <label class="f" for="s-guia">Tabela de medidas <span class="cnt" id="g-cnt">${(cfg.guiaMedidas || '').length}/3000</span><textarea id="s-guia" rows="8" maxlength="3000" style="width:100%;font:inherit;padding:10px 12px;border-radius:10px;border:1px solid #d9cfb8" placeholder="Tamanho, Cintura (cm), Quadril (cm)">${esc(cfg.guiaMedidas || '')}</textarea></label>

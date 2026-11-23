@@ -13,7 +13,7 @@ Abra `index.html` para ver a loja (funciona direto no computador; o login Google
 | O quê | Onde |
 |---|---|
 | Preço de uma peça | `products.js` → `preco` |
-| WhatsApp / Instagram | `app.js` → `CONFIG.whatsapp`, `CONFIG.instagram` (hoje 55 31 99481-0359 e @clouts.oficial) |
+| WhatsApp / Instagram | `app.js` → `CONFIG.whatsapp`, `CONFIG.instagram` (hoje 55 31 99481-0357 e @clouts.oficial) |
 | Valor do frete por cidade | `app.js` → `CONFIG.frete` (hoje R$ 0,00) |
 | Frete grátis acima de X | `app.js` → `CONFIG.freteGratisAcima` |
 | Mais vendidos | `products.js` → `MAIS_VENDIDOS` |
