@@ -35,8 +35,12 @@ async function usuario(req) {
 const cents = v => Math.round(Number(v) * 100);
 const reais = c => Math.round(c) / 100;
 
+/* Black Friday: +5% em toda a loja de 23/11 a 30/11/2026 (até 23h59, horário de Brasília). Soma com o cupom (ex.: 10% da primeira compra = 15%). */
+const BF_PCT = 5, BF_INICIO = Date.parse('2026-11-23T00:00:00-03:00'), BF_FIM = Date.parse('2026-11-30T23:59:59-03:00');
+const bfVale = (ms = Date.now()) => ms >= BF_INICIO && ms <= BF_FIM;
+
 /* Calcula o pedido a partir do que está no Firestore (preço, estoque e cupom do servidor). O navegador só informa ids, tamanhos e quantidades. */
-async function calcular({ itens, cupom, cep, tel }, uid) {
+async function calcular({ itens, cupom, bf, cep, tel }, uid) {
   if (!Array.isArray(itens) || !itens.length || itens.length > 40) throw erro(400, 'Carrinho vazio ou inválido.');
   const fs = db();
   let sub = 0; const linhas = [];
@@ -58,7 +62,7 @@ async function calcular({ itens, cupom, cep, tel }, uid) {
   if (!Number.isFinite(frete)) throw erro(500, 'Frete não configurado para esta cidade.');   // nunca fecha um pedido sem frete definido
   if (FRETE_GRATIS_ACIMA != null && sub >= cents(FRETE_GRATIS_ACIMA)) frete = 0;
   let percent = 0;
-  if (cupom) {
+  if (cupom && String(cupom) !== 'BLACKFRIDAY') {
     const code = String(cupom), cfg = (await fs.collection('config').doc('loja').get()).data() || {};
     if (code === 'AMIGO' || code === 'BEMVINDO') {
       // O dono pode ligar e desligar estes cupons no painel.
@@ -97,9 +101,14 @@ async function calcular({ itens, cupom, cep, tel }, uid) {
       percent = d.percent;
     }
   }
-  const desc = Math.round(sub * percent / 100);
+  // Black Friday: soma com o cupom, só dentro das datas, e o servidor decide (o navegador só pede).
+  const querBf = bf === true || String(cupom || '') === 'BLACKFRIDAY';
+  if (querBf && !bfVale()) throw erro(409, 'A promoção Black Friday já terminou. Atualize o carrinho.');
+  const bfPct = querBf ? BF_PCT : 0, primario = !!percent;
+  const desc = Math.round(sub * (percent + bfPct) / 100);
   const total = sub - desc + cents(frete);
-  return { linhas, cidade, subtotal: reais(sub), desconto: reais(desc), frete: reais(cents(frete)), total: reais(total), percent, cupom: percent ? String(cupom) : null };
+  return { linhas, cidade, subtotal: reais(sub), desconto: reais(desc), frete: reais(cents(frete)), total: reais(total),
+    percent: primario ? percent : bfPct, bf: primario ? bfPct : 0, cupom: primario ? String(cupom) : (bfPct ? 'BLACKFRIDAY' : null) };
 }
 
 async function cidadePorCep(cep) {
@@ -133,4 +142,4 @@ const FRETE_INFO = { FRETE, GRATIS: FRETE_GRATIS_ACIMA };
 /* Administradores do painel: contas Google verificadas. Para autorizar mais alguém, acrescente o e-mail aqui, em painel/painel.js (ADMINS) e em firestore.rules (isAdmin) e republique as regras. */
 const ADMINS = ['clouts.oficial2026@gmail.com', 'brenovilaca48@gmail.com'];
 const ehAdmin = u => !!u && ADMINS.includes(String(u.email || '').toLowerCase()) && u.email_verified === true && u.firebase?.sign_in_provider === 'google.com';
-module.exports = { admin, db, configurado, usuario, calcular, mp, erro, responder, cents, reais, DEGRAUS, FRETE_INFO, ADMINS, ehAdmin };
+module.exports = { admin, db, configurado, usuario, calcular, mp, erro, responder, cents, reais, DEGRAUS, FRETE_INFO, ADMINS, ehAdmin, BF_PCT, bfVale };

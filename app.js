@@ -195,7 +195,19 @@ async function aplicarCampanha(raw) {
     return { ok: true, percent: c.percent };
   } catch { return { ok: false, msg: 'Não foi possível validar agora. Tente de novo.' }; }
 }
-const descontoValor = () => { const c = cupomObj(); return c ? Math.round(cartTotal() * c.percent) / 100 : 0; };
+/* Black Friday: +5% em toda a loja, de 23/11 a 30/11/2026 (23h59). Soma com o cupom (ex.: 10% da primeira compra + 5% = 15%). O servidor confere as datas e o valor. */
+const BF = { inicio: Date.parse('2026-11-23T00:00:00-03:00'), fim: Date.parse('2026-11-30T23:59:59-03:00'), pct: 5 };
+let bfOff = store.get('clouts.bfoff', false) === true;   // o cliente pode tirar o desconto do carrinho; por padrão ele já vem aplicado
+const bfVale = () => { const n = Date.now(); return n >= BF.inicio && n <= BF.fim; };
+const bfObj = () => (bfVale() && !bfOff ? { percent: BF.pct } : null);
+const descontoCupom = () => { const c = cupomObj(); return c ? Math.round(cartTotal() * c.percent) / 100 : 0; };
+const descontoValor = () => { const p = (cupomObj()?.percent || 0) + (bfObj()?.percent || 0); return p ? Math.round(cartTotal() * p) / 100 : 0; };
+const descontoBf = () => Math.round((descontoValor() - descontoCupom()) * 100) / 100;
+const descLinhas = () => { const c = cupomObj(), b = bfObj(); return (c ? `<div class="tot disc"><span>Cupom ${esc(cupNome(c.codigo))} (${c.percent}%)</span><span>− ${brl(descontoCupom())}</span></div>` : '') + (b ? `<div class="tot disc"><span>Black Friday (${b.percent}%)</span><span>− ${brl(descontoBf())}</span></div>` : ''); };
+function bfBanner() {
+  const t = document.querySelector('.topbar'); if (!t || !bfVale()) return;
+  t.classList.add('bf'); t.innerHTML = `<b>BLACK FRIDAY</b> · +${BF.pct}% OFF em toda a loja até domingo (30/11) · soma com o cupom de primeira compra`;
+}
 const totalPedido = () => Math.max(0, cartTotal() - descontoValor()) + (freteValor() || 0);   // { cep, cidade, bairro, rua, valor }
 /* Guarda o carrinho do cliente logado no servidor (com calma, 8 s depois da última mudança) para o lembrete de carrinho abandonado. */
 let cartTm;
@@ -893,7 +905,7 @@ function renderCart() {
       <p class="note" id="cepMsg">${shipMsg()}</p></form>
     ${cupomBox()}
     <div class="tot"><span>Subtotal</span><span>${brl(cartTotal())}</span></div>
-    ${descontoValor() ? `<div class="tot disc"><span>Cupom ${esc(cupNome(cupomAtivo))}</span><span>− ${brl(descontoValor())}</span></div>` : ''}
+    ${descLinhas()}
     <div class="tot"><span>Frete</span><span id="fLbl">${ship ? brl(freteValor()) : '—'}</span></div>
     <div class="tot big"><span>Total</span><b id="tLbl">${brl(totalPedido())}</b></div>
     <button class="btn btn-gold block" id="goCheckout">Finalizar pedido</button>`;
@@ -915,25 +927,32 @@ function renderCart() {
 }
 function cupomBox() {
   if (!auth()?.configured) return '';
-  const c = cupomObj();
-  if (c) return `<div class="cupom on"><span><b>${esc(cupNome(c.codigo))}</b> · ${c.percent}% OFF aplicado</span><button type="button" id="cupomRm">Remover</button></div>`;
-  if (!me()) return `<div class="cupom"><button type="button" id="cupomLogin">Tem cupom? Entre para usar</button></div>`;
-  const av = cupons.filter(x => !x.usado);
-  const camp = ligado('campanhas') ? `<form class="cupom-camp" id="campForm"><input id="campIn" maxlength="20" autocomplete="off" autocapitalize="characters" placeholder="Código promocional"><button class="btn btn-dark sm" type="submit">Aplicar</button><p class="note" id="campMsg"></p></form>` : '';
-  const dis = av.filter(x => cupomLigado(x));
-  if (!dis.length) return `<div class="cupom">${ligado('cupomAmigo') ? '<button type="button" id="cupomShare">Convide amigos e ganhe até 20% OFF</button>' : ''}${camp}</div>`;
-  return `<div class="cupom"><label for="cupomSel">Cupom</label><select id="cupomSel"><option value="">Escolher cupom</option>${dis.map(x => `<option value="${esc(x.codigo)}">${esc(cupNome(x.codigo))} · ${x.percent}% OFF</option>`).join('')}</select>${camp}</div>`;
+  const c = cupomObj(), b = bfObj();
+  const card = (nome, pct, sub, on, btn) => `<div class="cp${on ? ' on' : ''}"><div><b>${nome} · ${pct}% OFF</b><small>${on ? 'Aplicado ✓ ' : ''}${sub}</small></div>${btn}</div>`;
+  const bf = bfVale() ? card('Black Friday', BF.pct, 'Em toda a loja, até domingo (30/11). Soma com o seu cupom.', !!b, `<button type="button" data-bf>${b ? 'Remover' : 'Resgatar'}</button>`) : '';
+  let cards = '', extra = '';
+  if (!me()) extra = `<button type="button" id="cupomLogin">Tem cupom? Entre para usar</button>`;
+  else {
+    const dis = cupons.filter(x => !x.usado && cupomLigado(x));
+    cards = dis.map(x => { const on = !!c && c.codigo === x.codigo; return card(esc(cupNome(x.codigo)), x.percent, x.expira ? restoTxt(x.expira) : 'Vale para todo o pedido, sem o frete.', on, on ? '<button type="button" id="cupomRm">Remover</button>' : `<button type="button" data-resgatar="${esc(x.codigo)}">Resgatar</button>`); }).join('');
+    if (c?.camp) cards += card(esc(c.codigo), c.percent, 'Código promocional.', true, '<button type="button" id="cupomRm">Remover</button>');
+    if (!dis.length && !c && ligado('cupomAmigo')) extra += '<button type="button" id="cupomShare">Convide amigos e ganhe até 20% OFF</button>';
+    if (ligado('campanhas') && !c?.camp) extra += `<form class="cupom-camp" id="campForm"><input id="campIn" maxlength="20" autocomplete="off" autocapitalize="characters" placeholder="Código promocional"><button class="btn btn-dark sm" type="submit">Aplicar</button><p class="note" id="campMsg"></p></form>`;
+  }
+  const t = (c?.percent || 0) + (b?.percent || 0), soma = c && b ? `<p class="cp-sum">Juntos: <b>${t}% OFF</b> no seu pedido</p>` : '';
+  return `${bf || cards ? `<div class="cps"><div class="cps-t">Cupons disponíveis</div>${bf}${cards}${soma}</div>` : ''}${extra ? `<div class="cupom">${extra}</div>` : ''}`;
 }
 function bindCupom() {
   const on = (id, f) => { const el = $(id); if (el) el.onclick = f; };
   on('#cupomRm', () => { cupomAtivo = null; campAtiva = null; store.set('clouts.cupom', null); store.set('clouts.camp', null); renderCart(); });
   on('#cupomLogin', () => openLogin('Entre com o Google para usar seus cupons.'));
   on('#cupomShare', () => shareStore());
+  $$('[data-bf]').forEach(el => el.onclick = () => { bfOff = !bfOff; store.set('clouts.bfoff', bfOff); renderCart(); if (!bfOff) toast('Black Friday aplicada: +5% OFF'); });
+  $$('[data-resgatar]').forEach(el => el.onclick = () => { cupomAtivo = el.dataset.resgatar; campAtiva = null; store.set('clouts.cupom', cupomAtivo); store.set('clouts.camp', null); renderCart(); toast('Cupom resgatado'); });
   const cf = $('#campForm'); if (cf) cf.onsubmit = async e => {
     e.preventDefault(); const m = $('#campMsg'); m.className = 'note'; m.textContent = 'Validando…';
     const r = await aplicarCampanha($('#campIn').value); if (r.ok) { toast(`Código aplicado: ${r.percent}% OFF`); renderCart(); } else { m.className = 'note bad'; m.textContent = r.msg; }
   };
-  const sel = $('#cupomSel'); if (sel) sel.onchange = e => { cupomAtivo = e.target.value || null; store.set('clouts.cupom', cupomAtivo); renderCart(); };
 }
 const shipMsg = () => ship ? `Entrega em ${ship.cidade}${ship.bairro ? ' · ' + ship.bairro : ''}: ${freteValor() === 0 ? 'frete ' + (CONFIG.freteGratisAcima != null && cartTotal() >= CONFIG.freteGratisAcima ? 'grátis' : brl(0)) : brl(freteValor())}` : 'Entregamos em Contagem, Betim e Belo Horizonte.';
 $('#cartBody').addEventListener('click', e => {
@@ -958,7 +977,7 @@ function renderCheckout() {
       <label class="opt"><input type="radio" name="pag" value="Cartão de crédito"><span>${ICON.card}<b>Cartão de crédito</b><small>Enviamos o link seguro de pagamento no WhatsApp.</small></span></label>
     </fieldset></form>`;
   $('#cartFoot').innerHTML = `<div class="tot"><span>Subtotal</span><span>${brl(cartTotal())}</span></div>
-    ${descontoValor() ? `<div class="tot disc"><span>Cupom ${esc(cupNome(cupomAtivo))}</span><span>− ${brl(descontoValor())}</span></div>` : ''}
+    ${descLinhas()}
     <div class="tot"><span>Frete (${esc(ship.cidade)})</span><span id="ckFrete">${brl(freteValor())}</span></div>
     <div class="tot big"><span>Total</span><b id="ckTotal">${brl(totalPedido())}</b></div>
     ${pagBotao() ? `<button class="btn btn-gold block" id="payPix">${ICON.pix} Pagar com Pix</button>
@@ -994,7 +1013,7 @@ async function payMp(metodo) {
     let ref = null; try { ref = localStorage.getItem('clouts.ref'); } catch {}
     const r = await fetch('/api/checkout', {
       method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-      body: JSON.stringify({ metodo, itens: cart.map(i => ({ id: i.id, tam: i.tam, q: i.q })), cupom: cupomObj()?.codigo || null, ref,
+      body: JSON.stringify({ metodo, itens: cart.map(i => ({ id: i.id, tam: i.tam, q: i.q })), cupom: cupomObj()?.codigo || null, bf: !!bfObj(), ref,
         cliente: { nome: d.nome, tel: d.tel, rua: d.rua, num: d.num, bairro: d.bairro, comp: d.comp, cep: d.cep } })
     });
     const j = await r.json().catch(() => ({}));
@@ -1082,13 +1101,13 @@ function sendOrder() {
   const frete = freteValor(), desc = descontoValor(), total = totalPedido(), cp = cupomObj();
   const linhas = cart.map(i => { const p = byId(i.id); return `• ${p.nome} — Cód. ${p.cod} — Tam. ${i.tam} — ${i.q}x ${brl(p.preco)}`; });
   const u = me();
-  const msg = `*Novo pedido — CLOUTS*\n\n${linhas.join('\n')}\n\n*Subtotal:* ${brl(cartTotal())}${cp ? `\n*Cupom ${cupNome(cp.codigo)} (${cp.percent}% OFF):* − ${brl(desc)}` : ''}\n*Frete (${ship.cidade}):* ${brl(frete)}\n*Total:* ${brl(total)}\n*Pagamento:* ${d.pag}\n\n*Cliente:* ${d.nome}${u?.email ? '\n*E-mail:* ' + u.email : ''}\n*WhatsApp:* ${d.tel}\n*Entrega:* ${d.rua}, ${d.num}${d.comp ? ' — ' + d.comp : ''} — ${d.bairro}, ${ship.cidade} — CEP ${d.cep}`;
+  const msg = `*Novo pedido — CLOUTS*\n\n${linhas.join('\n')}\n\n*Subtotal:* ${brl(cartTotal())}${cp ? `\n*Cupom ${cupNome(cp.codigo)} (${cp.percent}% OFF):* − ${brl(descontoCupom())}` : ''}${bfObj() ? `\n*Black Friday (${BF.pct}% OFF):* − ${brl(descontoBf())}` : ''}\n*Frete (${ship.cidade}):* ${brl(frete)}\n*Total:* ${brl(total)}\n*Pagamento:* ${d.pag}\n\n*Cliente:* ${d.nome}${u?.email ? '\n*E-mail:* ' + u.email : ''}\n*WhatsApp:* ${d.tel}\n*Entrega:* ${d.rua}, ${d.num}${d.comp ? ' — ' + d.comp : ''} — ${d.bairro}, ${ship.cidade} — CEP ${d.cep}`;
   window.open(waLink(msg), '_blank', 'noopener');
   track('generate_lead', 'Lead', { ga: { currency: 'BRL', value: total, items: cart.map(i => trkItem(byId(i.id), i.q)) }, fb: { value: total, currency: 'BRL', content_type: 'product', content_ids: cart.map(i => byId(i.id).cod) } });
   // Registra o pedido para o dono ver no painel (dashboard); a venda só conta depois que ele confirma o pagamento.
   if (u) CloutsDB.registrarPedido({ uid: u.uid, email: u.email || '', cliente: { nome: d.nome, tel: d.tel, rua: d.rua, num: d.num, bairro: d.bairro, comp: d.comp || '', cep: d.cep },
     itens: cart.map(i => { const p = byId(i.id); return { id: p.id, cod: String(p.cod), nome: String(p.nome).slice(0, 140), tam: String(i.tam), q: i.q, preco: p.preco }; }),
-    subtotal: cartTotal(), desconto: desc, frete, total, cupom: cp ? cp.codigo : null, percent: cp ? cp.percent : 0, cidade: ship.cidade }).then(id => { clearTimeout(cartTm); CloutsDB.email({ acao: 'pedido', pedidoId: id }); CloutsDB.email({ acao: 'carrinho', itens: [] }); }).catch(e => console.warn('Pedido não registrado', e));
+    subtotal: cartTotal(), desconto: desc, frete, total, cupom: cp ? cp.codigo : (bfObj() ? 'BLACKFRIDAY' : null), percent: cp ? cp.percent : (bfObj() ? BF.pct : 0), cidade: ship.cidade }).then(id => { clearTimeout(cartTm); CloutsDB.email({ acao: 'pedido', pedidoId: id }); CloutsDB.email({ acao: 'carrinho', itens: [] }); }).catch(e => console.warn('Pedido não registrado', e));
   if (cp && u) { if (!cp.camp && cp.codigo !== 'PRIMEIRA') CloutsDB.usarCupom(u.uid, cp.codigo).catch(() => {}); cupomAtivo = null; campAtiva = null; store.set('clouts.cupom', null); store.set('clouts.camp', null); }
 }
 
@@ -1108,7 +1127,7 @@ const idle = f => ('requestIdleCallback' in window ? requestIdleCallback(f, { ti
 let pecaInicial = (location.pathname.match(/^\/p\/([\w.-]+)\/?$/) || [])[1] || null;
 const abrirPecaInicial = () => { if (pecaInicial && byId(pecaInicial)) { const id = pecaInicial; pecaInicial = null; history.replaceState(null, '', '/' + location.hash); openSheet(id); } };
 try {
-  setHH(); updateBadges(); renderCart(); route(); abrirPecaInicial();
+  setHH(); bfBanner(); updateBadges(); renderCart(); route(); abrirPecaInicial();
   setTimeout(showPromo, 10000);
   setTimeout(() => { barOk = true; renderPcBar(); if (!me() && auth()?.configured && ligado('cupomPrimeira') && !$('#sheet').classList.contains('open') && !$('#promo') && Date.now() - store.get('clouts.boasHide', 0) > 24 * 3600 * 1000) { store.set('clouts.boasHide', Date.now()); openLogin('', true); } }, 2600);
 } catch (e) { console.error(e); fatal(); }

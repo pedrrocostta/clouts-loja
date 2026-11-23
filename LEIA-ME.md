@@ -137,3 +137,9 @@ Sem essas variáveis os e-mails simplesmente não saem e a loja funciona normal.
 - **Marcos estáveis**: tags `estavel-AAAA-MM-DD` no Git (ex.: `git checkout estavel-2026-11-17`).
 - **Login**: no celular usa redirecionamento (a janelinha falha); erro mostra o código (ex.: `auth/...`). No iPhone, se falhar, abrir no Chrome.
 - **Celular**: campos com 16 px (sem zoom do iPhone) e `overflow-x: clip` na página.
+
+## Black Friday 2026 (+5% em toda a loja)
+- De **23/11 a 30/11/2026 (até 23h59)**: 5% de desconto em todo o pedido, **somando** com o cupom (ex.: Primeira compra 10% + Black Friday 5% = 15%). O cupom de primeira compra continua valendo uma vez só; a Black Friday não tem limite de uso na semana.
+- No carrinho aparece o painel **Cupons disponíveis**: a Black Friday já vem aplicada (o cliente pode tirar e resgatar de novo) e os cupons do cliente aparecem com o botão **Resgatar**. A faixa preta no topo do site anuncia a promoção.
+- O **servidor** decide o valor e as datas (`api/_lib.js`: `BF_PCT`, `BF_INICIO`, `BF_FIM`) e o cliente espelha em `app.js` (`BF`). Para mudar percentual ou datas, altere os dois lugares. Depois de 30/11 a faixa, o cartão e o desconto somem sozinhos.
+- Pedido: `cupom` guarda o cupom principal (ou `BLACKFRIDAY` quando é só ela), `percent` o percentual desse cupom e `bf` o percentual extra (pedidos online). Na conferência dos pedidos do WhatsApp (`api/_conferencia.js`) o servidor aceita só os descontos possíveis e agora também recusa desconto sem cupom válido.

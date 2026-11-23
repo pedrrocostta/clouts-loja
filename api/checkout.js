@@ -39,7 +39,7 @@ module.exports = async (req, res) => {
     const meus = await db().collection('pedidos').where('uid', '==', u.uid).get();
     if (meus.docs.filter(d => d.data().origem !== 'whatsapp' && (d.data().criadoEm?.toMillis?.() || 0) > Date.now() - 15 * 60000).length >= 8) throw erro(429, 'Muitas tentativas de pagamento seguidas. Aguarde alguns minutos.');
 
-    const p = await calcular({ itens: b.itens, cupom: b.cupom, cep: cliente.cep, tel: cliente.tel }, u.uid);
+    const p = await calcular({ itens: b.itens, cupom: b.cupom, bf: b.bf === true, cep: cliente.cep, tel: cliente.tel }, u.uid);
     if (!(p.total > 0)) throw erro(400, 'Total inválido.');
 
     // Quem convidou vem do código de amigo que o cliente usou (users/{uid}/meta/indicacao, gravado uma única vez), não do navegador.
@@ -60,7 +60,7 @@ module.exports = async (req, res) => {
       if (falta.length) throw erro(409, `A peça ${falta[0].cod} (tam. ${falta[0].tam}) acabou de esgotar. Atualize o carrinho.`);
       t.set(doc, {
         uid: u.uid, email: u.email || '', cliente, itens: p.linhas, subtotal: p.subtotal, desconto: p.desconto, frete: p.frete, total: p.total,
-        cupom: p.cupom, percent: p.percent, cidade: p.cidade, telDigitos: String(cliente.tel).replace(/\D/g, '').slice(-11), ref, status: 'aguardando', criadoEm: admin.firestore.FieldValue.serverTimestamp()
+        cupom: p.cupom, percent: p.percent, ...(p.bf ? { bf: p.bf } : {}), cidade: p.cidade, telDigitos: String(cliente.tel).replace(/\D/g, '').slice(-11), ref, status: 'aguardando', criadoEm: admin.firestore.FieldValue.serverTimestamp()
       });
     });
 
