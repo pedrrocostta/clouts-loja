@@ -195,18 +195,26 @@ async function aplicarCampanha(raw) {
     return { ok: true, percent: c.percent };
   } catch { return { ok: false, msg: 'Não foi possível validar agora. Tente de novo.' }; }
 }
-/* Black Friday: +5% em toda a loja, de 23/11 a 30/11/2026 (23h59). Soma com o cupom (ex.: 10% da primeira compra + 5% = 15%). O servidor confere as datas e o valor. */
-const BF = { inicio: Date.parse('2026-11-23T00:00:00-03:00'), fim: Date.parse('2026-11-30T23:59:59-03:00'), pct: 5 };
-let bfOff = store.get('clouts.bfoff', false) === true;   // o cliente pode tirar o desconto do carrinho; por padrão ele já vem aplicado
+/* Black Friday automática, todo ano: +5% em toda a loja na semana da Black Friday (segunda a domingo, 23h59 de Brasília). Os preços aparecem "de X por Y".
+ * Black Friday = sexta depois da 4ª quinta de novembro (2026: 27/11; semana de 23/11 a 29/11). Soma com o cupom. O servidor confere (api/_lib.js, bfJanela): mexa nos dois. */
+function bfJanela(ms) {
+  const ano = new Date(ms - 3 * 3600000).getUTCFullYear();
+  let q = 0, d = 1; for (; d <= 30; d++) if (new Date(Date.UTC(ano, 10, d)).getUTCDay() === 4 && ++q === 4) break;
+  const sexta = Date.UTC(ano, 10, d + 1, 3, 0, 0);
+  return { inicio: sexta - 4 * 86400000, fim: sexta + 3 * 86400000 - 1000 };
+}
+const BF = { pct: 5, get inicio() { return bfJanela(Date.now()).inicio; }, get fim() { return bfJanela(Date.now()).fim; } };
 const bfVale = () => { const n = Date.now(); return n >= BF.inicio && n <= BF.fim; };
-const bfObj = () => (bfVale() && !bfOff ? { percent: BF.pct } : null);
+const bfFimTxt = () => { const d = new Date(BF.fim - 3 * 3600000); return String(d.getUTCDate()).padStart(2, '0') + '/' + String(d.getUTCMonth() + 1).padStart(2, '0'); };
+const bfObj = () => (bfVale() ? { percent: BF.pct } : null);
+const precoBf = p => (bfVale() && p.preco > 0 ? Math.round((p.preco - Math.round(p.preco * BF.pct) / 100) * 100) / 100 : p.preco);   // mesma conta do carrinho
 const descontoCupom = () => { const c = cupomObj(); return c ? Math.round(cartTotal() * c.percent) / 100 : 0; };
 const descontoValor = () => { const p = (cupomObj()?.percent || 0) + (bfObj()?.percent || 0); return p ? Math.round(cartTotal() * p) / 100 : 0; };
 const descontoBf = () => Math.round((descontoValor() - descontoCupom()) * 100) / 100;
 const descLinhas = () => { const c = cupomObj(), b = bfObj(); return (c ? `<div class="tot disc"><span>Cupom ${esc(cupNome(c.codigo))} (${c.percent}%)</span><span>− ${brl(descontoCupom())}</span></div>` : '') + (b ? `<div class="tot disc"><span>Black Friday (${b.percent}%)</span><span>− ${brl(descontoBf())}</span></div>` : ''); };
 function bfBanner() {
   const t = document.querySelector('.topbar'); if (!t || !bfVale()) return;
-  t.classList.add('bf'); t.innerHTML = `<b>BLACK FRIDAY</b> · +${BF.pct}% OFF em toda a loja até domingo (30/11) · soma com o cupom de primeira compra`;
+  t.classList.add('bf'); t.innerHTML = `<b>BLACK FRIDAY</b> · ${BF.pct}% OFF em toda a loja até domingo (${bfFimTxt()}) · soma com o cupom de primeira compra`;
 }
 const totalPedido = () => Math.max(0, cartTotal() - descontoValor()) + (freteValor() || 0);   // { cep, cidade, bairro, rua, valor }
 /* Guarda o carrinho do cliente logado no servidor (com calma, 8 s depois da última mudança) para o lembrete de carrinho abandonado. */
@@ -269,7 +277,9 @@ const CATS = () => [
 ];
 /* Preço com "De R$ X por R$ Y" quando a peça tem preço anterior maior que o atual. */
 const emPromo = p => Number(p.precoAntigo) > Number(p.preco) && Number(p.preco) > 0;
-const priceHTML = p => emPromo(p)
+const priceHTML = p => bfVale() && p.preco > 0
+  ? `<div class="price promo"><s>${brl(p.preco)}</s><b>${brl(precoBf(p))}</b><em>-${BF.pct}%</em></div>`
+  : emPromo(p)
   ? `<div class="price promo"><s>${brl(p.precoAntigo)}</s><b>${brl(p.preco)}</b><em>-${Math.round((1 - p.preco / p.precoAntigo) * 100)}%</em></div>`
   : `<div class="price">${brl(p.preco)}</div>`;
 const catHTML = ([n, h, img]) => `<a class="cat" href="${h}"><span><img src="${img}" alt="" loading="lazy"></span>${n}</a>`;
@@ -752,7 +762,7 @@ function openSheet(id) {
         ${p.premium ? '<span>Premium</span>' : ''}${p.diamond ? '<span>Diamond</span>' : ''}</div>
       ${cores.length > 1 ? `<div><div class="lbl">Cor: <b>${esc(p.cor || 'Escolha')}</b></div><div class="swatches">${cores.map(c => `<button class="swc ${c.id === p.id ? 'on' : ''}" data-c="${esc(c.id)}" aria-label="Cor ${esc(c.cor || c.cod)}" title="${esc(c.cor || c.cod)}"><img src="${esc(foto(c.img, 160))}" alt=""></button>`).join('')}</div></div>` : ''}
       <div><div class="lbl">Tamanho</div><div class="sizes">${sizesAll(p).map(t => `<button class="sz" data-t="${t}" ${p.tam.includes(t) && !p.esgotado ? '' : 'disabled'}>${t}</button>`).join('')}</div><p class="stk" id="stkMsg" aria-live="polite"></p>${soliciteHTML(p)}</div>
-      <div class="buy"><span class="buy-pr">${brl(p.preco)}</span>${soldOut(p) ? '<button class="btn btn-dark block" disabled>Esgotado</button>' : `<button class="btn btn-gold block" id="addBtn">${ICON.bag} Adicionar ao carrinho</button>`}</div>
+      <div class="buy"><span class="buy-pr">${brl(precoBf(p))}</span>${soldOut(p) ? '<button class="btn btn-dark block" disabled>Esgotado</button>' : `<button class="btn btn-gold block" id="addBtn">${ICON.bag} Adicionar ao carrinho</button>`}</div>
       <button class="btn btn-line block" id="favSheet">${ICON.heart} <span>${favs.includes(p.id) ? 'Remover dos favoritos' : 'Favoritar'}</span></button>
       <button class="btn btn-line block" id="shareSheet" type="button">Compartilhar esta peça</button>
       <div class="fr"><span>${ICON.truck || ''} <b>Entrega</b> em Contagem, Betim e Belo Horizonte</span><span>${ICON.chat || ''} Dúvida de tamanho? <a href="${waLink('Olá! Tenho uma dúvida de tamanho na peça ' + p.cod + ' (' + p.nome + ').')}" target="_blank" rel="noopener"><b>Chame no WhatsApp</b></a></span></div>
@@ -929,7 +939,7 @@ function cupomBox() {
   if (!auth()?.configured) return '';
   const c = cupomObj(), b = bfObj();
   const card = (nome, pct, sub, on, btn) => `<div class="cp${on ? ' on' : ''}"><div><b>${nome} · ${pct}% OFF</b><small>${on ? 'Aplicado ✓ ' : ''}${sub}</small></div>${btn}</div>`;
-  const bf = bfVale() ? card('Black Friday', BF.pct, 'Em toda a loja, até domingo (30/11). Soma com o seu cupom.', !!b, `<button type="button" data-bf>${b ? 'Remover' : 'Resgatar'}</button>`) : '';
+  const bf = bfVale() ? card('Black Friday', BF.pct, `Em toda a loja, até domingo (${bfFimTxt()}). Soma com o seu cupom.`, true, '') : '';
   let cards = '', extra = '';
   if (!me()) extra = `<button type="button" id="cupomLogin">Tem cupom? Entre para usar</button>`;
   else {
@@ -947,7 +957,6 @@ function bindCupom() {
   on('#cupomRm', () => { cupomAtivo = null; campAtiva = null; store.set('clouts.cupom', null); store.set('clouts.camp', null); renderCart(); });
   on('#cupomLogin', () => openLogin('Entre com o Google para usar seus cupons.'));
   on('#cupomShare', () => shareStore());
-  $$('[data-bf]').forEach(el => el.onclick = () => { bfOff = !bfOff; store.set('clouts.bfoff', bfOff); renderCart(); if (!bfOff) toast('Black Friday aplicada: +5% OFF'); });
   $$('[data-resgatar]').forEach(el => el.onclick = () => { cupomAtivo = el.dataset.resgatar; campAtiva = null; store.set('clouts.cupom', cupomAtivo); store.set('clouts.camp', null); renderCart(); toast('Cupom resgatado'); });
   const cf = $('#campForm'); if (cf) cf.onsubmit = async e => {
     e.preventDefault(); const m = $('#campMsg'); m.className = 'note'; m.textContent = 'Validando…';

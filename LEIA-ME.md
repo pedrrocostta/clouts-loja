@@ -138,8 +138,8 @@ Sem essas variáveis os e-mails simplesmente não saem e a loja funciona normal.
 - **Login**: no celular usa redirecionamento (a janelinha falha); erro mostra o código (ex.: `auth/...`). No iPhone, se falhar, abrir no Chrome.
 - **Celular**: campos com 16 px (sem zoom do iPhone) e `overflow-x: clip` na página.
 
-## Black Friday 2026 (+5% em toda a loja)
-- De **23/11 a 30/11/2026 (até 23h59)**: 5% de desconto em todo o pedido, **somando** com o cupom (ex.: Primeira compra 10% + Black Friday 5% = 15%). O cupom de primeira compra continua valendo uma vez só; a Black Friday não tem limite de uso na semana.
-- No carrinho aparece o painel **Cupons disponíveis**: a Black Friday já vem aplicada (o cliente pode tirar e resgatar de novo) e os cupons do cliente aparecem com o botão **Resgatar**. A faixa preta no topo do site anuncia a promoção.
-- O **servidor** decide o valor e as datas (`api/_lib.js`: `BF_PCT`, `BF_INICIO`, `BF_FIM`) e o cliente espelha em `app.js` (`BF`). Para mudar percentual ou datas, altere os dois lugares. Depois de 30/11 a faixa, o cartão e o desconto somem sozinhos.
-- Pedido: `cupom` guarda o cupom principal (ou `BLACKFRIDAY` quando é só ela), `percent` o percentual desse cupom e `bf` o percentual extra (pedidos online). Na conferência dos pedidos do WhatsApp (`api/_conferencia.js`) o servidor aceita só os descontos possíveis e agora também recusa desconto sem cupom válido.
+## Black Friday automática (todo ano, +5% em toda a loja)
+- **Quando:** a semana da Black Friday, da **segunda ao domingo (23h59)**. Black Friday = sexta depois da 4ª quinta de novembro. 2026: semana de **23/11 a 29/11**; 2027: 22/11 a 28/11; 2028: 20/11 a 26/11. Fora da semana, tudo volta ao normal sozinho (faixa, preços "de/por" e desconto somem). Não precisa programar nada a cada ano.
+- **Como aparece:** faixa preta no topo, preço "de R$ X por R$ Y (-5%)" nos cartões e na ficha da peça, e o cartão "Cupons disponíveis" no carrinho. O desconto é automático e **soma com o cupom** (Primeira compra 10% + Black Friday 5% = 15%). A Black Friday vale em toda compra da semana; o cupom de primeira compra continua valendo uma vez só.
+- **Onde mudar:** percentual e regra de datas em dois lugares que devem ficar iguais: `api/_lib.js` (`BF_PCT`, `bfJanela`, o servidor decide valor e datas) e `app.js` (`BF`, `bfJanela`).
+- **Pedido:** `cupom` guarda o cupom principal (ou `BLACKFRIDAY` quando é só ela), `percent` o percentual desse cupom e `bf` o extra (pedidos online). A conferência dos pedidos do WhatsApp (`api/_conferencia.js`) só aceita os descontos possíveis e recusa desconto sem cupom válido.

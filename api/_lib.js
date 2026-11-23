@@ -35,9 +35,17 @@ async function usuario(req) {
 const cents = v => Math.round(Number(v) * 100);
 const reais = c => Math.round(c) / 100;
 
-/* Black Friday: +5% em toda a loja de 23/11 a 30/11/2026 (até 23h59, horário de Brasília). Soma com o cupom (ex.: 10% da primeira compra = 15%). */
-const BF_PCT = 5, BF_INICIO = Date.parse('2026-11-23T00:00:00-03:00'), BF_FIM = Date.parse('2026-11-30T23:59:59-03:00');
-const bfVale = (ms = Date.now()) => ms >= BF_INICIO && ms <= BF_FIM;
+/* Black Friday automática, todo ano: +5% em toda a loja na semana da Black Friday (da segunda até o domingo, 23h59 de Brasília).
+ * A Black Friday é a sexta-feira depois da 4ª quinta-feira de novembro (2026: sexta 27/11, semana de 23/11 a 29/11). Fora da semana, os preços voltam ao normal sozinhos.
+ * Soma com o cupom (ex.: 10% da primeira compra = 15%). A mesma regra está em app.js (bfJanela): mexa nos dois. */
+const BF_PCT = 5;
+function bfJanela(ms) {
+  const ano = new Date(ms - 3 * 3600000).getUTCFullYear();
+  let q = 0, d = 1; for (; d <= 30; d++) if (new Date(Date.UTC(ano, 10, d)).getUTCDay() === 4 && ++q === 4) break;
+  const sexta = Date.UTC(ano, 10, d + 1, 3, 0, 0);   // 00h de Brasília = 03h UTC
+  return { inicio: sexta - 4 * 86400000, fim: sexta + 3 * 86400000 - 1000 };
+}
+const bfVale = (ms = Date.now()) => { const j = bfJanela(ms); return ms >= j.inicio && ms <= j.fim; };
 
 /* Calcula o pedido a partir do que está no Firestore (preço, estoque e cupom do servidor). O navegador só informa ids, tamanhos e quantidades. */
 async function calcular({ itens, cupom, bf, cep, tel }, uid) {
@@ -102,9 +110,9 @@ async function calcular({ itens, cupom, bf, cep, tel }, uid) {
     }
   }
   // Black Friday: soma com o cupom, só dentro das datas, e o servidor decide (o navegador só pede).
-  const querBf = bf === true || String(cupom || '') === 'BLACKFRIDAY';
-  if (querBf && !bfVale()) throw erro(409, 'A promoção Black Friday já terminou. Atualize o carrinho.');
-  const bfPct = querBf ? BF_PCT : 0, primario = !!percent;
+  const pediuBf = bf === true || String(cupom || '') === 'BLACKFRIDAY';
+  if (pediuBf && !bfVale()) throw erro(409, 'A promoção Black Friday já terminou. Atualize a página.');
+  const bfPct = bfVale() ? BF_PCT : 0, primario = !!percent;   // na semana da Black Friday o desconto vale para todos os pedidos, como nos preços mostrados
   const desc = Math.round(sub * (percent + bfPct) / 100);
   const total = sub - desc + cents(frete);
   return { linhas, cidade, subtotal: reais(sub), desconto: reais(desc), frete: reais(cents(frete)), total: reais(total),
@@ -142,4 +150,4 @@ const FRETE_INFO = { FRETE, GRATIS: FRETE_GRATIS_ACIMA };
 /* Administradores do painel: contas Google verificadas. Para autorizar mais alguém, acrescente o e-mail aqui, em painel/painel.js (ADMINS) e em firestore.rules (isAdmin) e republique as regras. */
 const ADMINS = ['clouts.oficial2026@gmail.com', 'brenovilaca48@gmail.com'];
 const ehAdmin = u => !!u && ADMINS.includes(String(u.email || '').toLowerCase()) && u.email_verified === true && u.firebase?.sign_in_provider === 'google.com';
-module.exports = { admin, db, configurado, usuario, calcular, mp, erro, responder, cents, reais, DEGRAUS, FRETE_INFO, ADMINS, ehAdmin, BF_PCT, bfVale };
+module.exports = { admin, db, configurado, usuario, calcular, mp, erro, responder, cents, reais, DEGRAUS, FRETE_INFO, ADMINS, ehAdmin, BF_PCT, bfVale, bfJanela };
