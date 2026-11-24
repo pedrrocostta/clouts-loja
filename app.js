@@ -3,7 +3,7 @@ const CONFIG = {
   whatsapp: '5531994810357',                 // (31) 99481-0357 — trocar quando o cliente tiver outro número
   instagram: 'clouts.oficial',
   cidades: ['Contagem', 'Betim', 'Belo Horizonte'],
-  freteGratisAcima: 300,                     // PAC grátis em pedidos a partir de R$ 300 (subtotal das peças) em Contagem, Betim e BH. Mantenha igual a FRETE_GRATIS_ACIMA em api/_lib.js
+  freteGratisAcima: 300,                     // frete grátis (serviço dos Correios mais barato) em pedidos a partir de R$ 300 (subtotal das peças) em Contagem, Betim e BH. Mantenha igual a FRETE_GRATIS_ACIMA em api/_lib.js
   // Pagamento online (Mercado Pago, Pix e cartão). Mude para true SÓ depois de configurar as chaves na Vercel (veja LEIA-ME.md → Pagamento)
   // e de definir os preços. Ligado, o amigo indicado só conta depois da primeira compra paga.
   pagamentoOnline: true,
@@ -405,7 +405,7 @@ function viewFavs() {
 function viewEntrega() {
   app.innerHTML = `<div class="page-h"><h1>Entrega e pagamento</h1><p>Entregamos no Brasil todo pelos Correios, com o valor da tabela dos Correios (PAC ou Sedex). Calcule o frete pelo CEP no carrinho.</p></div>
   <div class="deliv"><div><h3>Correios · PAC e Sedex</h3><p>Brasil todo. O valor e o prazo aparecem no carrinho.</p></div><div><h3>Contagem, Betim e Belo Horizonte</h3><p>Além dos Correios, você pode retirar com a loja ou chamar um motoboy/Uber (combinamos pelo WhatsApp).</p></div></div>
-  <p class="note" style="margin-bottom:6px">${CONFIG.freteGratisAcima != null ? `<b>PAC grátis</b> em pedidos a partir de ${brl(CONFIG.freteGratisAcima)} em Contagem, Betim e Belo Horizonte.` : ''}</p>
+  <p class="note" style="margin-bottom:6px">${CONFIG.freteGratisAcima != null ? `<b>Frete grátis</b> (o serviço mais barato dos Correios) em pedidos a partir de ${brl(CONFIG.freteGratisAcima)} em Contagem, Betim e Belo Horizonte.` : ''}</p>
   <p class="note" style="margin-bottom:18px">Formas de pagamento: Pix e cartão de crédito.</p>
   <a class="btn btn-gold" href="#/feminino">Começar a comprar</a>`;
 }
@@ -864,13 +864,13 @@ const LOCAIS = ['retirada', 'motoboy'], ENT_NOME = { retirada: 'Retirada com a l
 const entTipo = () => !ship ? null : (['pac', 'sedex'].includes(ship.entrega) || (ship.local !== false && LOCAIS.includes(ship.entrega))) ? ship.entrega : 'pac';
 let cotas = {};   // 'cep|peças' → opções dos Correios | 'carregando' | { erro }
 const cotaKey = () => ship ? String(ship.cep).replace(/\D/g, '') + '|' + cartQty() : '';
-const pacGratis = () => ship?.local !== false && CONFIG.freteGratisAcima != null && cartTotal() >= CONFIG.freteGratisAcima;   // PAC grátis acima de R$ 300 em Contagem, Betim e BH (o servidor confere)
+const gratisTipo = () => { if (ship?.local === false || CONFIG.freteGratisAcima == null || cartTotal() < CONFIG.freteGratisAcima) return null; const c = cotas[cotaKey()]; return Array.isArray(c) && c.length ? c[0].tipo : null; };   // acima de R$ 300 em Contagem, Betim e BH o serviço dos Correios mais barato é grátis (o servidor confere)
 const freteValor = () => {
   if (!ship) return null;
   const t = entTipo();
   if (t === 'retirada' || t === 'motoboy') return 0;
   const c = cotas[cotaKey()], o = Array.isArray(c) ? c.find(x => x.tipo === t) : null;
-  return o ? (t === 'pac' && pacGratis() ? 0 : o.valor) : null;
+  return o ? (t === gratisTipo() ? 0 : o.valor) : null;
 };
 const freteTxt = () => { const v = freteValor(); return v == null ? '—' : brl(v); };
 async function carregarCotas() {
@@ -891,7 +891,7 @@ function entBoxHTML() {
   const extra = local ? op('retirada', 'Retirar com a loja', 'Grátis', 'Combinamos o local e o horário pelo WhatsApp.') + op('motoboy', 'Motoboy ou Uber', 'Grátis', 'Você chama o motoboy; combinamos a retirada pelo WhatsApp.') : '';
   if (!c || c === 'carregando') return `<div class="ent-t">Forma de entrega</div><p class="note">Consultando o frete dos Correios…</p>${extra}`;
   if (c.erro) return `<div class="ent-t">Forma de entrega</div><p class="note bad">${esc(c.erro)}</p><button type="button" class="btn btn-line sm" data-entretry>Tentar de novo</button>${extra}`;
-  return `<div class="ent-t">Forma de entrega · Correios</div>${c.map(o => op(o.tipo, `${esc(o.nome)} Correios`, o.tipo === 'pac' && pacGratis() ? 'Grátis' : brl(o.valor), (o.prazo ? `Prazo de até ${o.prazo} dias úteis depois da postagem.` : 'Prazo informado pelos Correios.') + (o.tipo === 'pac' && pacGratis() ? ' Frete grátis acima de ' + brl(CONFIG.freteGratisAcima) + '.' : ''))).join('')}${extra}
+  return `<div class="ent-t">Forma de entrega · Correios</div>${c.map(o => op(o.tipo, `${esc(o.nome)} Correios`, o.tipo === gratisTipo() ? 'Grátis' : brl(o.valor), (o.prazo ? `Prazo de até ${o.prazo} dias úteis depois da postagem.` : 'Prazo informado pelos Correios.') + (o.tipo === gratisTipo() ? ' Frete grátis acima de ' + brl(CONFIG.freteGratisAcima) + '.' : ''))).join('')}${extra}
     <p class="note">Valor igual ao da tabela dos Correios. O pedido é postado em até 2 dias úteis.</p>`;
 }
 function atualizarEntrega() {

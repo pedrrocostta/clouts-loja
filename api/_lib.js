@@ -9,7 +9,7 @@ const admin = require('firebase-admin');
 const { cotarCorreios } = require('./_frete');
 
 const CIDADES = ['Contagem', 'Betim', 'Belo Horizonte'];
-// O frete vem dos Correios (api/_frete.js). Frete grátis (PAC) a partir deste subtotal, só em Contagem, Betim e Belo Horizonte.
+// O frete vem dos Correios (api/_frete.js). A partir deste subtotal o serviço mais barato dos Correios é grátis, só em Contagem, Betim e Belo Horizonte.
 const FRETE_GRATIS_ACIMA = 300;   // igual a CONFIG.freteGratisAcima em app.js
 const DEGRAUS = [5, 10, 20];
 
@@ -71,10 +71,10 @@ async function calcular({ itens, cupom, bf, cep, tel, entrega }, uid) {
   const cidade = info.cidade;
   let frete = 0, prazo = null, entregaNome = tipo === 'retirada' ? 'Retirada com a loja' : 'Motoboy/Uber (combinar no WhatsApp)';
   if (tipo === 'pac' || tipo === 'sedex') {
-    const op = (await cotarCorreios(cep, qtd)).find(o => o.tipo === tipo);
+    const todas = await cotarCorreios(cep, qtd), op = todas.find(o => o.tipo === tipo);   // todas já vem da mais barata para a mais cara
     if (!op) throw erro(409, 'Esse serviço dos Correios não está disponível para o seu CEP. Escolha outro.');
     frete = op.valor; prazo = op.prazo; entregaNome = 'Correios ' + op.nome;
-    if (tipo === 'pac' && info.local && FRETE_GRATIS_ACIMA != null && sub >= cents(FRETE_GRATIS_ACIMA)) frete = 0;   // PAC grátis a partir de R$ 300 em Contagem, Betim e BH
+    if (info.local && FRETE_GRATIS_ACIMA != null && sub >= cents(FRETE_GRATIS_ACIMA) && op.tipo === todas[0].tipo) frete = 0;   // a partir de R$ 300 em Contagem, Betim e BH o serviço mais barato dos Correios (PAC ou, se não houver PAC, o Sedex) é grátis
   } else if (!info.local) throw erro(400, 'Retirada e motoboy valem só para Contagem, Betim e Belo Horizonte. Escolha os Correios.');
   let percent = 0;
   if (cupom && String(cupom) !== 'BLACKFRIDAY') {
