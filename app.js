@@ -861,7 +861,11 @@ async function lookupCep(raw) {
 }
 /* Entrega: própria (Contagem, Betim e BH), retirada e motoboy/Uber (combinados no WhatsApp) ou Correios PAC/Sedex (Brasil todo, preço de tabela vindo de /api/frete). O servidor recalcula tudo no pagamento. */
 const LOCAIS = ['retirada', 'motoboy'], ENT_NOME = { retirada: 'Retirada com a loja', motoboy: 'Motoboy/Uber', pac: 'Correios PAC', sedex: 'Correios Sedex' };
-const entTipo = () => !ship ? null : (['pac', 'sedex'].includes(ship.entrega) || (ship.local !== false && LOCAIS.includes(ship.entrega))) ? ship.entrega : 'pac';
+const entTipo = () => {
+  if (!ship) return null;
+  const c = cotas[cotaKey()], ops = Array.isArray(c) ? c.map(o => o.tipo) : [];   // serviços dos Correios que existem para este CEP (do mais barato ao mais caro)
+  return [...ops, ...(ship.local !== false ? LOCAIS : [])].includes(ship.entrega) ? ship.entrega : (ops[0] || 'pac');   // sem escolha válida: o mais barato
+};
 let cotas = {};   // 'cep|peças' → opções dos Correios | 'carregando' | { erro }
 const cotaKey = () => ship ? String(ship.cep).replace(/\D/g, '') + '|' + cartQty() : '';
 const gratisTipo = () => { if (ship?.local === false || CONFIG.freteGratisAcima == null || cartTotal() < CONFIG.freteGratisAcima) return null; const c = cotas[cotaKey()]; return Array.isArray(c) && c.length ? c[0].tipo : null; };   // acima de R$ 300 em Contagem, Betim e BH o serviço dos Correios mais barato é grátis (o servidor confere)
