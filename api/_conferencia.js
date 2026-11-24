@@ -25,7 +25,7 @@ async function conferirPedido(fs, o, idAtual) {
   // 2) frete
   // Frete aceito: R$ 0 em Contagem, Betim e BH (retirada, motoboy ou PAC grátis acima de R$ 300) ou o preço de tabela do PAC/Sedex para o CEP.
   const local = ['Contagem', 'Betim', 'Belo Horizonte'].includes(o.cidade), validos = local ? [0] : [];
-  try { (await cotarCorreios(dig(o.cliente?.cep), itens.reduce((s, i) => s + (Number(i?.q) || 0), 0))).forEach(x => validos.push(x.valor)); }
+  try { (await cotarCorreios(dig(o.cliente?.cep), itens.reduce((s, i) => s + (Number(i?.q) || 0), 0), local)).forEach(x => validos.push(x.valor)); }
   catch (e) { prob.push('Não foi possível conferir o frete dos Correios agora: ' + e.message); }
   if (validos.length && !validos.some(v => Math.abs(v - Number(o.frete)) <= 0.011)) prob.push(`Frete diferente: o pedido cobra R$ ${arred(o.frete).toFixed(2)} e os valores possíveis são ${validos.map(v => 'R$ ' + v.toFixed(2)).join(' ou ')}.`);
   else if (!validos.length && !prob.some(p => p.startsWith('Não foi possível conferir o frete'))) prob.push('Cidade de entrega inválida.');

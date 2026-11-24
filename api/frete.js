@@ -9,6 +9,6 @@ module.exports = async (req, res) => {
   try {
     const cep = String(req.query?.cep || '').replace(/\D/g, ''), q = Number(req.query?.q) || 1;
     const info = await infoCep(cep);
-    res.status(200).json({ ...info, gratisPac: info.local ? FRETE_INFO.GRATIS : null, opcoes: await cotarCorreios(cep, q) });
+    res.status(200).json({ ...info, gratisPac: info.local ? FRETE_INFO.GRATIS : null, opcoes: await cotarCorreios(cep, q, info.local) });
   } catch (e) { responder(res, e); }
 };

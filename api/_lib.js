@@ -71,7 +71,7 @@ async function calcular({ itens, cupom, bf, cep, tel, entrega }, uid) {
   const cidade = info.cidade;
   let frete = 0, prazo = null, entregaNome = tipo === 'retirada' ? 'Retirada com a loja' : 'Motoboy/Uber (combinar no WhatsApp)';
   if (tipo === 'pac' || tipo === 'sedex') {
-    const todas = await cotarCorreios(cep, qtd), op = todas.find(o => o.tipo === tipo);   // todas já vem da mais barata para a mais cara
+    const todas = await cotarCorreios(cep, qtd, info.local), op = todas.find(o => o.tipo === tipo);   // todas já vem da mais barata para a mais cara
     if (!op) throw erro(409, 'Esse serviço dos Correios não está disponível para o seu CEP. Escolha outro.');
     frete = op.valor; prazo = op.prazo; entregaNome = 'Correios ' + op.nome;
     if (info.local && FRETE_GRATIS_ACIMA != null && sub >= cents(FRETE_GRATIS_ACIMA) && op.tipo === todas[0].tipo) frete = 0;   // a partir de R$ 300 em Contagem, Betim e BH o serviço mais barato dos Correios (PAC ou, se não houver PAC, o Sedex) é grátis

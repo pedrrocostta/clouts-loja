@@ -1,12 +1,16 @@
 /* Frete dos Correios (PAC e Sedex) pelo Melhor Envio. Só o servidor fala com o Melhor Envio: o token fica em MELHORENVIO_TOKEN (Vercel → Settings → Environment Variables).
- * Cobramos o preço aproximado de balcão dos Correios (preço do Melhor Envio + SOMA_BALCAO), não o preço com desconto da conta do Melhor Envio.
+ * Cobramos o preço aproximado de balcão dos Correios (preço do Melhor Envio × FATOR_BALCAO), não o preço com desconto da conta do Melhor Envio.
  * Medidas da embalagem de UMA calça (a maior, tam. 46): 29 × 27,5 × 4,5 cm e 575 g. Mais peças: soma a altura e o peso. */
 const ORIGEM = '32280620';   // CEP de onde os pedidos saem (Contagem)
 const PACOTE = { comp: 29, larg: 27.5, alt: 4.5, peso: 0.575 };
-/* O Melhor Envio só informa o preço com o desconto da conta dele; o preço de balcão dos Correios não vem na resposta. Para chegar perto do balcão, SOMAMOS uma diferença por serviço.
- * Calibrado em 24/11/2026 (pacote de 575 g) com o calculador dos Correios: Sedex Contagem→Contagem ME 12,45 × balcão 27,60 (+15,15); Sedex →RJ ME 31,27 × balcão 46,80 (+15,53); PAC →RJ ME 21,90 × balcão 30,50 (+8,60).
- * Aproximação: reconfira de tempos em tempos (e para pacotes mais pesados) no site dos Correios e ajuste os valores abaixo. */
-const SOMA_BALCAO = { sedex: 15.3, pac: 8.6 };
+/* O Melhor Envio só informa o preço com o desconto da conta dele; o preço de balcão dos Correios não vem na resposta. Para chegar perto do balcão, MULTIPLICAMOS por um fator que depende do serviço e da região.
+ * Calibrado em 24/11/2026 com o calculador dos Correios (pacote de 575 g, faixa de 1 kg), origem 32280-620:
+ *   Sedex Contagem→Contagem  ME 12,45 × balcão 27,60 = 2,217   (mesma região: Contagem, Betim e BH)
+ *   Sedex →Rio               ME 31,27 × balcão 46,80 = 1,497
+ *   Sedex →Curitiba          ME 43,77 × balcão 65,00 = 1,485   (Sedex fora da região ≈ 1,49)
+ *   PAC   →Rio               ME 21,90 × balcão 30,50 = 1,393
+ * Ainda NÃO conferidos: pacotes mais pesados (2 peças ou mais), PAC de outros destinos, outras cidades de MG. Reconfira de tempos em tempos no site dos Correios e ajuste os fatores. */
+const FATOR_BALCAO = { local: { sedex: 2.217, pac: 2.217 }, nacional: { sedex: 1.49, pac: 1.393 } };
 const SERVICOS = { 1: 'pac', 2: 'sedex' };   // códigos dos Correios no Melhor Envio
 const NOMES = { pac: 'PAC', sedex: 'Sedex' };
 
@@ -15,11 +19,11 @@ const TTL = 10 * 60000;
 
 function erro(status, msg) { const e = new Error(msg); e.status = status; return e; }
 
-async function cotarCorreios(cepDestino, qtd) {
+async function cotarCorreios(cepDestino, qtd, local = false) {
   const cep = String(cepDestino || '').replace(/\D/g, ''), q = Math.max(1, Math.min(20, Math.floor(Number(qtd)) || 1));
   if (cep.length !== 8) throw erro(400, 'CEP inválido.');
   if (!process.env.MELHORENVIO_TOKEN) throw erro(503, 'O frete dos Correios ainda não está ativo.');
-  const k = cep + '|' + q, c = cache.get(k);
+  const k = cep + '|' + q + '|' + (local ? 'L' : 'N'), c = cache.get(k);
   if (c && Date.now() - c.t < TTL) return c.opcoes;
   let r, j;
   try {
@@ -37,7 +41,7 @@ async function cotarCorreios(cepDestino, qtd) {
   if (!r.ok || !Array.isArray(j)) { console.error('Melhor Envio', r.status, JSON.stringify(j).slice(0, 300)); throw erro(503, 'Não foi possível calcular o frete dos Correios agora. Tente de novo.'); }
   const opcoes = j.filter(s => SERVICOS[s.id] && !s.error && Number(s.price) > 0).map(s => ({
     tipo: SERVICOS[s.id], nome: NOMES[SERVICOS[s.id]],
-    valor: Math.round((Number(s.price) + SOMA_BALCAO[SERVICOS[s.id]]) * 100) / 100,   // aproxima o preço de balcão dos Correios
+    valor: Math.round(Number(s.price) * FATOR_BALCAO[local ? 'local' : 'nacional'][SERVICOS[s.id]] * 100) / 100,   // aproxima o preço de balcão dos Correios
     prazo: Number(s.delivery_range?.max || s.delivery_time) || null   // dias úteis dos Correios (o preparo do pedido vem à parte)
   })).sort((a, b) => a.valor - b.valor);
   if (!opcoes.length) throw erro(404, 'Os Correios não atendem este CEP pela loja. Fale com a gente no WhatsApp.');
@@ -46,4 +50,4 @@ async function cotarCorreios(cepDestino, qtd) {
   return opcoes;
 }
 
-module.exports = { cotarCorreios, ORIGEM, PACOTE, SOMA_BALCAO };
+module.exports = { cotarCorreios, ORIGEM, PACOTE, FATOR_BALCAO };

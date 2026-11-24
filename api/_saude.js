@@ -33,7 +33,7 @@ async function verificarSaude() {
   try { await mp('/users/me'); } catch (e) { problemas.push('Mercado Pago não respondeu ou o token (MP_ACCESS_TOKEN) é inválido/expirou.'); }
   try { await db().collection('config').doc('loja').get(); } catch (e) { problemas.push('O banco de dados (Firestore) não respondeu: ' + e.message); }
   if (!process.env.MELHORENVIO_TOKEN) problemas.push('MELHORENVIO_TOKEN não está configurado: o frete dos Correios não funciona.');
-  else { try { await cotarCorreios('01001000', 1); } catch (e) { problemas.push('O frete dos Correios (Melhor Envio) não respondeu. O token pode ter vencido: gere outro em Integrações → Tokens e troque MELHORENVIO_TOKEN na Vercel. Detalhe: ' + e.message); } }
+  else { try { await cotarCorreios('01001000', 1, false); } catch (e) { problemas.push('O frete dos Correios (Melhor Envio) não respondeu. O token pode ter vencido: gere outro em Integrações → Tokens e troque MELHORENVIO_TOKEN na Vercel. Detalhe: ' + e.message); } }
   if (!process.env.CRON_SECRET) problemas.push('CRON_SECRET não está configurado.');
   return problemas;
 }
