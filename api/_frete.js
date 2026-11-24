@@ -1,11 +1,12 @@
 /* Frete dos Correios (PAC e Sedex) pelo Melhor Envio. Só o servidor fala com o Melhor Envio: o token fica em MELHORENVIO_TOKEN (Vercel → Settings → Environment Variables).
- * Cobramos o preço aproximado de balcão dos Correios (preço do Melhor Envio × FATOR_BALCAO), não o preço com desconto da conta do Melhor Envio.
+ * Cobramos o preço aproximado de balcão dos Correios (preço do Melhor Envio + SOMA_BALCAO), não o preço com desconto da conta do Melhor Envio.
  * Medidas da embalagem de UMA calça (a maior, tam. 46): 29 × 27,5 × 4,5 cm e 575 g. Mais peças: soma a altura e o peso. */
 const ORIGEM = '32280620';   // CEP de onde os pedidos saem (Contagem)
 const PACOTE = { comp: 29, larg: 27.5, alt: 4.5, peso: 0.575 };
-/* O Melhor Envio só informa o preço com o desconto da conta dele; o preço de balcão dos Correios não vem na resposta. Para cobrar o valor do balcão, multiplicamos pelo fator abaixo.
- * Calibrado em 24/11/2026: Sedex de 575 g, Contagem → Contagem, Melhor Envio R$ 12,45, balcão dos Correios R$ 27,60 (27,60 ÷ 12,45). Se o balcão mudar, ajuste aqui. */
-const FATOR_BALCAO = 2.217;
+/* O Melhor Envio só informa o preço com o desconto da conta dele; o preço de balcão dos Correios não vem na resposta. Para chegar perto do balcão, SOMAMOS uma diferença por serviço.
+ * Calibrado em 24/11/2026 (pacote de 575 g) com o calculador dos Correios: Sedex Contagem→Contagem ME 12,45 × balcão 27,60 (+15,15); Sedex →RJ ME 31,27 × balcão 46,80 (+15,53); PAC →RJ ME 21,90 × balcão 30,50 (+8,60).
+ * Aproximação: reconfira de tempos em tempos (e para pacotes mais pesados) no site dos Correios e ajuste os valores abaixo. */
+const SOMA_BALCAO = { sedex: 15.3, pac: 8.6 };
 const SERVICOS = { 1: 'pac', 2: 'sedex' };   // códigos dos Correios no Melhor Envio
 const NOMES = { pac: 'PAC', sedex: 'Sedex' };
 
@@ -36,7 +37,7 @@ async function cotarCorreios(cepDestino, qtd) {
   if (!r.ok || !Array.isArray(j)) { console.error('Melhor Envio', r.status, JSON.stringify(j).slice(0, 300)); throw erro(503, 'Não foi possível calcular o frete dos Correios agora. Tente de novo.'); }
   const opcoes = j.filter(s => SERVICOS[s.id] && !s.error && Number(s.price) > 0).map(s => ({
     tipo: SERVICOS[s.id], nome: NOMES[SERVICOS[s.id]],
-    valor: Math.round(Number(s.price) * FATOR_BALCAO * 100) / 100,   // aproxima o preço de balcão dos Correios
+    valor: Math.round((Number(s.price) + SOMA_BALCAO[SERVICOS[s.id]]) * 100) / 100,   // aproxima o preço de balcão dos Correios
     prazo: Number(s.delivery_range?.max || s.delivery_time) || null   // dias úteis dos Correios (o preparo do pedido vem à parte)
   })).sort((a, b) => a.valor - b.valor);
   if (!opcoes.length) throw erro(404, 'Os Correios não atendem este CEP pela loja. Fale com a gente no WhatsApp.');
@@ -45,4 +46,4 @@ async function cotarCorreios(cepDestino, qtd) {
   return opcoes;
 }
 
-module.exports = { cotarCorreios, ORIGEM, PACOTE, FATOR_BALCAO };
+module.exports = { cotarCorreios, ORIGEM, PACOTE, SOMA_BALCAO };
