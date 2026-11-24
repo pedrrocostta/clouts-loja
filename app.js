@@ -8,7 +8,9 @@ const CONFIG = {
   freteGratisAcima: 300,                     // frete grátis em pedidos a partir de R$ 300 (subtotal das peças). Mantenha igual a FRETE_GRATIS_ACIMA em api/_lib.js
   // Pagamento online (Mercado Pago, Pix e cartão). Mude para true SÓ depois de configurar as chaves na Vercel (veja LEIA-ME.md → Pagamento)
   // e de definir os preços. Ligado, o amigo indicado só conta depois da primeira compra paga.
-  pagamentoOnline: true
+  pagamentoOnline: true,
+  // Frete dos Correios (PAC/Sedex, Brasil todo) + escolha de entrega. false = só quem abrir a loja com ?correios=1 enxerga (para testar). Mude para true para ligar para todos.
+  correios: false
 };
 
 const $ = (s, r = document) => r.querySelector(s);
@@ -67,6 +69,8 @@ const tierPct = n => n >= 10 ? 20 : n >= 5 ? 10 : n >= 1 ? 5 : 0;
 const meuCupom = () => cupons.find(c => c.codigo === 'AMIGO') || null;
 try { const r = new URLSearchParams(location.search).get('ref'); if (r && /^[A-Za-z0-9]{20,40}$/.test(r)) localStorage.setItem('clouts.ref', r); } catch {}
 try { const tp = new URLSearchParams(location.search).get('testepag'); if (tp === '1') localStorage.setItem('clouts.testepag', '1'); else if (tp === '0') localStorage.removeItem('clouts.testepag'); } catch {}   // ?testepag=1 mostra o botão de pagamento só neste navegador (para testar antes de ligar para todos)
+try { const cq = new URLSearchParams(location.search).get('correios'); if (cq === '1') localStorage.setItem('clouts.correios', '1'); else if (cq === '0') localStorage.removeItem('clouts.correios'); } catch {}
+const CORREIOS = () => CONFIG.correios || String(store.get('clouts.correios', '')) === '1';
 const pagBotao = () => CONFIG.pagamentoOnline || String(store.get('clouts.testepag', '')) === '1';
 try { const c = (new URLSearchParams(location.search).get('codigo') || '').toUpperCase(); if (/^[A-Z0-9]{8}$/.test(c)) localStorage.setItem('clouts.codigo', c); } catch {}
 let meuCod = null, aplicando = false;
@@ -383,9 +387,9 @@ function viewFavs() {
 }
 
 function viewEntrega() {
-  app.innerHTML = `<div class="page-h"><h1>Entrega e pagamento</h1><p>Entregamos nas cidades abaixo. Calcule o frete pelo CEP no carrinho.</p></div>
+  app.innerHTML = `<div class="page-h"><h1>Entrega e pagamento</h1><p>${CORREIOS() ? 'Entregamos no Brasil todo pelos Correios (PAC ou Sedex, com o valor da tabela dos Correios). Em Contagem, Betim e Belo Horizonte também levamos nós mesmos, ou você retira com a gente.' : 'Entregamos nas cidades abaixo.'} Calcule o frete pelo CEP no carrinho.</p></div>
   <div class="deliv">${CONFIG.cidades.map(c => `<div><h3>${c}</h3><p>Frete: ${brl(CONFIG.frete[c] || 0)}</p></div>`).join('')}</div>
-  <p class="note" style="margin-bottom:6px">${CONFIG.freteGratisAcima != null ? `<b>Frete grátis</b> em pedidos a partir de ${brl(CONFIG.freteGratisAcima)}.` : ''}</p>
+  <p class="note" style="margin-bottom:6px">${CONFIG.freteGratisAcima != null ? `<b>Frete grátis</b> em pedidos a partir de ${brl(CONFIG.freteGratisAcima)}${CORREIOS() ? ' em Contagem, Betim e Belo Horizonte' : ''}.` : ''}</p>
   <p class="note" style="margin-bottom:18px">Formas de pagamento: Pix e cartão de crédito.</p>
   <a class="btn btn-gold" href="#/feminino">Começar a comprar</a>`;
 }
@@ -825,24 +829,68 @@ app.addEventListener('keydown', e => { const c = e.target.closest('.card'); if (
 async function lookupCep(raw) {
   const cep = String(raw).replace(/\D/g, '');
   if (cep.length !== 8) return { ok: false, msg: 'Digite um CEP com 8 números.' };
+  const fmt = cep.replace(/(\d{5})(\d{3})/, '$1-$2');
   let d;
   try { d = await (await fetch(`https://viacep.com.br/ws/${cep}/json/`)).json(); }
   catch {
     // Sem acesso ao ViaCEP: identifica a cidade pela faixa do CEP (aproximado; rua e bairro ficam para o cliente digitar).
     const n = +cep, cidade = n >= 30000000 && n <= 31999999 ? 'Belo Horizonte' : n >= 32000000 && n <= 32399999 ? 'Contagem' : n >= 32600000 && n <= 32699999 ? 'Betim' : null;
-    if (!cidade) return { ok: false, msg: `Não foi possível confirmar o CEP. Atendemos ${CONFIG.cidades.join(', ')}.` };
-    return { ok: true, data: { cep: cep.replace(/(\d{5})(\d{3})/, '$1-$2'), cidade, bairro: '', rua: '' } };
+    if (!cidade) return { ok: false, msg: `Não foi possível confirmar o CEP. ${CORREIOS() ? 'Tente de novo em instantes.' : 'Atendemos ' + CONFIG.cidades.join(', ') + '.'}` };
+    return { ok: true, data: { cep: fmt, cidade, uf: 'MG', local: true, bairro: '', rua: '' } };
   }
   if (d.erro) return { ok: false, msg: 'CEP não encontrado.' };
-  const cidade = CONFIG.cidades.find(c => norm(c) === norm(d.localidade));
-  if (!cidade || d.uf !== 'MG') return { ok: false, msg: `Ainda não entregamos em ${d.localidade}/${d.uf}. Atendemos ${CONFIG.cidades.join(', ')}.` };
-  return { ok: true, data: { cep: cep.replace(/(\d{5})(\d{3})/, '$1-$2'), cidade, bairro: d.bairro || '', rua: d.logradouro || '' } };
+  const cidade = CONFIG.cidades.find(c => norm(c) === norm(d.localidade)), local = !!cidade && d.uf === 'MG';
+  if (!local && !CORREIOS()) return { ok: false, msg: `Ainda não entregamos em ${d.localidade}/${d.uf}. Atendemos ${CONFIG.cidades.join(', ')}.` };
+  return { ok: true, data: { cep: fmt, cidade: local ? cidade : d.localidade, uf: d.uf || 'MG', local, bairro: d.bairro || '', rua: d.logradouro || '' } };
 }
+/* Entrega: própria (Contagem, Betim e BH), retirada e motoboy/Uber (combinados no WhatsApp) ou Correios PAC/Sedex (Brasil todo, preço de tabela vindo de /api/frete). O servidor recalcula tudo no pagamento. */
+const LOCAIS = ['propria', 'retirada', 'motoboy'], ENT_NOME = { propria: 'Entrega própria', retirada: 'Retirada com a loja', motoboy: 'Motoboy/Uber', pac: 'Correios PAC', sedex: 'Correios Sedex' };
+const entTipo = () => !ship ? null : ship.local === false ? (['pac', 'sedex'].includes(ship.entrega) ? ship.entrega : 'pac') : (LOCAIS.includes(ship.entrega) && CORREIOS() ? ship.entrega : 'propria');
+let cotas = {};   // 'cep|peças' → opções dos Correios | 'carregando' | { erro }
+const cotaKey = () => ship ? String(ship.cep).replace(/\D/g, '') + '|' + cartQty() : '';
+const freteProprio = () => (CONFIG.freteGratisAcima != null && cartTotal() >= CONFIG.freteGratisAcima ? 0 : (Number.isFinite(CONFIG.frete[ship.cidade]) ? CONFIG.frete[ship.cidade] : null));   // cidade sem frete definido: não deixa fechar o pedido
 const freteValor = () => {
   if (!ship) return null;
-  if (CONFIG.freteGratisAcima != null && cartTotal() >= CONFIG.freteGratisAcima) return 0;
-  return Number.isFinite(CONFIG.frete[ship.cidade]) ? CONFIG.frete[ship.cidade] : null;   // cidade sem frete definido: não deixa fechar o pedido
+  const t = entTipo();
+  if (t === 'retirada' || t === 'motoboy') return 0;
+  if (t === 'propria') return freteProprio();
+  const c = cotas[cotaKey()], o = Array.isArray(c) ? c.find(x => x.tipo === t) : null;
+  return o ? o.valor : null;
 };
+const freteTxt = () => { const v = freteValor(); return v == null ? '—' : brl(v); };
+async function carregarCotas() {
+  if (!ship || ship.local !== false) return;
+  const k = cotaKey(); if (cotas[k]) return;
+  cotas[k] = 'carregando';
+  try {
+    const r = await fetch(`/api/frete?cep=${encodeURIComponent(String(ship.cep).replace(/\D/g, ''))}&q=${cartQty()}`, { cache: 'no-store' }), j = await r.json().catch(() => ({}));
+    if (!r.ok || !Array.isArray(j.opcoes)) throw new Error(j.erro || 'Não foi possível calcular o frete dos Correios agora.');
+    cotas[k] = j.opcoes;
+  } catch (e) { cotas[k] = { erro: e.message || 'Não foi possível calcular o frete dos Correios agora.' }; setTimeout(() => { if (cotas[k]?.erro) delete cotas[k]; }, 20000); }
+  atualizarEntrega();
+}
+function entBoxHTML() {
+  if (!ship || !CORREIOS()) return '';
+  const t = entTipo(), op = (v, nome, preco, sub) => `<label><input type="radio" name="ent" value="${v}"${t === v ? ' checked' : ''}><span><b>${nome}</b><em>${preco}</em><small>${sub}</small></span></label>`;
+  if (ship.local !== false) return `<div class="ent-t">Forma de entrega</div>
+    ${op('propria', 'Entrega própria', freteProprio() === 0 ? 'Grátis' : brl(freteProprio()), `Levamos até você em ${esc(ship.cidade)}.`)}
+    ${op('retirada', 'Retirar com a loja', 'Grátis', 'Combinamos o local e o horário pelo WhatsApp.')}
+    ${op('motoboy', 'Motoboy ou Uber', 'Grátis', 'Você chama o motoboy; combinamos a retirada pelo WhatsApp.')}`;
+  const c = cotas[cotaKey()];
+  if (!c || c === 'carregando') return `<div class="ent-t">Forma de entrega</div><p class="note">Consultando o frete dos Correios…</p>`;
+  if (c.erro) return `<div class="ent-t">Forma de entrega</div><p class="note bad">${esc(c.erro)}</p><button type="button" class="btn btn-line sm" data-entretry>Tentar de novo</button>`;
+  return `<div class="ent-t">Forma de entrega · Correios</div>${c.map(o => op(o.tipo, `${esc(o.nome)} Correios`, brl(o.valor), o.prazo ? `Prazo de até ${o.prazo} dias úteis depois da postagem.` : 'Prazo informado pelos Correios.')).join('')}
+    <p class="note">Valor igual ao da tabela dos Correios. O pedido é postado em até 2 dias úteis.</p>`;
+}
+function atualizarEntrega() {
+  const box = $('#entBox'); if (!box || checkout) return;
+  box.innerHTML = entBoxHTML(); bindEntrega();
+  const f = $('#fLbl'), t = $('#tLbl'), m = $('#cepMsg'); if (f) f.textContent = freteTxt(); if (t) t.textContent = brl(totalPedido()); if (m && ship) { m.classList.remove('bad'); m.textContent = shipMsg(); }
+}
+function bindEntrega() {
+  $$('input[name="ent"]').forEach(el => el.onchange = () => { ship.entrega = el.value; store.set('clouts.ship', ship); atualizarEntrega(); });
+  const r = $('[data-entretry]'); if (r) r.onclick = () => { delete cotas[cotaKey()]; atualizarEntrega(); carregarCotas(); };
+}
 const maskCep = v => v.replace(/\D/g, '').slice(0, 8).replace(/(\d{5})(\d)/, '$1-$2');
 
 /* ---------- Carrinho ---------- */
@@ -913,20 +961,21 @@ function renderCart() {
   foot.innerHTML = `<form class="cep" id="cepForm"><label for="cepIn">Calcular frete</label>
       <div><input id="cepIn" inputmode="numeric" placeholder="Seu CEP" maxlength="9" autocomplete="postal-code" value="${esc(ship?.cep || '')}"><button class="btn btn-dark" type="submit">Calcular</button></div>
       <p class="note" id="cepMsg">${shipMsg()}</p></form>
+    <div class="ent" id="entBox">${entBoxHTML()}</div>
     ${cupomBox()}
     <div class="tot"><span>Subtotal</span><span>${brl(cartTotal())}</span></div>
     ${descLinhas()}
-    <div class="tot"><span>Frete</span><span id="fLbl">${ship ? brl(freteValor()) : '—'}</span></div>
+    <div class="tot"><span>Frete</span><span id="fLbl">${ship ? freteTxt() : '—'}</span></div>
     <div class="tot big"><span>Total</span><b id="tLbl">${brl(totalPedido())}</b></div>
     <button class="btn btn-gold block" id="goCheckout">Finalizar pedido</button>`;
-  bindCupom();
+  bindCupom(); bindEntrega(); carregarCotas();
   $('#cepIn').oninput = e => { e.target.value = maskCep(e.target.value); };
   $('#cepForm').onsubmit = async e => {
     e.preventDefault(); const m = $('#cepMsg'); m.textContent = 'Consultando…';
     const r = await lookupCep($('#cepIn').value);
-    if (!r.ok) { ship = null; store.set('clouts.ship', null); m.textContent = r.msg; m.classList.add('bad'); $('#fLbl').textContent = '—'; $('#tLbl').textContent = brl(totalPedido()); return; }
-    ship = { ...ship, ...r.data }; ship.valor = freteValor(); store.set('clouts.ship', ship);
-    m.classList.remove('bad'); m.textContent = shipMsg(); $('#fLbl').textContent = brl(freteValor()); $('#tLbl').textContent = brl(totalPedido());
+    if (!r.ok) { ship = null; store.set('clouts.ship', null); m.textContent = r.msg; m.classList.add('bad'); $('#fLbl').textContent = '—'; $('#tLbl').textContent = brl(totalPedido()); $('#entBox').innerHTML = ''; return; }
+    ship = { ...ship, ...r.data, ...(ship?.cep !== r.data.cep ? { entrega: null } : {}) }; store.set('clouts.ship', ship);
+    atualizarEntrega(); carregarCotas();
   };
   $('#goCheckout').onclick = () => {
     if (cart.some(i => { const p = byId(i.id); return !p.tam.includes(i.tam) || p.esgotado || i.q > estMax(p, i.tam); })) { toast('Ajuste os itens indisponíveis do carrinho'); return; }
@@ -963,7 +1012,9 @@ function bindCupom() {
     const r = await aplicarCampanha($('#campIn').value); if (r.ok) { toast(`Código aplicado: ${r.percent}% OFF`); renderCart(); } else { m.className = 'note bad'; m.textContent = r.msg; }
   };
 }
-const shipMsg = () => ship ? `Entrega em ${ship.cidade}${ship.bairro ? ' · ' + ship.bairro : ''}: ${freteValor() === 0 ? 'frete ' + (CONFIG.freteGratisAcima != null && cartTotal() >= CONFIG.freteGratisAcima ? 'grátis' : brl(0)) : brl(freteValor())}` : 'Entregamos em Contagem, Betim e Belo Horizonte.';
+const shipMsg = () => !ship ? (CORREIOS() ? 'Entregamos no Brasil todo. Informe seu CEP.' : 'Entregamos em Contagem, Betim e Belo Horizonte.')
+  : ship.local === false ? `Entrega em ${ship.cidade}/${ship.uf} pelos Correios.`
+  : `Entrega em ${ship.cidade}${ship.bairro ? ' · ' + ship.bairro : ''}: ${entTipo() !== 'propria' ? ENT_NOME[entTipo()] + ' (frete grátis)' : freteValor() === 0 ? 'frete ' + (CONFIG.freteGratisAcima != null && cartTotal() >= CONFIG.freteGratisAcima ? 'grátis' : brl(0)) : brl(freteValor())}`;
 $('#cartBody').addEventListener('click', e => {
   const t = e.target;
   if (t.dataset.inc != null) { const i = cart[t.dataset.inc], p = byId(i.id), mx = p ? estMax(p, i.tam) : Infinity; if (i.q + 1 > mx) { toast(mx <= 1 ? 'Só temos 1 unidade desse tamanho' : `Só temos ${unid(mx)} desse tamanho`); return; } i.q++; }
@@ -978,7 +1029,7 @@ function renderCheckout() {
   $('#cartBody').innerHTML = `<form class="form" id="ckForm" novalidate>
     <label>Nome completo<input name="nome" autocomplete="name" required value="${esc(saved.nome || u?.nome || '')}"></label>
     <label>WhatsApp<input name="tel" type="tel" inputmode="tel" autocomplete="tel" placeholder="(31) 90000-0000" required value="${esc(saved.tel || '')}"></label>
-    <div class="two"><label>CEP<input name="cep" inputmode="numeric" maxlength="9" required value="${esc(ship.cep)}"></label><label>Cidade<input name="cidade" readonly value="${esc(ship.cidade)}"></label></div>
+    <div class="two"><label>CEP<input name="cep" inputmode="numeric" maxlength="9" required value="${esc(ship.cep)}"></label><label>Cidade<input name="cidade" readonly value="${esc(ship.cidade)}${ship.local === false ? '/' + esc(ship.uf) : ''}"></label></div>
     <div class="two"><label>Rua<input name="rua" autocomplete="street-address" required value="${esc(ship.rua || saved.rua || '')}"></label><label>Número<input name="num" inputmode="numeric" required value="${esc(saved.num || '')}"></label></div>
     <div class="two"><label>Bairro<input name="bairro" required value="${esc(ship.bairro || saved.bairro || '')}"></label><label>Complemento<input name="comp" value="${esc(saved.comp || '')}"></label></div>
     <fieldset class="pay"${pagBotao() ? ' hidden' : ''}><legend>Forma de pagamento</legend>
@@ -987,24 +1038,25 @@ function renderCheckout() {
     </fieldset></form>`;
   $('#cartFoot').innerHTML = `<div class="tot"><span>Subtotal</span><span>${brl(cartTotal())}</span></div>
     ${descLinhas()}
-    <div class="tot"><span>Frete (${esc(ship.cidade)})</span><span id="ckFrete">${brl(freteValor())}</span></div>
+    <div class="tot"><span>Frete (${esc(ENT_NOME[entTipo()])})</span><span id="ckFrete">${freteTxt()}</span></div>
     <div class="tot big"><span>Total</span><b id="ckTotal">${brl(totalPedido())}</b></div>
     ${pagBotao() ? `<button class="btn btn-gold block" id="payPix">${ICON.pix} Pagar com Pix</button>
     <button class="btn btn-dark block" id="payMp">${ICON.card} Pagar com cartão</button>
-    <button class="btn btn-line block" id="sendWa">${ICON.chat} Prefiro finalizar pelo WhatsApp</button>`
-      : `<button class="btn btn-gold block" id="sendWa">${ICON.chat} Enviar pedido no WhatsApp</button>`}
+    ${entTipo() === 'propria' ? `<button class="btn btn-line block" id="sendWa">${ICON.chat} Prefiro finalizar pelo WhatsApp</button>` : ''}`
+      : (entTipo() === 'propria' ? `<button class="btn btn-gold block" id="sendWa">${ICON.chat} Enviar pedido no WhatsApp</button>` : '<p class="note bad">Para essa forma de entrega, o pagamento precisa ser online. Volte ao carrinho e escolha a entrega própria.</p>')}
     <button class="btn block link" id="backCart">← Voltar ao carrinho</button>`;
   const f = $('#ckForm');
   f.elements.cep.oninput = e => { e.target.value = maskCep(e.target.value); };
   f.elements.cep.onchange = async e => {
     const r = await lookupCep(e.target.value);
     if (!r.ok) { toast(r.msg); e.target.classList.add('err'); return; }
-    e.target.classList.remove('err'); ship = { ...ship, ...r.data }; store.set('clouts.ship', ship);
-    f.elements.cidade.value = ship.cidade; f.elements.rua.value = ship.rua; f.elements.bairro.value = ship.bairro;
-    $('#ckFrete').textContent = brl(freteValor()); $('#ckTotal').textContent = brl(totalPedido());
+    e.target.classList.remove('err');
+    if (r.data.cep === ship.cep) return;
+    ship = { ...ship, ...r.data, entrega: null }; store.set('clouts.ship', ship);   // outro CEP: a entrega e o frete mudam, então volta ao carrinho para conferir
+    checkout = false; renderCart(); toast('CEP alterado. Confira a forma de entrega e o frete.');
   };
   $('#backCart').onclick = () => { checkout = false; renderCart(); };
-  $('#sendWa').onclick = sendOrder;
+  if ($('#sendWa')) $('#sendWa').onclick = sendOrder;
   if ($('#payMp')) $('#payMp').onclick = () => payMp('cartao');
   if ($('#payPix')) $('#payPix').onclick = () => payMp('pix');
 }
@@ -1022,7 +1074,7 @@ async function payMp(metodo) {
     let ref = null; try { ref = localStorage.getItem('clouts.ref'); } catch {}
     const r = await fetch('/api/checkout', {
       method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-      body: JSON.stringify({ metodo, itens: cart.map(i => ({ id: i.id, tam: i.tam, q: i.q })), cupom: cupomObj()?.codigo || null, bf: !!bfObj(), ref,
+      body: JSON.stringify({ metodo, entrega: entTipo(), freteVisto: freteValor(), itens: cart.map(i => ({ id: i.id, tam: i.tam, q: i.q })), cupom: cupomObj()?.codigo || null, bf: !!bfObj(), ref,
         cliente: { nome: d.nome, tel: d.tel, rua: d.rua, num: d.num, bairro: d.bairro, comp: d.comp, cep: d.cep } })
     });
     const j = await r.json().catch(() => ({}));
@@ -1103,6 +1155,7 @@ function voltaDoPagamento() {
   showSheet(`<div class="avisos"><h2>${msg[0]}</h2><p class="note" style="margin:10px 0 16px">${msg[1]}</p><a class="btn btn-gold block" href="${waLink('Olá! Tenho uma dúvida sobre meu pedido.')}" target="_blank" rel="noopener">Falar no WhatsApp</a></div>`);
 }
 function sendOrder() {
+  if (entTipo() !== 'propria') { toast('Para essa forma de entrega, pague online.'); return; }
   const f = $('#ckForm'), d = Object.fromEntries(new FormData(f)); let ok = true;
   ['nome', 'tel', 'cep', 'rua', 'num', 'bairro'].forEach(k => { const el = f.elements[k]; const bad = !String(d[k] || '').trim(); el.classList.toggle('err', bad); if (bad) ok = false; });
   if (!ok) { toast('Preencha os campos obrigatórios'); return; }

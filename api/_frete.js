@@ -34,7 +34,6 @@ async function cotarCorreios(cepDestino, qtd) {
   const opcoes = j.filter(s => SERVICOS[s.id] && !s.error && Number(s.price) > 0).map(s => ({
     tipo: SERVICOS[s.id], nome: NOMES[SERVICOS[s.id]],
     valor: Math.round(Number(s.price) * 100) / 100,   // preço de tabela (balcão)
-    custoTeste: Number(s.custom_price), descTeste: s.discount,
     prazo: Number(s.delivery_range?.max || s.delivery_time) || null   // dias úteis dos Correios (o preparo do pedido vem à parte)
   })).sort((a, b) => a.valor - b.valor);
   if (!opcoes.length) throw erro(404, 'Os Correios não atendem este CEP pela loja. Fale com a gente no WhatsApp.');

@@ -586,3 +586,16 @@ html,body{overflow-x:clip}
 .cp-sum{margin:0;text-align:center;font-size:13px;color:var(--gold-d)}
 .topbar.bf{background:#12100c;color:#fff}
 .topbar.bf b{color:var(--gold);letter-spacing:.08em}
+
+/* ===== entrega: escolha da forma de entrega no carrinho ===== */
+.ent{margin:2px 0 10px;display:grid;gap:8px}
+.ent:empty{display:none}
+.ent .ent-t{font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase}
+.ent label{display:block;cursor:pointer;position:relative}
+.ent input{position:absolute;opacity:0;width:1px;height:1px}
+.ent label>span{display:grid;grid-template-columns:1fr auto;gap:2px 10px;align-items:center;border:1px solid #d3c8b0;border-radius:12px;padding:10px 12px;background:#fff}
+.ent label>span b{font-size:14px}
+.ent label>span em{font-style:normal;font-weight:600;white-space:nowrap}
+.ent label>span small{grid-column:1/-1;font-size:11.5px;color:var(--ink2)}
+.ent input:checked+span{border-color:var(--gold-d);box-shadow:0 0 0 2px rgba(206,161,71,.35)}
+.ent input:focus-visible+span{outline:2px solid var(--gold-d);outline-offset:2px}
