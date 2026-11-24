@@ -2,6 +2,7 @@
  * O pedido do WhatsApp nasce no navegador do cliente (preço, frete e desconto vêm do celular dele), então aqui tudo é refeito com os dados reais:
  * preço do catálogo, frete da cidade, desconto permitido para o cupom e se o cupom já foi usado antes. Devolve uma lista de problemas (vazia = tudo certo). */
 const { admin, FRETE_INFO, cents, BF_PCT, bfVale } = require('./_lib');
+const { cotarCorreios } = require('./_frete');
 
 const arred = v => Math.round(Number(v) * 100) / 100;
 const dig = t => String(t || '').replace(/\D/g, '');
@@ -22,10 +23,12 @@ async function conferirPedido(fs, o, idAtual) {
   if (!ok) prob.push('Itens do pedido inválidos.');
   else if (Math.abs(sub - Number(o.subtotal)) > 0.011) prob.push(`Preço diferente do catálogo: o pedido diz R$ ${arred(o.subtotal).toFixed(2)} e o catálogo soma R$ ${sub.toFixed(2)}.`);
   // 2) frete
-  const { FRETE, GRATIS } = FRETE_INFO;
-  const freteCerto = GRATIS != null && sub >= GRATIS ? 0 : FRETE[o.cidade];
-  if (!Number.isFinite(freteCerto)) prob.push('Cidade de entrega inválida.');
-  else if (Math.abs(freteCerto - Number(o.frete)) > 0.011) prob.push(`Frete diferente: o pedido cobra R$ ${arred(o.frete).toFixed(2)} e o certo é R$ ${freteCerto.toFixed(2)}.`);
+  // Frete aceito: R$ 0 em Contagem, Betim e BH (retirada, motoboy ou PAC grátis acima de R$ 300) ou o preço de tabela do PAC/Sedex para o CEP.
+  const local = ['Contagem', 'Betim', 'Belo Horizonte'].includes(o.cidade), validos = local ? [0] : [];
+  try { (await cotarCorreios(dig(o.cliente?.cep), itens.reduce((s, i) => s + (Number(i?.q) || 0), 0))).forEach(x => validos.push(x.valor)); }
+  catch (e) { prob.push('Não foi possível conferir o frete dos Correios agora: ' + e.message); }
+  if (validos.length && !validos.some(v => Math.abs(v - Number(o.frete)) <= 0.011)) prob.push(`Frete diferente: o pedido cobra R$ ${arred(o.frete).toFixed(2)} e os valores possíveis são ${validos.map(v => 'R$ ' + v.toFixed(2)).join(' ou ')}.`);
+  else if (!validos.length && !prob.some(p => p.startsWith('Não foi possível conferir o frete'))) prob.push('Cidade de entrega inválida.');
   // 3) conta fecha?
   if (Math.abs(arred(o.subtotal) - arred(o.desconto || 0) + arred(o.frete) - arred(o.total)) > 0.021) prob.push('O total do pedido não bate com subtotal − desconto + frete.');
   // 4) cupom e Black Friday

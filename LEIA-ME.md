@@ -27,7 +27,7 @@ Abra `index.html` para ver a loja (funciona direto no computador; o login Google
 Sem isso o botão mostra um aviso e o site funciona sem login. Depois de ativado, o cliente precisa entrar com o Google para finalizar o pedido.
 
 ## Frete
-Ao informar o CEP, o site consulta o ViaCEP, confirma se é Contagem, Betim ou Belo Horizonte e aplica o valor de `CONFIG.frete`. CEP de outras cidades é recusado, a não ser que o frete dos Correios esteja ligado (veja abaixo).
+Ao informar o CEP, o site consulta o ViaCEP, confirma se é Contagem, Betim ou Belo Horizonte e calcula o frete pelos Correios (veja a seção do frete dos Correios, mais abaixo).
 
 ## Pagamento (Pix e cartão)
 Enquanto `CONFIG.pagamentoOnline` (em `app.js`) for `false`, o pedido vai por WhatsApp. O pagamento online com **Mercado Pago (Pix e cartão)** já está programado em `api/checkout.js` e `api/webhook.js`: o servidor recalcula preço, estoque, cupom e frete (o navegador não consegue alterar valores), cria o link de pagamento e só marca o pedido como pago quando o Mercado Pago confirma. Para ligar:
@@ -86,7 +86,7 @@ Sem essas variáveis os e-mails simplesmente não saem e a loja funciona normal.
 - Pedido **cancelado** depois de baixado devolve as peças (`liberar`). Pedidos antigos que ficaram com peça reservada (testes de antes desta regra) têm dois botões: **Cancelar e devolver a peça** e **Cancelar (já repus o estoque)**.
 - **Atualizar pagamento:** nos pedidos online aguardando, o botão **Atualizar pagamento** (aba Pedidos) pergunta direto ao Mercado Pago como está o pagamento daquele pedido e atualiza a loja (pago + estoque + e-mail, ou recusado). É a reserva caso um aviso do Mercado Pago (webhook) falhe. A lógica fica em `api/_pagamento.js`, usada também pelo webhook.
 - **Pedidos parados:** o link de pagamento do Mercado Pago vale 24 h (só Pix e cartão, sem boleto); a rotina diária cancela pedidos online ainda aguardando depois de 26 h. Pedidos do WhatsApp aguardando há mais de 2 dias ganham a marca **Parado há N dias** para você decidir (confirmar ou cancelar).
-- **Frete:** Contagem R$ 12, Betim R$ 15, Belo Horizonte R$ 20, grátis a partir de R$ 300. Valores em `CONFIG.frete`/`freteGratisAcima` (`app.js`) e `FRETE`/`FRETE_GRATIS_ACIMA` (`api/_lib.js`): mantenha os dois iguais.
+- **Frete:** preço de tabela dos Correios (PAC/Sedex) pelo CEP; PAC grátis a partir de R$ 300 em Contagem, Betim e BH (`freteGratisAcima` em `app.js` e `FRETE_GRATIS_ACIMA` em `api/_lib.js`: mantenha os dois iguais).
 - **Testar o pagamento sem ligar para todos:** abra a loja com `?testepag=1` (só aquele navegador vê o botão "Pagar com Pix ou cartão"); `?testepag=0` desliga. Para ligar de vez, mude `pagamentoOnline` para `true` em `app.js`.
 
 ## Segurança (o que já está protegendo a loja)
@@ -146,9 +146,8 @@ Sem essas variáveis os e-mails simplesmente não saem e a loja funciona normal.
 
 ## Frete dos Correios e formas de entrega (Brasil todo)
 
-- **Como funciona:** ao informar o CEP, se for fora de Contagem, Betim e Belo Horizonte, a loja consulta o PAC e o Sedex (`/api/frete`, arquivos `api/_frete.js` e `api/frete.js`) pelo **Melhor Envio**, e cobra o **preço de tabela dos Correios** (o campo `price` da resposta). O servidor recalcula o frete no pagamento; se o valor mudou desde o carrinho, a cliente confere de novo.
+- **Como funciona:** o frete de **todo pedido** é o preço de tabela dos Correios (PAC e Sedex), calculado pelo CEP da cliente no **Melhor Envio** (`/api/frete`, arquivos `api/_frete.js` e `api/frete.js`). Não existe mais tabela fixa por cidade. O servidor recalcula o frete no pagamento; se o valor mudou desde o carrinho, a cliente confere de novo.
 - **Embalagem de uma calça** (a maior, tam. 46): 29 × 27,5 × 4,5 cm e 575 g (`PACOTE` em `api/_frete.js`). Mais peças somam a altura e o peso. CEP de saída: 32280-620 (`ORIGEM`).
-- **Chave:** variável `MELHORENVIO_TOKEN` na Vercel (permissão `shipping-calculate`). O token vence em **24/11/2027**: gere outro no Melhor Envio (Integrações → Tokens) e troque na Vercel antes disso. A rotina diária testa o token e avisa por e-mail se falhar. Se o token falhar, o carrinho avisa que o frete dos Correios não está disponível e só a entrega própria continua.
-- **Em Contagem, Betim e BH** a cliente escolhe: entrega própria (R$ 12 / 15 / 20; grátis a partir de R$ 300), retirar com a loja ou motoboy/Uber (grátis; combinam pelo WhatsApp). O frete grátis acima de R$ 300 vale **só** para a entrega própria nessas cidades.
-- **Pagamento:** Correios, retirada e motoboy só com pagamento online (Pix ou cartão). O pedido pelo WhatsApp continua só para a entrega própria.
-- **Liga/desliga:** `CONFIG.correios` em `app.js`. Está `true` (ligado para todos). Se virar `false`, só quem abrir a loja com `?correios=1` (neste navegador) vê as novas opções; `?correios=0` volta ao normal.
+- **Chave:** variável `MELHORENVIO_TOKEN` na Vercel (permissão `shipping-calculate`). O token vence em **24/11/2027**: gere outro no Melhor Envio (Integrações → Tokens) e troque na Vercel antes disso. A rotina diária testa o token e avisa por e-mail se falhar. Se o token falhar, o carrinho avisa que o frete dos Correios não está disponível.
+- **Em Contagem, Betim e BH** a cliente também pode escolher retirar com a loja ou motoboy/Uber (sem frete; combinam pelo WhatsApp). O **PAC é grátis a partir de R$ 300** nessas três cidades (`FRETE_GRATIS_ACIMA` em `api/_lib.js` e `freteGratisAcima` em `app.js`); o Sedex é sempre cobrado.
+- **Pagamento:** fora de Contagem, Betim e BH só com pagamento online (Pix ou cartão). Nessas três cidades continua existindo o pedido pelo WhatsApp.

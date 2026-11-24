@@ -9,8 +9,7 @@ const admin = require('firebase-admin');
 const { cotarCorreios } = require('./_frete');
 
 const CIDADES = ['Contagem', 'Betim', 'Belo Horizonte'];
-// Fonte da verdade do frete: o servidor. Mantenha igual ao CONFIG.frete do app.js (que só exibe o valor).
-const FRETE = { 'Contagem': 12, 'Betim': 15, 'Belo Horizonte': 20 };
+// O frete vem dos Correios (api/_frete.js). Frete grátis (PAC) a partir deste subtotal, só em Contagem, Betim e Belo Horizonte.
 const FRETE_GRATIS_ACIMA = 300;   // igual a CONFIG.freteGratisAcima em app.js
 const DEGRAUS = [5, 10, 20];
 
@@ -66,23 +65,17 @@ async function calcular({ itens, cupom, bf, cep, tel, entrega }, uid) {
     sub += pc * q; qtd += q;
     linhas.push({ id, cod: p.cod, nome: p.nome, tam, q, preco: reais(pc) });
   }
-  // Entrega: própria (Contagem, Betim e BH), retirada e motoboy/Uber (combinados no WhatsApp, só na região) ou Correios (PAC/Sedex, Brasil todo, preço de tabela).
-  const tipo = String(entrega || 'propria'), info = await infoCep(cep);
-  if (!['propria', 'retirada', 'motoboy', 'pac', 'sedex'].includes(tipo)) throw erro(400, 'Forma de entrega inválida.');
+  // Entrega: Correios (PAC/Sedex, Brasil todo, preço de tabela) ou, só em Contagem, Betim e BH, retirada com a loja e motoboy/Uber (combinados no WhatsApp, sem frete).
+  const tipo = String(entrega || 'pac'), info = await infoCep(cep);
+  if (!['retirada', 'motoboy', 'pac', 'sedex'].includes(tipo)) throw erro(400, 'Forma de entrega inválida. Atualize a página e escolha a entrega de novo.');
   const cidade = info.cidade;
-  let frete = 0, prazo = null, entregaNome = 'Entrega própria';
+  let frete = 0, prazo = null, entregaNome = tipo === 'retirada' ? 'Retirada com a loja' : 'Motoboy/Uber (combinar no WhatsApp)';
   if (tipo === 'pac' || tipo === 'sedex') {
     const op = (await cotarCorreios(cep, qtd)).find(o => o.tipo === tipo);
     if (!op) throw erro(409, 'Esse serviço dos Correios não está disponível para o seu CEP. Escolha outro.');
     frete = op.valor; prazo = op.prazo; entregaNome = 'Correios ' + op.nome;
-  } else {
-    if (!info.local) throw erro(400, 'Essa forma de entrega vale só para Contagem, Betim e Belo Horizonte. Escolha os Correios.');
-    if (tipo === 'propria') {
-      frete = FRETE[cidade];
-      if (!Number.isFinite(frete)) throw erro(500, 'Frete não configurado para esta cidade.');   // nunca fecha um pedido sem frete definido
-      if (FRETE_GRATIS_ACIMA != null && sub >= cents(FRETE_GRATIS_ACIMA)) frete = 0;
-    } else entregaNome = tipo === 'retirada' ? 'Retirada com a loja' : 'Motoboy/Uber (combinar no WhatsApp)';
-  }
+    if (tipo === 'pac' && info.local && FRETE_GRATIS_ACIMA != null && sub >= cents(FRETE_GRATIS_ACIMA)) frete = 0;   // PAC grátis a partir de R$ 300 em Contagem, Betim e BH
+  } else if (!info.local) throw erro(400, 'Retirada e motoboy valem só para Contagem, Betim e Belo Horizonte. Escolha os Correios.');
   let percent = 0;
   if (cupom && String(cupom) !== 'BLACKFRIDAY') {
     const code = String(cupom), cfg = (await fs.collection('config').doc('loja').get()).data() || {};
@@ -162,7 +155,7 @@ const mp = async (path, opt = {}) => {
   return j;
 };
 
-const FRETE_INFO = { FRETE, GRATIS: FRETE_GRATIS_ACIMA };
+const FRETE_INFO = { GRATIS: FRETE_GRATIS_ACIMA };
 /* Administradores do painel: contas Google verificadas. Para autorizar mais alguém, acrescente o e-mail aqui, em painel/painel.js (ADMINS) e em firestore.rules (isAdmin) e republique as regras. */
 const ADMINS = ['clouts.oficial2026@gmail.com', 'brenovilaca48@gmail.com'];
 const ehAdmin = u => !!u && ADMINS.includes(String(u.email || '').toLowerCase()) && u.email_verified === true && u.firebase?.sign_in_provider === 'google.com';

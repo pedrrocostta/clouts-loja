@@ -3,14 +3,10 @@ const CONFIG = {
   whatsapp: '5531994810357',                 // (31) 99481-0357 — trocar quando o cliente tiver outro número
   instagram: 'clouts.oficial',
   cidades: ['Contagem', 'Betim', 'Belo Horizonte'],
-  // Frete por cidade, em reais. Zerado por enquanto (igual aos preços). Edite aqui quando definir os valores.
-  frete: { 'Contagem': 12, 'Betim': 15, 'Belo Horizonte': 20 },
-  freteGratisAcima: 300,                     // frete grátis em pedidos a partir de R$ 300 (subtotal das peças). Mantenha igual a FRETE_GRATIS_ACIMA em api/_lib.js
+  freteGratisAcima: 300,                     // PAC grátis em pedidos a partir de R$ 300 (subtotal das peças) em Contagem, Betim e BH. Mantenha igual a FRETE_GRATIS_ACIMA em api/_lib.js
   // Pagamento online (Mercado Pago, Pix e cartão). Mude para true SÓ depois de configurar as chaves na Vercel (veja LEIA-ME.md → Pagamento)
   // e de definir os preços. Ligado, o amigo indicado só conta depois da primeira compra paga.
   pagamentoOnline: true,
-  // Frete dos Correios (PAC/Sedex, Brasil todo) + escolha de entrega. true = ligado para todos. false = só quem abrir a loja com ?correios=1 enxerga (para testar).
-  correios: true,
   // Grade de banners no computador (carrossel grande + carrossel vertical ao lado). false = só quem abrir a loja com ?banners=1 enxerga (para aprovar antes). Mude para true para ligar para todos.
   bannersGrade: false
 };
@@ -71,10 +67,9 @@ const tierPct = n => n >= 10 ? 20 : n >= 5 ? 10 : n >= 1 ? 5 : 0;
 const meuCupom = () => cupons.find(c => c.codigo === 'AMIGO') || null;
 try { const r = new URLSearchParams(location.search).get('ref'); if (r && /^[A-Za-z0-9]{20,40}$/.test(r)) localStorage.setItem('clouts.ref', r); } catch {}
 try { const tp = new URLSearchParams(location.search).get('testepag'); if (tp === '1') localStorage.setItem('clouts.testepag', '1'); else if (tp === '0') localStorage.removeItem('clouts.testepag'); } catch {}   // ?testepag=1 mostra o botão de pagamento só neste navegador (para testar antes de ligar para todos)
-try { const cq = new URLSearchParams(location.search).get('correios'); if (cq === '1') localStorage.setItem('clouts.correios', '1'); else if (cq === '0') localStorage.removeItem('clouts.correios'); } catch {}
 try { const bq = new URLSearchParams(location.search).get('banners'); if (bq === '1') localStorage.setItem('clouts.banners', '1'); else if (bq === '0') localStorage.removeItem('clouts.banners'); } catch {}
 const GRADE = () => CONFIG.bannersGrade || String(store.get('clouts.banners', '')) === '1';
-const CORREIOS = () => CONFIG.correios || String(store.get('clouts.correios', '')) === '1';
+const CORREIOS = () => true;   // frete dos Correios sempre ligado
 const pagBotao = () => CONFIG.pagamentoOnline || String(store.get('clouts.testepag', '')) === '1';
 try { const c = (new URLSearchParams(location.search).get('codigo') || '').toUpperCase(); if (/^[A-Z0-9]{8}$/.test(c)) localStorage.setItem('clouts.codigo', c); } catch {}
 let meuCod = null, aplicando = false;
@@ -318,7 +313,7 @@ function viewHome() {
   <div class="cta-row"><a class="btn btn-gold" href="#/feminino">Comprar feminino</a><a class="btn btn-dark" href="#/masculino">Comprar masculino</a></div>
 
   <section class="strip">
-    <a href="#/entrega">${ICON.truck}<span><b>Entrega no Brasil</b>Correios e entrega local</span></a>
+    <a href="#/entrega">${ICON.truck}<span><b>Entrega no Brasil</b>PAC e Sedex dos Correios</span></a>
     <div>${ICON.pix}<span><b>Pix e cartão</b>Pague como preferir</span></div>
     <a href="trocas.html">${ICON.swap}<span><b>Troca em 7 dias</b>Direito do consumidor</span></a>
     <a href="${waLink('Olá! Vim pelo site da CLOUTS.')}" target="_blank" rel="noopener">${ICON.chat}<span><b>Atendimento</b>Chame no WhatsApp</span></a>
@@ -408,9 +403,9 @@ function viewFavs() {
 }
 
 function viewEntrega() {
-  app.innerHTML = `<div class="page-h"><h1>Entrega e pagamento</h1><p>${CORREIOS() ? 'Entregamos no Brasil todo pelos Correios (PAC ou Sedex, com o valor da tabela dos Correios). Em Contagem, Betim e Belo Horizonte também levamos nós mesmos, ou você retira com a gente.' : 'Entregamos nas cidades abaixo.'} Calcule o frete pelo CEP no carrinho.</p></div>
-  <div class="deliv">${CONFIG.cidades.map(c => `<div><h3>${c}</h3><p>Frete: ${brl(CONFIG.frete[c] || 0)}</p></div>`).join('')}</div>
-  <p class="note" style="margin-bottom:6px">${CONFIG.freteGratisAcima != null ? `<b>Frete grátis</b> em pedidos a partir de ${brl(CONFIG.freteGratisAcima)}${CORREIOS() ? ' em Contagem, Betim e Belo Horizonte' : ''}.` : ''}</p>
+  app.innerHTML = `<div class="page-h"><h1>Entrega e pagamento</h1><p>Entregamos no Brasil todo pelos Correios, com o valor da tabela dos Correios (PAC ou Sedex). Calcule o frete pelo CEP no carrinho.</p></div>
+  <div class="deliv"><div><h3>Correios · PAC e Sedex</h3><p>Brasil todo. O valor e o prazo aparecem no carrinho.</p></div><div><h3>Contagem, Betim e Belo Horizonte</h3><p>Além dos Correios, você pode retirar com a loja ou chamar um motoboy/Uber (combinamos pelo WhatsApp).</p></div></div>
+  <p class="note" style="margin-bottom:6px">${CONFIG.freteGratisAcima != null ? `<b>PAC grátis</b> em pedidos a partir de ${brl(CONFIG.freteGratisAcima)} em Contagem, Betim e Belo Horizonte.` : ''}</p>
   <p class="note" style="margin-bottom:18px">Formas de pagamento: Pix e cartão de crédito.</p>
   <a class="btn btn-gold" href="#/feminino">Começar a comprar</a>`;
 }
@@ -865,22 +860,21 @@ async function lookupCep(raw) {
   return { ok: true, data: { cep: fmt, cidade: local ? cidade : d.localidade, uf: d.uf || 'MG', local, bairro: d.bairro || '', rua: d.logradouro || '' } };
 }
 /* Entrega: própria (Contagem, Betim e BH), retirada e motoboy/Uber (combinados no WhatsApp) ou Correios PAC/Sedex (Brasil todo, preço de tabela vindo de /api/frete). O servidor recalcula tudo no pagamento. */
-const LOCAIS = ['propria', 'retirada', 'motoboy'], ENT_NOME = { propria: 'Entrega própria', retirada: 'Retirada com a loja', motoboy: 'Motoboy/Uber', pac: 'Correios PAC', sedex: 'Correios Sedex' };
-const entTipo = () => !ship ? null : ship.local === false ? (['pac', 'sedex'].includes(ship.entrega) ? ship.entrega : 'pac') : (LOCAIS.includes(ship.entrega) && CORREIOS() ? ship.entrega : 'propria');
+const LOCAIS = ['retirada', 'motoboy'], ENT_NOME = { retirada: 'Retirada com a loja', motoboy: 'Motoboy/Uber', pac: 'Correios PAC', sedex: 'Correios Sedex' };
+const entTipo = () => !ship ? null : (['pac', 'sedex'].includes(ship.entrega) || (ship.local !== false && LOCAIS.includes(ship.entrega))) ? ship.entrega : 'pac';
 let cotas = {};   // 'cep|peças' → opções dos Correios | 'carregando' | { erro }
 const cotaKey = () => ship ? String(ship.cep).replace(/\D/g, '') + '|' + cartQty() : '';
-const freteProprio = () => (CONFIG.freteGratisAcima != null && cartTotal() >= CONFIG.freteGratisAcima ? 0 : (Number.isFinite(CONFIG.frete[ship.cidade]) ? CONFIG.frete[ship.cidade] : null));   // cidade sem frete definido: não deixa fechar o pedido
+const pacGratis = () => ship?.local !== false && CONFIG.freteGratisAcima != null && cartTotal() >= CONFIG.freteGratisAcima;   // PAC grátis acima de R$ 300 em Contagem, Betim e BH (o servidor confere)
 const freteValor = () => {
   if (!ship) return null;
   const t = entTipo();
   if (t === 'retirada' || t === 'motoboy') return 0;
-  if (t === 'propria') return freteProprio();
   const c = cotas[cotaKey()], o = Array.isArray(c) ? c.find(x => x.tipo === t) : null;
-  return o ? o.valor : null;
+  return o ? (t === 'pac' && pacGratis() ? 0 : o.valor) : null;
 };
 const freteTxt = () => { const v = freteValor(); return v == null ? '—' : brl(v); };
 async function carregarCotas() {
-  if (!ship || ship.local !== false) return;
+  if (!ship) return;
   const k = cotaKey(); if (cotas[k]) return;
   cotas[k] = 'carregando';
   try {
@@ -891,16 +885,13 @@ async function carregarCotas() {
   atualizarEntrega();
 }
 function entBoxHTML() {
-  if (!ship || !CORREIOS()) return '';
+  if (!ship) return '';
   const t = entTipo(), op = (v, nome, preco, sub) => `<label><input type="radio" name="ent" value="${v}"${t === v ? ' checked' : ''}><span><b>${nome}</b><em>${preco}</em><small>${sub}</small></span></label>`;
-  if (ship.local !== false) return `<div class="ent-t">Forma de entrega</div>
-    ${op('propria', 'Entrega própria', freteProprio() === 0 ? 'Grátis' : brl(freteProprio()), `Levamos até você em ${esc(ship.cidade)}.`)}
-    ${op('retirada', 'Retirar com a loja', 'Grátis', 'Combinamos o local e o horário pelo WhatsApp.')}
-    ${op('motoboy', 'Motoboy ou Uber', 'Grátis', 'Você chama o motoboy; combinamos a retirada pelo WhatsApp.')}`;
-  const c = cotas[cotaKey()];
-  if (!c || c === 'carregando') return `<div class="ent-t">Forma de entrega</div><p class="note">Consultando o frete dos Correios…</p>`;
-  if (c.erro) return `<div class="ent-t">Forma de entrega</div><p class="note bad">${esc(c.erro)}</p><button type="button" class="btn btn-line sm" data-entretry>Tentar de novo</button>`;
-  return `<div class="ent-t">Forma de entrega · Correios</div>${c.map(o => op(o.tipo, `${esc(o.nome)} Correios`, brl(o.valor), o.prazo ? `Prazo de até ${o.prazo} dias úteis depois da postagem.` : 'Prazo informado pelos Correios.')).join('')}
+  const c = cotas[cotaKey()], local = ship.local !== false;
+  const extra = local ? op('retirada', 'Retirar com a loja', 'Grátis', 'Combinamos o local e o horário pelo WhatsApp.') + op('motoboy', 'Motoboy ou Uber', 'Grátis', 'Você chama o motoboy; combinamos a retirada pelo WhatsApp.') : '';
+  if (!c || c === 'carregando') return `<div class="ent-t">Forma de entrega</div><p class="note">Consultando o frete dos Correios…</p>${extra}`;
+  if (c.erro) return `<div class="ent-t">Forma de entrega</div><p class="note bad">${esc(c.erro)}</p><button type="button" class="btn btn-line sm" data-entretry>Tentar de novo</button>${extra}`;
+  return `<div class="ent-t">Forma de entrega · Correios</div>${c.map(o => op(o.tipo, `${esc(o.nome)} Correios`, o.tipo === 'pac' && pacGratis() ? 'Grátis' : brl(o.valor), (o.prazo ? `Prazo de até ${o.prazo} dias úteis depois da postagem.` : 'Prazo informado pelos Correios.') + (o.tipo === 'pac' && pacGratis() ? ' Frete grátis acima de ' + brl(CONFIG.freteGratisAcima) + '.' : ''))).join('')}${extra}
     <p class="note">Valor igual ao da tabela dos Correios. O pedido é postado em até 2 dias úteis.</p>`;
 }
 function atualizarEntrega() {
@@ -1033,9 +1024,8 @@ function bindCupom() {
     const r = await aplicarCampanha($('#campIn').value); if (r.ok) { toast(`Código aplicado: ${r.percent}% OFF`); renderCart(); } else { m.className = 'note bad'; m.textContent = r.msg; }
   };
 }
-const shipMsg = () => !ship ? (CORREIOS() ? 'Entregamos no Brasil todo. Informe seu CEP.' : 'Entregamos em Contagem, Betim e Belo Horizonte.')
-  : ship.local === false ? `Entrega em ${ship.cidade}/${ship.uf} pelos Correios.`
-  : `Entrega em ${ship.cidade}${ship.bairro ? ' · ' + ship.bairro : ''}: ${entTipo() !== 'propria' ? ENT_NOME[entTipo()] + ' (frete grátis)' : freteValor() === 0 ? 'frete ' + (CONFIG.freteGratisAcima != null && cartTotal() >= CONFIG.freteGratisAcima ? 'grátis' : brl(0)) : brl(freteValor())}`;
+const shipMsg = () => !ship ? 'Entregamos no Brasil todo. Informe seu CEP.'
+  : `Entrega em ${ship.cidade}/${ship.uf || 'MG'}${ship.local !== false && ship.bairro ? ' · ' + ship.bairro : ''}${ship.local === false ? ' pelos Correios' : ''}.`;
 $('#cartBody').addEventListener('click', e => {
   const t = e.target;
   if (t.dataset.inc != null) { const i = cart[t.dataset.inc], p = byId(i.id), mx = p ? estMax(p, i.tam) : Infinity; if (i.q + 1 > mx) { toast(mx <= 1 ? 'Só temos 1 unidade desse tamanho' : `Só temos ${unid(mx)} desse tamanho`); return; } i.q++; }
@@ -1063,8 +1053,8 @@ function renderCheckout() {
     <div class="tot big"><span>Total</span><b id="ckTotal">${brl(totalPedido())}</b></div>
     ${pagBotao() ? `<button class="btn btn-gold block" id="payPix">${ICON.pix} Pagar com Pix</button>
     <button class="btn btn-dark block" id="payMp">${ICON.card} Pagar com cartão</button>
-    ${entTipo() === 'propria' ? `<button class="btn btn-line block" id="sendWa">${ICON.chat} Prefiro finalizar pelo WhatsApp</button>` : ''}`
-      : (entTipo() === 'propria' ? `<button class="btn btn-gold block" id="sendWa">${ICON.chat} Enviar pedido no WhatsApp</button>` : '<p class="note bad">Para essa forma de entrega, o pagamento precisa ser online. Volte ao carrinho e escolha a entrega própria.</p>')}
+    ${ship.local !== false ? `<button class="btn btn-line block" id="sendWa">${ICON.chat} Prefiro finalizar pelo WhatsApp</button>` : ''}`
+      : (ship.local !== false ? `<button class="btn btn-gold block" id="sendWa">${ICON.chat} Enviar pedido no WhatsApp</button>` : '<p class="note bad">Para entregas fora de Contagem, Betim e Belo Horizonte, o pagamento precisa ser online.</p>')}
     <button class="btn block link" id="backCart">← Voltar ao carrinho</button>`;
   const f = $('#ckForm');
   f.elements.cep.oninput = e => { e.target.value = maskCep(e.target.value); };
@@ -1176,7 +1166,7 @@ function voltaDoPagamento() {
   showSheet(`<div class="avisos"><h2>${msg[0]}</h2><p class="note" style="margin:10px 0 16px">${msg[1]}</p><a class="btn btn-gold block" href="${waLink('Olá! Tenho uma dúvida sobre meu pedido.')}" target="_blank" rel="noopener">Falar no WhatsApp</a></div>`);
 }
 function sendOrder() {
-  if (entTipo() !== 'propria') { toast('Para essa forma de entrega, pague online.'); return; }
+  if (ship.local === false || freteValor() == null) { toast('Para essa entrega, pague online.'); return; }
   const f = $('#ckForm'), d = Object.fromEntries(new FormData(f)); let ok = true;
   ['nome', 'tel', 'cep', 'rua', 'num', 'bairro'].forEach(k => { const el = f.elements[k]; const bad = !String(d[k] || '').trim(); el.classList.toggle('err', bad); if (bad) ok = false; });
   if (!ok) { toast('Preencha os campos obrigatórios'); return; }
@@ -1184,7 +1174,7 @@ function sendOrder() {
   const frete = freteValor(), desc = descontoValor(), total = totalPedido(), cp = cupomObj();
   const linhas = cart.map(i => { const p = byId(i.id); return `• ${p.nome} — Cód. ${p.cod} — Tam. ${i.tam} — ${i.q}x ${brl(p.preco)}`; });
   const u = me();
-  const msg = `*Novo pedido — CLOUTS*\n\n${linhas.join('\n')}\n\n*Subtotal:* ${brl(cartTotal())}${cp ? `\n*Cupom ${cupNome(cp.codigo)} (${cp.percent}% OFF):* − ${brl(descontoCupom())}` : ''}${bfObj() ? `\n*Black Friday (${BF.pct}% OFF):* − ${brl(descontoBf())}` : ''}\n*Frete (${ship.cidade}):* ${brl(frete)}\n*Total:* ${brl(total)}\n*Pagamento:* ${d.pag}\n\n*Cliente:* ${d.nome}${u?.email ? '\n*E-mail:* ' + u.email : ''}\n*WhatsApp:* ${d.tel}\n*Entrega:* ${d.rua}, ${d.num}${d.comp ? ' — ' + d.comp : ''} — ${d.bairro}, ${ship.cidade} — CEP ${d.cep}`;
+  const msg = `*Novo pedido — CLOUTS*\n\n${linhas.join('\n')}\n\n*Subtotal:* ${brl(cartTotal())}${cp ? `\n*Cupom ${cupNome(cp.codigo)} (${cp.percent}% OFF):* − ${brl(descontoCupom())}` : ''}${bfObj() ? `\n*Black Friday (${BF.pct}% OFF):* − ${brl(descontoBf())}` : ''}\n*Entrega (${ENT_NOME[entTipo()]}):* ${brl(frete)}\n*Total:* ${brl(total)}\n*Pagamento:* ${d.pag}\n\n*Cliente:* ${d.nome}${u?.email ? '\n*E-mail:* ' + u.email : ''}\n*WhatsApp:* ${d.tel}\n*Entrega:* ${d.rua}, ${d.num}${d.comp ? ' — ' + d.comp : ''} — ${d.bairro}, ${ship.cidade} — CEP ${d.cep}`;
   window.open(waLink(msg), '_blank', 'noopener');
   track('generate_lead', 'Lead', { ga: { currency: 'BRL', value: total, items: cart.map(i => trkItem(byId(i.id), i.q)) }, fb: { value: total, currency: 'BRL', content_type: 'product', content_ids: cart.map(i => byId(i.id).cod) } });
   // Registra o pedido para o dono ver no painel (dashboard); a venda só conta depois que ele confirma o pagamento.
