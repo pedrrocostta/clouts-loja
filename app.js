@@ -9,8 +9,8 @@ const CONFIG = {
   // Pagamento online (Mercado Pago, Pix e cartão). Mude para true SÓ depois de configurar as chaves na Vercel (veja LEIA-ME.md → Pagamento)
   // e de definir os preços. Ligado, o amigo indicado só conta depois da primeira compra paga.
   pagamentoOnline: true,
-  // Frete dos Correios (PAC/Sedex, Brasil todo) + escolha de entrega. false = só quem abrir a loja com ?correios=1 enxerga (para testar). Mude para true para ligar para todos.
-  correios: false
+  // Frete dos Correios (PAC/Sedex, Brasil todo) + escolha de entrega. true = ligado para todos. false = só quem abrir a loja com ?correios=1 enxerga (para testar).
+  correios: true
 };
 
 const $ = (s, r = document) => r.querySelector(s);

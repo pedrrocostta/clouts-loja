@@ -52,7 +52,7 @@ function layout({ preheader, capa, capaImg, corpo, rodape }) {
 ${capa || ''}
 <tr><td style="padding:30px 30px 8px">${corpo}</td></tr>
 <tr><td style="padding:8px 30px 30px"><div style="border-top:1px solid ${LINHA};padding-top:18px;font-size:12px;line-height:1.6;color:${TINTA2};text-align:center">${rodape || ''}
-<div style="margin-top:8px">CLOUTS · CNPJ 70.043.901/0001-46 · Entregamos em Contagem, Betim e Belo Horizonte</div></div></td></tr>
+<div style="margin-top:8px">CLOUTS · CNPJ 70.043.901/0001-46 · Entregamos no Brasil todo</div></div></td></tr>
 </table></td></tr></table></body></html>`;
 }
 
@@ -78,7 +78,7 @@ function boasVindas({ nome, cupom }) {
   const url = site();
   const bloco = cupom ? cupomBloco(cupom.percent, cupom.dias, 'Seu presente de boas-vindas') : '';
   const corpo = `${titulo(`Que bom ter você aqui, ${primeiroNome(nome)}!`)}
-    ${par('Sua conta está criada. A CLOUTS é feita de jeans com caimento de verdade, do feminino ao masculino, pensada para quem gosta de peça com identidade. Entregamos em <b>Contagem, Betim e Belo Horizonte</b>.')}
+    ${par('Sua conta está criada. A CLOUTS é feita de jeans com caimento de verdade, do feminino ao masculino, pensada para quem gosta de peça com identidade. Entregamos no <b>Brasil todo</b>.')}
     ${bloco}
     ${botao('Ver as novidades', url)}
     ${par('Qualquer dúvida sobre tamanho ou entrega, é só chamar a gente no WhatsApp pela loja.')}`;

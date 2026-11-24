@@ -31,7 +31,7 @@ module.exports = async (req, res) => {
     const sec = p.secao === 'masculino' ? 'masculino' : 'feminino';
     const preco = Number(p.preco) > 0 ? Number(p.preco) : 0, esg = p.esgotado === true || !(p.tam || []).length;
     const titulo = `${p.nome} — CLOUTS`;
-    const desc = (p.descricao || `${p.nome}. ${sec === 'masculino' ? 'Masculino' : 'Feminino'} ${p.modelo || ''}`.trim() + '. Entrega em Contagem, Betim e Belo Horizonte.').slice(0, 300);
+    const desc = (p.descricao || `${p.nome}. ${sec === 'masculino' ? 'Masculino' : 'Feminino'} ${p.modelo || ''}`.trim() + '. Entrega no Brasil todo.').slice(0, 300);
     const ld = {
       '@context': 'https://schema.org', '@type': 'Product', name: p.nome, sku: String(p.cod), image: [img], description: desc,
       brand: { '@type': 'Brand', name: 'CLOUTS' }, ...(p.cor ? { color: p.cor } : {}),
