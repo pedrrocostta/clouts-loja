@@ -31,7 +31,6 @@ async function cotarCorreios(cepDestino, qtd) {
     j = await r.json().catch(() => null);
   } catch { throw erro(503, 'Não foi possível calcular o frete dos Correios agora. Tente de novo.'); }
   if (!r.ok || !Array.isArray(j)) { console.error('Melhor Envio', r.status, JSON.stringify(j).slice(0, 300)); throw erro(503, 'Não foi possível calcular o frete dos Correios agora. Tente de novo.'); }
-  if (globalThis.__bruto) globalThis.__bruto(j);   // TEMPORÁRIO (diagnóstico do preço)
   const opcoes = j.filter(s => SERVICOS[s.id] && !s.error && Number(s.price) > 0).map(s => ({
     tipo: SERVICOS[s.id], nome: NOMES[SERVICOS[s.id]],
     valor: Math.round(Number(s.price) * 100) / 100,   // preço de tabela (balcão)
