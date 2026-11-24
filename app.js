@@ -10,7 +10,9 @@ const CONFIG = {
   // e de definir os preços. Ligado, o amigo indicado só conta depois da primeira compra paga.
   pagamentoOnline: true,
   // Frete dos Correios (PAC/Sedex, Brasil todo) + escolha de entrega. true = ligado para todos. false = só quem abrir a loja com ?correios=1 enxerga (para testar).
-  correios: true
+  correios: true,
+  // Grade de banners no computador (carrossel grande + carrossel vertical ao lado). false = só quem abrir a loja com ?banners=1 enxerga (para aprovar antes). Mude para true para ligar para todos.
+  bannersGrade: false
 };
 
 const $ = (s, r = document) => r.querySelector(s);
@@ -70,6 +72,8 @@ const meuCupom = () => cupons.find(c => c.codigo === 'AMIGO') || null;
 try { const r = new URLSearchParams(location.search).get('ref'); if (r && /^[A-Za-z0-9]{20,40}$/.test(r)) localStorage.setItem('clouts.ref', r); } catch {}
 try { const tp = new URLSearchParams(location.search).get('testepag'); if (tp === '1') localStorage.setItem('clouts.testepag', '1'); else if (tp === '0') localStorage.removeItem('clouts.testepag'); } catch {}   // ?testepag=1 mostra o botão de pagamento só neste navegador (para testar antes de ligar para todos)
 try { const cq = new URLSearchParams(location.search).get('correios'); if (cq === '1') localStorage.setItem('clouts.correios', '1'); else if (cq === '0') localStorage.removeItem('clouts.correios'); } catch {}
+try { const bq = new URLSearchParams(location.search).get('banners'); if (bq === '1') localStorage.setItem('clouts.banners', '1'); else if (bq === '0') localStorage.removeItem('clouts.banners'); } catch {}
+const GRADE = () => CONFIG.bannersGrade || String(store.get('clouts.banners', '')) === '1';
 const CORREIOS = () => CONFIG.correios || String(store.get('clouts.correios', '')) === '1';
 const pagBotao = () => CONFIG.pagamentoOnline || String(store.get('clouts.testepag', '')) === '1';
 try { const c = (new URLSearchParams(location.search).get('codigo') || '').toUpperCase(); if (/^[A-Z0-9]{8}$/.test(c)) localStorage.setItem('clouts.codigo', c); } catch {}
@@ -265,12 +269,17 @@ function cardHTML(p, rank) {
 
 /* ---------- Views ---------- */
 const app = $('#app');
-let heroTimer;
+let heroTimer, heroTimer2;
 const BANNERS = [
   { f: 'b1', href: '#/feminino', alt: 'CLOUTS — Vista seu melhor. Moda feminina' },
   { f: 'b2', href: '#/feminino', alt: 'CLOUTS — Calças jeans femininas' },
   { f: 'b3', href: '#/masculino', alt: 'CLOUTS — Moda masculina' },
   { f: 'b4', href: '#/mais-vendidos', alt: 'Estilo para todos os momentos — ver mais vendidos' }
+];
+/* Banner lateral (vertical no computador, faixa embaixo no celular). Arte nova: img/banners/NOME-vertical.webp (800x1000) e NOME-faixa.webp (702x270). Enquanto não há arte própria, usa as artes atuais. Na semana da Black Friday entra um cartão automático na frente. */
+const BANNERS_LADO = [
+  { v: 'img/banners/b3-mobile.webp', h: 'img/banners/b3-desktop.webp', href: '#/masculino', alt: 'CLOUTS — Moda masculina' },
+  { v: 'img/banners/b2-mobile.webp', h: 'img/banners/b2-desktop.webp', href: '#/feminino', alt: 'CLOUTS — Calças jeans femininas' }
 ];
 const CATS = () => [
   ['Feminino', '#/feminino', pick('f-112420-1', 'feminino').img], ['Masculino', '#/masculino', pick('m-3', 'masculino').img],
@@ -299,17 +308,17 @@ function lazyVideos() {
 function viewHome() {
   const fem = PRODUTOS.filter(p => p.secao === 'feminino'), mas = PRODUTOS.filter(p => p.secao === 'masculino');
   app.innerHTML = `
-  <h1 class="sr-only">CLOUTS: calças femininas e masculinas com entrega em Contagem, Betim e Belo Horizonte</h1>
-  <section class="bn" aria-roledescription="carrossel" aria-label="Destaques">
+  <h1 class="sr-only">CLOUTS: calças femininas e masculinas com entrega no Brasil todo</h1>
+  ${GRADE() ? '<div class="bn-grid">' : ''}<section class="bn${GRADE() ? ' bn-main' : ''}" aria-roledescription="carrossel" aria-label="Destaques">
     <div class="bn-track">${BANNERS.map((b, i) => `<a class="bn-slide${i ? '' : ' on'}" href="${b.href}" aria-label="${esc(b.alt)}"><picture><source media="(max-width:700px)" srcset="img/banners/${b.f}-mobile.webp"><img src="img/banners/${b.f}-desktop.webp" alt="${esc(b.alt)}" width="2496" height="1040" decoding="async" ${i ? 'loading="lazy"' : 'fetchpriority="high"'}></picture></a>`).join('')}</div>
     <button class="bn-arr prev" type="button" aria-label="Anterior">‹</button><button class="bn-arr next" type="button" aria-label="Próximo">›</button>
     <div class="hero-dots">${BANNERS.map((_, i) => `<button type="button" class="${i ? '' : 'on'}" aria-label="Banner ${i + 1}"></button>`).join('')}</div>
-  </section>
+  </section>${GRADE() ? ladoHTML() + '</div>' : ''}
 
   <div class="cta-row"><a class="btn btn-gold" href="#/feminino">Comprar feminino</a><a class="btn btn-dark" href="#/masculino">Comprar masculino</a></div>
 
   <section class="strip">
-    <a href="#/entrega">${ICON.truck}<span><b>Entrega local</b>Contagem, Betim e BH</span></a>
+    <a href="#/entrega">${ICON.truck}<span><b>Entrega no Brasil</b>Correios e entrega local</span></a>
     <div>${ICON.pix}<span><b>Pix e cartão</b>Pague como preferir</span></div>
     <a href="trocas.html">${ICON.swap}<span><b>Troca em 7 dias</b>Direito do consumidor</span></a>
     <a href="${waLink('Olá! Vim pelo site da CLOUTS.')}" target="_blank" rel="noopener">${ICON.chat}<span><b>Atendimento</b>Chame no WhatsApp</span></a>
@@ -329,15 +338,27 @@ function viewHome() {
   <section class="sec"><div class="sec-h"><h2>Masculino</h2><a href="#/masculino">Ver tudo →</a></div>
     <div class="grid">${mas.map(p => cardHTML(p)).join('')}</div></section>`;
   lazyVideos();
-  const sl = $$('.bn-slide'), dots = $$('.hero-dots button'), box = $('.bn'); let k = 0, hold = false;
-  const go = n => { sl[k].classList.remove('on'); dots[k].classList.remove('on'); k = (n + sl.length) % sl.length; sl[k].classList.add('on'); dots[k].classList.add('on'); };
-  $('.bn-arr.prev').onclick = () => go(k - 1); $('.bn-arr.next').onclick = () => go(k + 1);
+  heroTimer = carrossel($('.bn-main') || $('.bn'), 5000);
+  if ($('.bn-lado')) heroTimer2 = carrossel($('.bn-lado'), 6500);   // o lateral passa em outro ritmo para não virar junto com o principal
+}
+/* Carrossel de uma caixa .bn: setas, bolinhas, deslizar o dedo e troca automática. Devolve o temporizador. */
+function carrossel(box, ms) {
+  const sl = $$('.bn-slide', box), dots = $$('.hero-dots button', box); let k = 0, hold = false;
+  const go = n => { sl[k].classList.remove('on'); dots[k]?.classList.remove('on'); k = (n + sl.length) % sl.length; sl[k].classList.add('on'); dots[k]?.classList.add('on'); };
+  const pv = $('.bn-arr.prev', box), nx = $('.bn-arr.next', box); if (pv) pv.onclick = () => go(k - 1); if (nx) nx.onclick = () => go(k + 1);
   dots.forEach((d, i) => d.onclick = () => go(i));
   let x0 = null;
   box.addEventListener('touchstart', e => { x0 = e.touches[0].clientX; hold = true; }, { passive: true });
   box.addEventListener('touchend', e => { if (x0 != null) { const dx = e.changedTouches[0].clientX - x0; if (Math.abs(dx) > 40) go(k + (dx < 0 ? 1 : -1)); } x0 = null; hold = false; }, { passive: true });
   box.onmouseenter = () => hold = true; box.onmouseleave = () => hold = false;
-  heroTimer = setInterval(() => { if (!hold && !document.hidden) go(k + 1); }, 5000);
+  return sl.length > 1 ? setInterval(() => { if (!hold && !document.hidden) go(k + 1); }, ms) : null;
+}
+function ladoHTML() {
+  const bf = bfVale() ? [`<a class="bn-slide bn-bf" href="#/feminino" aria-label="Black Friday: ${BF.pct}% OFF em toda a loja"><div><span class="k">Black Friday</span><b>${BF.pct}% <em>OFF</em></b><p>em toda a loja até domingo (${bfFimTxt()}). Soma com o cupom de primeira compra.</p><span class="bt">Aproveitar</span></div></a>`] : [];
+  const itens = BANNERS_LADO.map(b => `<a class="bn-slide" href="${b.href}" aria-label="${esc(b.alt)}"><picture><source media="(max-width:700px)" srcset="${b.h}"><img src="${b.v}" alt="${esc(b.alt)}" decoding="async" loading="lazy"></picture></a>`);
+  const todos = [...bf, ...itens].map((h, i) => i ? h : h.replace('class="bn-slide', 'class="bn-slide on'));
+  return `<section class="bn bn-lado" aria-roledescription="carrossel" aria-label="Promoções"><div class="bn-track">${todos.join('')}</div>
+    <div class="hero-dots">${todos.map((_, i) => `<button type="button" class="${i ? '' : 'on'}" aria-label="Promoção ${i + 1}"></button>`).join('')}</div></section>`;
 }
 
 function viewList(secao, q) {
@@ -445,7 +466,7 @@ function renderView() {
 }
 function route() {
   const [path, qs] = (location.hash.slice(1) || '/').split('?');
-  clearInterval(heroTimer); closeAll();
+  clearInterval(heroTimer); clearInterval(heroTimer2); closeAll();
   const r = path.split('/').filter(Boolean)[0] || 'home';
   cur = { r: ['feminino', 'masculino', 'mais-vendidos', 'promocoes', 'busca', 'favoritos', 'entrega', 'perfil', 'cupons'].includes(r) ? r : 'home', q: new URLSearchParams(qs || '') };
   routeKey = cur.r;
@@ -462,7 +483,7 @@ function refreshCatalog() {
   if ($('#sheet').classList.contains('open')) { pendingRefresh = true; return; }
   pendingRefresh = false;
   cart = cart.filter(i => byId(i.id)); favs = favs.filter(byId); store.set('clouts.cart', cart); store.set(favKey(), favs);
-  const y = window.scrollY; clearInterval(heroTimer); renderView(); window.scrollTo(0, y);
+  const y = window.scrollY; clearInterval(heroTimer); clearInterval(heroTimer2); renderView(); window.scrollTo(0, y);
   renderCart();
 }
 window.addEventListener('hashchange', route);

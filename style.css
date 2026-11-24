@@ -599,3 +599,31 @@ html,body{overflow-x:clip}
 .ent label>span small{grid-column:1/-1;font-size:11.5px;color:var(--ink2)}
 .ent input:checked+span{border-color:var(--gold-d);box-shadow:0 0 0 2px rgba(206,161,71,.35)}
 .ent input:focus-visible+span{outline:2px solid var(--gold-d);outline-offset:2px}
+
+/* ===== grade de banners (computador: carrossel grande + vertical ao lado; celular: grande em cima, faixa embaixo) ===== */
+.bn-grid{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr);gap:12px;margin:12px 0 8px}
+.bn-grid .bn{margin:0}
+.bn-main{aspect-ratio:8/5}
+.bn-lado{aspect-ratio:auto;height:100%;min-height:0}
+.bn-main .bn-slide picture,.bn-main .bn-slide img{object-position:center}
+.bn-bf{background:linear-gradient(170deg,#1b1209,#7a2a1f 75%,#b3372b);color:var(--cream);display:flex;align-items:flex-end;padding:26px;text-decoration:none}
+.bn-bf .k{display:block;font-size:11px;letter-spacing:.3em;color:var(--gold);text-transform:uppercase;font-weight:600}
+.bn-bf b{display:block;font-family:'Cormorant Garamond',Georgia,serif;font-size:clamp(46px,5.5vw,80px);line-height:1;font-weight:600;margin:6px 0 4px}
+.bn-bf b em{color:var(--gold);font-style:normal}
+.bn-bf p{font-size:14px;max-width:270px;color:#f1e3c8;margin-bottom:14px}
+.bn-bf .bt{display:inline-block;background:var(--gold);color:var(--ink);font-size:13px;font-weight:600;padding:9px 18px;border-radius:999px}
+@media(max-width:700px){
+  .bn-grid{grid-template-columns:1fr;gap:10px}
+  .bn-main{aspect-ratio:702/900}
+  .bn-lado{height:auto;aspect-ratio:702/270}
+  .bn-bf{padding:12px 16px;align-items:center}
+  .bn-bf>div{display:grid;grid-template-columns:auto 1fr;column-gap:14px;align-items:center;width:100%}
+  .bn-bf b{grid-row:1/4;grid-column:1}
+  .bn-bf .k,.bn-bf p,.bn-bf .bt{grid-column:2}
+  .bn-bf .k{font-size:10px}
+  .bn-bf .bt{justify-self:start}
+  .bn-bf b{font-size:34px;margin:0}
+  .bn-bf p{font-size:11.5px;line-height:1.3;margin:2px 0 6px;max-width:none}
+  .bn-bf .bt{padding:6px 14px;font-size:12px}
+  .bn-lado .hero-dots{bottom:6px}
+}
