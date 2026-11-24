@@ -271,11 +271,19 @@ const BANNERS = [
   { f: 'b3', href: '#/masculino', alt: 'CLOUTS — Moda masculina' },
   { f: 'b4', href: '#/mais-vendidos', alt: 'Estilo para todos os momentos — ver mais vendidos' }
 ];
-/* Banner lateral (vertical no computador, faixa embaixo no celular). Arte nova: img/banners/NOME-vertical.webp (800x1000) e NOME-faixa.webp (702x270). Enquanto não há arte própria, usa as artes atuais. Na semana da Black Friday entra um cartão automático na frente. */
+/* Banner lateral (vertical no computador, faixa embaixo no celular). Cada item tem duas artes: NOME-vertical.webp (800x1000) e NOME-faixa.webp (702x270), em img/banners/.
+ * Na semana da Black Friday entra na frente a arte bf-vertical / bf-faixa. Banner principal da grade: grade-bN-desktop.webp (1600x1000) e grade-bN-mobile.webp (702x900); na Black Friday entra na frente bf-desktop / bf-mobile. */
 const BANNERS_LADO = [
-  { v: 'img/banners/b3-mobile.webp', h: 'img/banners/b3-desktop.webp', href: '#/masculino', alt: 'CLOUTS — Moda masculina' },
-  { v: 'img/banners/b2-mobile.webp', h: 'img/banners/b2-desktop.webp', href: '#/feminino', alt: 'CLOUTS — Calças jeans femininas' }
+  { f: 'lado-b3', href: '#/masculino', alt: 'CLOUTS — Moda masculina' },
+  { f: 'lado-b2', href: '#/feminino', alt: 'CLOUTS — Calças jeans femininas' }
 ];
+const BF_ALT = () => `Black Friday: ${BF.pct}% OFF em toda a loja`;
+function bannersPrincipais() {
+  if (!GRADE()) return BANNERS.map(b => ({ ...b, d: `${b.f}-desktop`, m: `${b.f}-mobile`, w: 2496, h: 1040 }));
+  const l = BANNERS.map(b => ({ ...b, d: `grade-${b.f}-desktop`, m: `grade-${b.f}-mobile`, w: 1600, h: 1000 }));
+  if (bfVale()) l.unshift({ d: 'bf-desktop', m: 'bf-mobile', href: '#/feminino', alt: BF_ALT(), w: 1600, h: 1000 });
+  return l;
+}
 const CATS = () => [
   ['Feminino', '#/feminino', pick('f-112420-1', 'feminino').img], ['Masculino', '#/masculino', pick('m-3', 'masculino').img],
   ['Mais vendidos', '#/mais-vendidos', pick('f-112466-1', 'feminino').img], ['Cigarrete', '#/feminino?m=Cigarrete', pick('f-112725-1', 'feminino').img],
@@ -305,9 +313,9 @@ function viewHome() {
   app.innerHTML = `
   <h1 class="sr-only">CLOUTS: calças femininas e masculinas com entrega no Brasil todo</h1>
   ${GRADE() ? '<div class="bn-grid">' : ''}<section class="bn${GRADE() ? ' bn-main' : ''}" aria-roledescription="carrossel" aria-label="Destaques">
-    <div class="bn-track">${BANNERS.map((b, i) => `<a class="bn-slide${i ? '' : ' on'}" href="${b.href}" aria-label="${esc(b.alt)}"><picture><source media="(max-width:700px)" srcset="img/banners/${b.f}-mobile.webp"><img src="img/banners/${b.f}-desktop.webp" alt="${esc(b.alt)}" width="2496" height="1040" decoding="async" ${i ? 'loading="lazy"' : 'fetchpriority="high"'}></picture></a>`).join('')}</div>
+    <div class="bn-track">${bannersPrincipais().map((b, i) => `<a class="bn-slide${i ? '' : ' on'}" href="${b.href}" aria-label="${esc(b.alt)}"><picture><source media="(max-width:700px)" srcset="img/banners/${b.m}.webp"><img src="img/banners/${b.d}.webp" alt="${esc(b.alt)}" width="${b.w}" height="${b.h}" decoding="async" ${i ? 'loading="lazy"' : 'fetchpriority="high"'}></picture></a>`).join('')}</div>
     <button class="bn-arr prev" type="button" aria-label="Anterior">‹</button><button class="bn-arr next" type="button" aria-label="Próximo">›</button>
-    <div class="hero-dots">${BANNERS.map((_, i) => `<button type="button" class="${i ? '' : 'on'}" aria-label="Banner ${i + 1}"></button>`).join('')}</div>
+    <div class="hero-dots">${bannersPrincipais().map((_, i) => `<button type="button" class="${i ? '' : 'on'}" aria-label="Banner ${i + 1}"></button>`).join('')}</div>
   </section>${GRADE() ? ladoHTML() + '</div>' : ''}
 
   <div class="cta-row"><a class="btn btn-gold" href="#/feminino">Comprar feminino</a><a class="btn btn-dark" href="#/masculino">Comprar masculino</a></div>
@@ -349,9 +357,8 @@ function carrossel(box, ms) {
   return sl.length > 1 ? setInterval(() => { if (!hold && !document.hidden) go(k + 1); }, ms) : null;
 }
 function ladoHTML() {
-  const bf = bfVale() ? [`<a class="bn-slide bn-bf" href="#/feminino" aria-label="Black Friday: ${BF.pct}% OFF em toda a loja"><div><span class="k">Black Friday</span><b>${BF.pct}% <em>OFF</em></b><p>em toda a loja até domingo (${bfFimTxt()}). Soma com o cupom de primeira compra.</p><span class="bt">Aproveitar</span></div></a>`] : [];
-  const itens = BANNERS_LADO.map(b => `<a class="bn-slide" href="${b.href}" aria-label="${esc(b.alt)}"><picture><source media="(max-width:700px)" srcset="${b.h}"><img src="${b.v}" alt="${esc(b.alt)}" decoding="async" loading="lazy"></picture></a>`);
-  const todos = [...bf, ...itens].map((h, i) => i ? h : h.replace('class="bn-slide', 'class="bn-slide on'));
+  const slide = (f, href, alt) => `<a class="bn-slide" href="${href}" aria-label="${esc(alt)}"><picture><source media="(max-width:700px)" srcset="img/banners/${f}-faixa.webp"><img src="img/banners/${f}-vertical.webp" alt="${esc(alt)}" decoding="async" loading="eager"></picture></a>`;
+  const todos = [...(bfVale() ? [slide('bf', '#/feminino', BF_ALT())] : []), ...BANNERS_LADO.map(b => slide(b.f, b.href, b.alt))].map((h, i) => i ? h : h.replace('class="bn-slide', 'class="bn-slide on'));
   return `<section class="bn bn-lado" aria-roledescription="carrossel" aria-label="Promoções"><div class="bn-track">${todos.join('')}</div>
     <div class="hero-dots">${todos.map((_, i) => `<button type="button" class="${i ? '' : 'on'}" aria-label="Promoção ${i + 1}"></button>`).join('')}</div></section>`;
 }
