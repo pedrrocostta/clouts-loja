@@ -6,6 +6,7 @@
  *   MP_WEBHOOK_SECRET         (opcional, recomendado) "Assinatura secreta" das notificações do Mercado Pago
  */
 const admin = require('firebase-admin');
+const { cotarCorreios } = require('./_frete');
 
 const CIDADES = ['Contagem', 'Betim', 'Belo Horizonte'];
 // Fonte da verdade do frete: o servidor. Mantenha igual ao CONFIG.frete do app.js (que só exibe o valor).
@@ -48,10 +49,10 @@ function bfJanela(ms) {
 const bfVale = (ms = Date.now()) => { const j = bfJanela(ms); return ms >= j.inicio && ms <= j.fim; };
 
 /* Calcula o pedido a partir do que está no Firestore (preço, estoque e cupom do servidor). O navegador só informa ids, tamanhos e quantidades. */
-async function calcular({ itens, cupom, bf, cep, tel }, uid) {
+async function calcular({ itens, cupom, bf, cep, tel, entrega }, uid) {
   if (!Array.isArray(itens) || !itens.length || itens.length > 40) throw erro(400, 'Carrinho vazio ou inválido.');
   const fs = db();
-  let sub = 0; const linhas = [];
+  let sub = 0, qtd = 0; const linhas = [];
   for (const it of itens) {
     const id = String(it?.id || ''), q = Number(it?.q), tam = String(it?.tam || '');
     if (!/^[\w.-]{1,80}$/.test(id) || !Number.isInteger(q) || q < 1 || q > 20) throw erro(400, 'Item inválido no carrinho.');
@@ -62,13 +63,26 @@ async function calcular({ itens, cupom, bf, cep, tel }, uid) {
     if (Array.isArray(p.tam) && p.tam.length && !p.tam.map(String).includes(tam)) throw erro(409, `Tamanho ${tam} indisponível em ${p.nome}.`);
     const pc = cents(p.preco);
     if (!(pc > 0)) throw erro(409, 'Preço da peça ainda não definido. Finalize pelo WhatsApp.');
-    sub += pc * q;
+    sub += pc * q; qtd += q;
     linhas.push({ id, cod: p.cod, nome: p.nome, tam, q, preco: reais(pc) });
   }
-  const cidade = await cidadePorCep(cep);
-  let frete = FRETE[cidade];
-  if (!Number.isFinite(frete)) throw erro(500, 'Frete não configurado para esta cidade.');   // nunca fecha um pedido sem frete definido
-  if (FRETE_GRATIS_ACIMA != null && sub >= cents(FRETE_GRATIS_ACIMA)) frete = 0;
+  // Entrega: própria (Contagem, Betim e BH), retirada e motoboy/Uber (combinados no WhatsApp, só na região) ou Correios (PAC/Sedex, Brasil todo, preço de tabela).
+  const tipo = String(entrega || 'propria'), info = await infoCep(cep);
+  if (!['propria', 'retirada', 'motoboy', 'pac', 'sedex'].includes(tipo)) throw erro(400, 'Forma de entrega inválida.');
+  const cidade = info.cidade;
+  let frete = 0, prazo = null, entregaNome = 'Entrega própria';
+  if (tipo === 'pac' || tipo === 'sedex') {
+    const op = (await cotarCorreios(cep, qtd)).find(o => o.tipo === tipo);
+    if (!op) throw erro(409, 'Esse serviço dos Correios não está disponível para o seu CEP. Escolha outro.');
+    frete = op.valor; prazo = op.prazo; entregaNome = 'Correios ' + op.nome;
+  } else {
+    if (!info.local) throw erro(400, 'Essa forma de entrega vale só para Contagem, Betim e Belo Horizonte. Escolha os Correios.');
+    if (tipo === 'propria') {
+      frete = FRETE[cidade];
+      if (!Number.isFinite(frete)) throw erro(500, 'Frete não configurado para esta cidade.');   // nunca fecha um pedido sem frete definido
+      if (FRETE_GRATIS_ACIMA != null && sub >= cents(FRETE_GRATIS_ACIMA)) frete = 0;
+    } else entregaNome = tipo === 'retirada' ? 'Retirada com a loja' : 'Motoboy/Uber (combinar no WhatsApp)';
+  }
   let percent = 0;
   if (cupom && String(cupom) !== 'BLACKFRIDAY') {
     const code = String(cupom), cfg = (await fs.collection('config').doc('loja').get()).data() || {};
@@ -115,19 +129,21 @@ async function calcular({ itens, cupom, bf, cep, tel }, uid) {
   const bfPct = bfVale() ? BF_PCT : 0, primario = !!percent;   // na semana da Black Friday o desconto vale para todos os pedidos, como nos preços mostrados
   const desc = Math.round(sub * (percent + bfPct) / 100);
   const total = sub - desc + cents(frete);
-  return { linhas, cidade, subtotal: reais(sub), desconto: reais(desc), frete: reais(cents(frete)), total: reais(total),
+  return { linhas, cidade, uf: info.uf, entrega: { tipo, nome: entregaNome, ...(prazo ? { prazo } : {}) }, subtotal: reais(sub), desconto: reais(desc), frete: reais(cents(frete)), total: reais(total),
     percent: primario ? percent : bfPct, bf: primario ? bfPct : 0, cupom: primario ? String(cupom) : (bfPct ? 'BLACKFRIDAY' : null) };
 }
 
-async function cidadePorCep(cep) {
+/* Consulta o CEP (ViaCEP). local = Contagem, Betim ou Belo Horizonte (entrega própria). Qualquer outro CEP do Brasil só vai pelos Correios. */
+async function infoCep(cep) {
   const c = String(cep || '').replace(/\D/g, '');
   if (c.length !== 8) throw erro(400, 'CEP inválido.');
   let d;
   try { d = await (await fetch(`https://viacep.com.br/ws/${c}/json/`, { signal: AbortSignal.timeout(5000) })).json(); }
   catch { throw erro(503, 'Não foi possível confirmar o CEP agora. Tente de novo.'); }
-  const cidade = CIDADES.find(x => norm(x) === norm(d?.localidade));
-  if (d?.erro || !cidade || d.uf !== 'MG') throw erro(400, 'Entregamos apenas em Contagem, Betim e Belo Horizonte.');
-  return cidade;
+  if (d?.erro || !d?.localidade || !/^[A-Z]{2}$/.test(d.uf || '')) throw erro(400, 'CEP não encontrado.');
+  const propria = CIDADES.find(x => norm(x) === norm(d.localidade));
+  const local = !!propria && d.uf === 'MG';
+  return { cidade: local ? propria : String(d.localidade).slice(0, 60), uf: d.uf, local, bairro: d.bairro || '', rua: d.logradouro || '' };
 }
 
 function erro(status, msg) { const e = new Error(msg); e.status = status; return e; }
@@ -150,4 +166,4 @@ const FRETE_INFO = { FRETE, GRATIS: FRETE_GRATIS_ACIMA };
 /* Administradores do painel: contas Google verificadas. Para autorizar mais alguém, acrescente o e-mail aqui, em painel/painel.js (ADMINS) e em firestore.rules (isAdmin) e republique as regras. */
 const ADMINS = ['clouts.oficial2026@gmail.com', 'brenovilaca48@gmail.com'];
 const ehAdmin = u => !!u && ADMINS.includes(String(u.email || '').toLowerCase()) && u.email_verified === true && u.firebase?.sign_in_provider === 'google.com';
-module.exports = { admin, db, configurado, usuario, calcular, mp, erro, responder, cents, reais, DEGRAUS, FRETE_INFO, ADMINS, ehAdmin, BF_PCT, bfVale, bfJanela };
+module.exports = { admin, db, configurado, usuario, calcular, mp, erro, responder, cents, reais, DEGRAUS, FRETE_INFO, ADMINS, ehAdmin, BF_PCT, bfVale, bfJanela, infoCep };
