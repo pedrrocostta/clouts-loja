@@ -35,15 +35,15 @@ async function usuario(req) {
 const cents = v => Math.round(Number(v) * 100);
 const reais = c => Math.round(c) / 100;
 
-/* Black Friday automática, todo ano: +5% em toda a loja na semana da Black Friday (da segunda até o domingo, 23h59 de Brasília).
- * A Black Friday é a sexta-feira depois da 4ª quinta-feira de novembro (2026: sexta 27/11, semana de 23/11 a 29/11). Fora da semana, os preços voltam ao normal sozinhos.
+/* Black Friday automática, todo ano: +5% em toda a loja da segunda da semana da Black Friday até o domingo da semana seguinte, 23h59 de Brasília (duas semanas).
+ * A Black Friday é a sexta-feira depois da 4ª quinta-feira de novembro (2026: sexta 27/11; vale de 23/11 a 06/12). Fora da semana, os preços voltam ao normal sozinhos.
  * Soma com o cupom (ex.: 10% da primeira compra = 15%). A mesma regra está em app.js (bfJanela): mexa nos dois. */
 const BF_PCT = 5;
 function bfJanela(ms) {
   const ano = new Date(ms - 3 * 3600000).getUTCFullYear();
   let q = 0, d = 1; for (; d <= 30; d++) if (new Date(Date.UTC(ano, 10, d)).getUTCDay() === 4 && ++q === 4) break;
   const sexta = Date.UTC(ano, 10, d + 1, 3, 0, 0);   // 00h de Brasília = 03h UTC
-  return { inicio: sexta - 4 * 86400000, fim: sexta + 3 * 86400000 - 1000 };
+  return { inicio: sexta - 4 * 86400000, fim: sexta + 10 * 86400000 - 1000 };
 }
 const bfVale = (ms = Date.now()) => { const j = bfJanela(ms); return ms >= j.inicio && ms <= j.fim; };
 

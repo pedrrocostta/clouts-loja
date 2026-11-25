@@ -139,7 +139,7 @@ Sem essas variáveis os e-mails simplesmente não saem e a loja funciona normal.
 - **Celular**: campos com 16 px (sem zoom do iPhone) e `overflow-x: clip` na página.
 
 ## Black Friday automática (todo ano, +5% em toda a loja)
-- **Quando:** a semana da Black Friday, da **segunda ao domingo (23h59)**. Black Friday = sexta depois da 4ª quinta de novembro. 2026: semana de **23/11 a 29/11**; 2027: 22/11 a 28/11; 2028: 20/11 a 26/11. Fora da semana, tudo volta ao normal sozinho (faixa, preços "de/por" e desconto somem). Não precisa programar nada a cada ano.
+- **Quando:** da **segunda da semana da Black Friday até o domingo da semana seguinte (23h59)**: duas semanas. Black Friday = sexta depois da 4ª quinta de novembro. 2026: **23/11 a 06/12**; 2027: 22/11 a 05/12; 2028: 20/11 a 03/12. Fora da semana, tudo volta ao normal sozinho (faixa, preços "de/por" e desconto somem). Não precisa programar nada a cada ano.
 - **Como aparece:** faixa preta no topo, preço "de R$ X por R$ Y (-5%)" nos cartões e na ficha da peça, e o cartão "Cupons disponíveis" no carrinho. O desconto é automático e **soma com o cupom** (Primeira compra 10% + Black Friday 5% = 15%). A Black Friday vale em toda compra da semana; o cupom de primeira compra continua valendo uma vez só.
 - **Onde mudar:** percentual e regra de datas em dois lugares que devem ficar iguais: `api/_lib.js` (`BF_PCT`, `bfJanela`, o servidor decide valor e datas) e `app.js` (`BF`, `bfJanela`).
 - **Pedido:** `cupom` guarda o cupom principal (ou `BLACKFRIDAY` quando é só ela), `percent` o percentual desse cupom e `bf` o extra (pedidos online). A conferência dos pedidos do WhatsApp (`api/_conferencia.js`) só aceita os descontos possíveis e recusa desconto sem cupom válido.
