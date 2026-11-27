@@ -7,7 +7,7 @@
 const crypto = require('crypto');
 const { db, usuario, erro, responder, ehAdmin } = require('./_lib');
 
-const PROPRIEDADE_PADRAO = '556669532';   // propriedade do GA4 da loja (não é segredo); o painel (Site) pode trocar
+const PROPRIEDADE_PADRAO = '564189763';   // propriedade do GA4 da loja (não é segredo); o painel (Site) pode trocar
 
 /* Token de acesso (JWT assinado com a chave da conta de serviço), guardado até perto de vencer. */
 let tok = { v: null, exp: 0 }, tokP = null;
