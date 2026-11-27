@@ -76,13 +76,6 @@ function motivoDe(e) {
 
 module.exports = async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
-  if (req.method === 'GET' && req.query?.diag === 'm4x9') {   // TEMPORÁRIO: só diz se a leitura funciona (sem números nem dados)
-    let prop = null;
-    try { const cfg = (await db().collection('config').doc('loja').get()).data() || {}; prop = String(cfg.gaPropertyId || PROPRIEDADE_PADRAO).replace(/\D/g, '');
-      const r = await ga(prop, 'runReport', { dateRanges: [{ startDate: '6daysAgo', endDate: 'today' }], metrics: [{ name: 'activeUsers' }] }), t = await ga(prop, 'runRealtimeReport', { metrics: [{ name: 'activeUsers' }] });
-      return res.status(200).json({ ok: true, prop, visitas7d: Number(r?.rows?.[0]?.metricValues?.[0]?.value || 0) > 0, aoVivo: ativos(t) > 0 }); }
-    catch (e) { return res.status(200).json({ ok: false, prop, motivo: motivoDe(e).motivo, status: e.gaStatus || null }); }
-  }
   if (req.method !== 'POST') return res.status(405).json({ erro: 'Método não permitido.' });
   try {
     const u = await usuario(req); if (!u) throw erro(401, 'Entre na sua conta.');
