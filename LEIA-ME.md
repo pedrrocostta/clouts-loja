@@ -109,7 +109,7 @@ Sem essas variáveis os e-mails simplesmente não saem e a loja funciona normal.
 - **Solicitar peça:** quando um tamanho volta ao estoque (aba Peças), o painel pergunta se quer avisar por e-mail quem pediu.
 
 ## Configurações que não podem se perder
-- O **código do Google Analytics** (`G-VQ23DQ3JFY`, em `app.js`) e o **ID da propriedade** (`556669532`, em `api/analytics.js`) estão embutidos no código como valores padrão. O painel (Site) só serve para trocar por outros; se ficar vazio, a loja mede do mesmo jeito.
+- O **código do Google Analytics** (`G-VQ23DQ3JFY`, em `app.js`) e o **ID da propriedade** (`564189763`, em `api/analytics.js`) estão embutidos no código como valores padrão. O painel (Site) só serve para trocar por outros; se ficar vazio, a loja mede do mesmo jeito.
 - Os formulários da aba **Site** e **Cupons** não são mais redesenhados enquanto há texto digitado e não salvo (antes, uma atualização em tempo real podia apagar o que você acabou de colar).
 
 ## Administradores do painel
